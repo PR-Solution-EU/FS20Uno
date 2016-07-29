@@ -87,6 +87,7 @@
 
 #include <Wire.h>		
 #include <MsTimer2.h>	// http://playground.arduino.cc/Main/MsTimer2
+#include <Adafruit_SleepyDog.h>
 #include "I2C.h"
 
 #define VERSION "1.00.0001"
@@ -116,6 +117,9 @@
  * Zeiten in ms müssen Vielfache von 10 sein
  * ========================================================================== */
 #define MAX_MOTORS				8
+// timer period in ms
+#define TIMER_MS				10
+
 // Relais Ansprechzeit in ms (Datenblatt 5 ms)
 #define OPERATE_TIME			20
 // Relais Rückfallzeit in ms (Datenblatt 4 ms))
@@ -126,6 +130,11 @@
 #define FS20_SM8_IN_RESPONSE	150
 // Tasten Entprellzeit in ms
 #define DEBOUNCE_TIME			20
+
+
+// FS20 output default timer in 1/10s
+#define FS20_WIN_TIMEOUT	550
+#define FS20_JL_TIMEOUT		200
 
 /* FS20 SM8 Output */
 byte SM8Out = 0;
@@ -165,8 +174,8 @@ byte MotorPower = 0;
 byte MotorDir = 0;
 byte PrevMotorPower = 0;
 byte PrevMotorDir = 0;
-unsigned long MotorPowerDelay[MAX_MOTORS];
-unsigned long MotorDirDelay[MAX_MOTORS];
+volatile char MotorPowerDelay[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
+volatile char MotorDirDelay[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 bool prevRainClosed;
 
 /* Rain detect input */
@@ -192,8 +201,8 @@ volatile unsigned int irqWallButton = ~0x0000;
 volatile unsigned int curSM8Status  = 0x0000;
 volatile unsigned int curWallButton = 0x0000;
 // debounce counter für keys
-volatile char debSM8Status[16];
-volatile char debWallButton[16];
+volatile char debSM8Status[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+volatile char debWallButton[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 volatile bool intSM8Status;		// true if SM8 Status (Output) has new data
 volatile bool intWallButton;	// true if Wall button (Output) has new data
@@ -208,6 +217,14 @@ volatile unsigned long ledTimer = 0;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+	byte i;
+
+	for(i=0; i<MAX_MOTORS;i++ ) {
+		SM8OutTimeoutValue[i]   =
+		SM8OutTimeoutValue[i+8] = (RAINBITMASK & (1<<i))?FS20_WIN_TIMEOUT:FS20_JL_TIMEOUT;
+	}
+
+
 	pinMode(DBG_INT, OUTPUT); 		// debugging
 	pinMode(DBG_MPC, OUTPUT); 		// debugging
 	pinMode(DBG_TIMER, OUTPUT);		// debugging
@@ -269,12 +286,18 @@ void setup()
 
 	attachInterrupt(digitalPinToInterrupt(2), isr, FALLING);
 	
-	MsTimer2::set(10, timer10ms); 				// 20ms period
+	MsTimer2::set(TIMER_MS, timer10ms); 				// 20ms period
 	MsTimer2::start();	
 
 	Serial.print("Starting v");
 	Serial.print(VERSION);
 	Serial.println("...");
+
+	int countdownMS = Watchdog.enable(4000);
+	Serial.print("Enabled the watchdog with max countdown of ");
+	Serial.print(countdownMS, DEC);
+	Serial.println(" milliseconds!");
+	Serial.println();
 }
 
 void timer10ms()
@@ -285,19 +308,33 @@ void timer10ms()
 	digitalWrite(DBG_TIMERLEN, HIGH);	// debugging
 	for(i=0; i<16; i++) {
 		if( debSM8Status[i]>0 ) {
-			debSM8Status[i] -= 10;
+			debSM8Status[i] -= TIMER_MS;
 		}
 		else if( (curSM8Status & (1<<i)) != (irqSM8Status & (1<<i)) ) {
 			curSM8Status = curSM8Status & (unsigned int)(~(1<<i)) | (irqSM8Status & (1<<i));
 		}
 
 		if( debWallButton[i]>0 ) {
-			debWallButton[i] -= 10;
+			debWallButton[i] -= TIMER_MS;
 		}
 		else if( (curWallButton & (1<<i)) != (irqWallButton & (1<<i)) ) {
 			curWallButton = curWallButton & (unsigned int)(~(1<<i)) | (irqWallButton & (1<<i));
 		}
 	}
+	for(i=0; i<MAX_MOTORS; i++) {
+		if( MotorPowerDelay[i]>0 ) {
+			MotorPowerDelay[i] -= TIMER_MS;
+		}
+		if( MotorDirDelay[i]>0 ) {
+			MotorDirDelay[i] -= TIMER_MS;
+		}
+	}
+	for(i=0; i<(MAX_MOTORS*2); i++ ) {
+		if( SM8OutCounter[i]>0 ) {
+			SM8OutCounter[i] -= TIMER_MS;
+		}
+	}
+	
 	digitalWrite(DBG_TIMERLEN, LOW);	// debugging
 	
 }
@@ -552,13 +589,13 @@ void ctrlMotor(void)
 
 		for(i=0; i<MAX_MOTORS; i++) {
 			if( MotorLDelay & (1<<i) ) {
-				MotorPowerDelay[i] = t + MOTOR_SWITCHOVER;
+				MotorPowerDelay[i] = MOTOR_SWITCHOVER;
 			}
 			else if( MotorSDelay & (1<<i) ) {
-				MotorPowerDelay[i] = t + OPERATE_TIME;
+				MotorPowerDelay[i] = OPERATE_TIME;
 			}
 			if( DirDelay & (1<<i) ) {
-				MotorDirDelay[i] = t + MOTOR_SWITCHOVER;
+				MotorDirDelay[i] = MOTOR_SWITCHOVER;
 			}
 		}
 
@@ -600,12 +637,12 @@ void ctrlMotor(void)
 			Serial.println("---------------------------------------");
 			Serial.println("Old Motor control: ");
 			Serial.println(valMotorRelais, HEX);
-			printCtrlMotor(valMotorRelais);
+			// printCtrlMotor(valMotorRelais);
 			
 			valMotorRelais = (MotorDir<<8) | tmpMotorPower;
 			Serial.println("New Motor control: ");
 			Serial.println(valMotorRelais, HEX);
-			printCtrlMotor(valMotorRelais);
+			// printCtrlMotor(valMotorRelais);
 			
 			expanderWriteWord(MPC_MOTORRELAIS, GPIOA, valMotorRelais);
 		}
@@ -622,8 +659,8 @@ void loop()
 {
 	if ( isrTrigger ) {
 		handleMPCInt();
+		ctrlMotor();
 	}
-	// ctrlMotor();
 
 	// turn LED off after 100 ms
 	if ( (ledSignalTimer != 0) && (millis() > (ledSignalTimer + 50)) )
@@ -638,19 +675,19 @@ void loop()
 		{
 			digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
 			ledTimer = millis();
-			//handleMPCInt();
+			Watchdog.reset();
 		}
 	}
 	
 	// debug
-	if( tmpSM8Status != curSM8Status ) {
-		Serial.print("curSM8Status:  ");
-		Serial.println(curSM8Status, HEX);
-		tmpSM8Status = curSM8Status;
-	}
-	if( tmpWallButton != curWallButton ) {
-		Serial.print("curWallButton: ");
-		Serial.println(curWallButton, HEX);
-		tmpWallButton = curWallButton;
-	}
+	//~ if( tmpSM8Status != curSM8Status ) {
+		//~ Serial.print("curSM8Status:  ");
+		//~ Serial.println(curSM8Status, HEX);
+		//~ tmpSM8Status = curSM8Status;
+	//~ }
+	//~ if( tmpWallButton != curWallButton ) {
+		//~ Serial.print("curWallButton: ");
+		//~ Serial.println(curWallButton, HEX);
+		//~ tmpWallButton = curWallButton;
+	//~ }
 }
