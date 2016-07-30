@@ -136,56 +136,8 @@
 #define DEBOUNCE_TIME			20
 
 
-// FS20 output default timer in 1/10s
-#define FS20_WIN_TIMEOUT	550
-#define FS20_JL_TIMEOUT		200
-
-// Count down SM8 output timeout
-volatile unsigned long SM8StatusTimeout[MAX_MOTORS*2];
-// Contains Timeout values in 1/10s value;
-unsigned long SM8OutTimeoutValue[MAX_MOTORS*2];
-
-
-/* Wall pushbuttons */
-unsigned int MCPWallPB;
-/* Wall pushbuttons can not be used directly from MCP
- * it must be first debounced.
- * The following variables will be used for debouncing
- */
-unsigned int WallPB = 0x0000;		// Debounced Wall PB bits
-unsigned int prevWallPB = 0xffff;
-
-/* Wall pushbutton values used by program main loop */
-byte WallPBOpen = 0;
-byte WallPBClose = 0;
-byte PrevWallPBOpen = 0;
-byte PrevWallPBClose = 0;
-
-/* FS20 SM8 Inputs */
-unsigned int SM8In = 0x0000;
-unsigned int prevSM8In = 0x0000;
-byte SM8InKey[MAX_MOTORS*2];		/* count down if SM8 input is active */
-
-
-/* Motor control logic */
-byte MotorPower = 0;
-byte MotorDir = 0;
-byte PrevMotorPower = 0;
-byte PrevMotorDir = 0;
-volatile char MotorPowerDelay[MAX_MOTORS];
-volatile char MotorDirDelay[MAX_MOTORS];
-bool prevRainClosed;
-
-/* Rain detect input */
-#define RAINBITMASK			0b11110000				// OR Bitmask for Close output during rain
-bool RainDetect;
-bool prevRainDetect;
-
-/* Disable Rain detect input */
-bool DisableRainDetect;
-bool prevDisableRainDetect;
-
-
+// MPC Data
+// MPC output data
 volatile unsigned int valMotorRelais = 0x0000;
 volatile unsigned int valSM8Button   = 0x0000;
 
@@ -196,6 +148,7 @@ volatile unsigned int irqWallButton = 0x0000;
 // values currently used within program
 volatile unsigned int curSM8Status  = 0x0000;
 volatile unsigned int curWallButton = 0x0000;
+
 // debounce counter für keys
 volatile char debSM8Status[16];
 volatile char debWallButton[16];
@@ -208,22 +161,21 @@ volatile unsigned long ledTimer = 0;
 volatile bool isrTrigger;
 
 
-// the setup function runs once when you press reset or power the board
+
+/*
+ * Function:	setup
+ * Return:
+ * Arguments:
+ * Description: setup function runs once when you press reset or power the board
+ */
 void setup()
 {
 	byte i;
 
-	for(i=0; i<MAX_MOTORS;i++ ) {
-		MotorPowerDelay[i] = 0;
-		MotorDirDelay[i] = 0;
-		SM8OutTimeoutValue[i]   =
-		SM8OutTimeoutValue[i+8] = (RAINBITMASK & (1<<i))?FS20_WIN_TIMEOUT:FS20_JL_TIMEOUT;
-	}
 	for(i=0; i<16; i++) {
 		debSM8Status[i] = 0;
 		debWallButton[i] = 0;
 	}
-	
 	isrTrigger = false;
 
 	pinMode(DBG_INT, OUTPUT); 		// debugging
@@ -297,6 +249,28 @@ void setup()
 	//~ Serial.println();
 }
 
+/*
+ * Function:	isr
+ * Return:
+ * Arguments:
+ * Description: Interrupt service routine
+ * 				called when external pin D2 goes from 1 to 0
+ */
+void isr()
+{
+	digitalWrite(DBG_INT, !digitalRead(DBG_INT));  			// debugging
+	isrTrigger = true;
+	ledSignalTimer = millis();  							// remember when IR occured
+	digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));   // turn the LED on (HIGH is the voltage level)
+}
+
+/*
+ * Function:	timer10ms
+ * Return:
+ * Arguments:
+ * Description: Interrupt service routine
+ * 				called from timer2 every 10 ms
+ */
 void timer10ms()
 {
 	byte i;
@@ -318,19 +292,6 @@ void timer10ms()
 			curWallButton = curWallButton & (unsigned int)(~(1<<i)) | (irqWallButton & (1<<i));
 		}
 	}
-	for(i=0; i<MAX_MOTORS; i++) {
-		if( MotorPowerDelay[i]>0 ) {
-			MotorPowerDelay[i] -= TIMER_MS;
-		}
-		if( MotorDirDelay[i]>0 ) {
-			MotorDirDelay[i] -= TIMER_MS;
-		}
-	}
-	for(i=0; i<(MAX_MOTORS*2); i++ ) {
-		if( SM8StatusTimeout[i]>0 ) {
-			SM8StatusTimeout[i] -= TIMER_MS;
-		}
-	}
 	
 	digitalWrite(DBG_TIMERLEN, LOW);	// debugging
 	
@@ -340,17 +301,10 @@ void timer10ms()
  * Function:	handleMPCInt
  * Return:
  * Arguments:
- * Description: Interrupt service routine, called when pin D2 goes from 1 to 0
- *              Handle MPC Interrupts
+ * Description: MPC Interrupt handling outside isr
  *              Reads the input status from MPCs into vars
+ *              Called from main loop, not from ISR
  */
-void isr()
-{
-	digitalWrite(DBG_INT, !digitalRead(DBG_INT));  			// debugging
-	isrTrigger = true;
-	ledSignalTimer = millis();  							// remember when IR occured
-	digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));   // turn the LED on (HIGH is the voltage level)
-}
 void handleMPCInt()
 {
 	byte portValue;
@@ -388,43 +342,6 @@ void handleMPCInt()
 
 }
 
-
-void printCtrlMotor(unsigned int motorRelais)
-{
-	int i;
-	String str;
-	char c;
-	
-	/* Head
-	 * Motor     8 7 6 5 4 3 2 1
-	 * Direction 8 7 6 5 4 3 2 1 */
-	str = String("8 7 6 5 4 3 2 1 ");
-	for(i=0; i<8; i++) {
-		if( motorRelais & i ) {
-			c = '1';
-		}
-		else {
-			c = '0';
-		}
-		str.setCharAt(i*2, c);
-	}
-	Serial.print("    Motor     ");
-	Serial.println(str);
-
-	str = String("8 7 6 5 4 3 2 1 ");
-	for(i=8; i<16; i++) {
-		if( motorRelais & i ) {
-			c = '1';
-		}
-		else {
-			c = '0';
-		}
-		str.setCharAt((i-8)*2, c);
-	}
-	Serial.print("    Direction ");
-	Serial.println(str);
-}
-
 String addLeadingZeros(byte value)
 {
 	int zeros = 8 - String(value,BIN).length();
@@ -453,228 +370,76 @@ void printWordBin(const char *head, unsigned int value)
  * Arguments:
  * Description: Do the motor control by SM8 and key status
  */
-
-/* FS20 SM8 Output */
-unsigned int SM8Status;
-unsigned int prevSM8Status = 0x0000;
-/* Wall Button Output */
-unsigned int WallButton;
-unsigned int prevWallButton = 0x0000;
-
 void ctrlMotor(void)
 {
-	byte SlopeOpen, SlopeClose;
-	byte WallPBSlopeOpen, WallPBSlopeClose;
-	byte MaskOpen, MaskClose;
-	byte SM8OutOpen = 0;
-	byte SM8OutClose = 0;
-	byte PrevSM8OutOpen = 0;
-	byte PrevSM8OutClose = 0;
-	byte LatchOpen = 0;
-	byte LatchClose = 0;
-	byte i;
-	byte MotorSDelay;
-	byte MotorLDelay;
-	byte DirDelay;
-	byte tmpMotorPower;
+	/* FS20 SM8 Output */
+	static unsigned int SM8Status;
+	static unsigned int prevSM8Status = 0x0000;
+	/* Wall Button Output */
+	static unsigned int WallButton;
+	static unsigned int prevWallButton = 0x0000;
 
-	// Read FS20 SM8 output
-	// lower 8-bits are 'Open', higher 8-bits are 'Close'
+	/* Wandtaster haben Vorrang vor SM8 Ausgänge */
+
+	/* Lese SM8 Ausgänge
+		* die unteren 8-bits sind "Öffnen" Befehle
+		* die oberen 8-bits sind "Schliessen" Befehle
+		* Flankengesteuert
+			* Flanke von 0 nach 1 bedeuted: Motor Ein
+			* Flanke von 1 nach 0 bedeuted: Motor Aus
+			* Gleiche Flanken für Öffnen und Schliessen 
+			  sind ungültig
+		  Tabelle
+		  Fo Fc  Motor
+		  0  0   Aus
+		  1  0   Öffnen
+		  0  1   Schliessen
+		  1  1   Ignorieren
+	*/
 	if( prevSM8Status != curSM8Status ) {
 		unsigned int SM8StatusSlope;
+		unsigned int SM8StatusChange;
 
 		SM8Status = curSM8Status;
 		SM8StatusSlope = ~prevSM8Status & SM8Status;
+		SM8StatusChange= prevSM8Status ^ SM8Status;
 
-		for( i=0; i<16; i++) {
-			if( SM8StatusSlope & (1<<i) ) {
-				SM8StatusTimeout[i] = SM8OutTimeoutValue[i];
-			}
-		}
 		Serial.println("---------------------------------------");
-		printWordBin("prevSM8Status:  ", prevSM8Status);
-		printWordBin("SM8StatusSlope: ", SM8StatusSlope);
-		printWordBin("SM8Status:      ", SM8Status);
+		printWordBin("prevSM8Status:   ", prevSM8Status);
+		printWordBin("SM8Status:       ", SM8Status);
+		printWordBin("SM8StatusSlope:  ", SM8StatusSlope);
+		printWordBin("SM8StatusChange: ", SM8StatusChange);
 
 		prevSM8Status = curSM8Status;
 	}
 
-	//~ // Read wall pushbuttons
-	// lower 8-bits are 'Open', higher 8-bits are 'Close'
+	/* Lese Wandtaster
+		* die unteren 8-bits sind "Öffnen" Befehle
+		* die oberen 8-bits sind "Schliessen" Befehle
+		* Flankenänderung von 0 auf 1 schaltet Motor ein/aus
+		* Flankenänderung von 1 auf 0 bewirkt nichts
+		* Einzelpegel bewirkt nichts
+		* Pegel Öffnen und Schliessen = 1:
+		  - Motor Aus
+		  - Taster verriegeln
+		* Pegel Öffnen und Schliessen = 0:
+		  - Taster entriegeln
+	*/
 	if( prevWallButton != curWallButton ) {
 		unsigned int WallButtonSlope;
+		unsigned int WallButtonChange;
 
 		WallButton = curWallButton;
 		WallButtonSlope = ~prevWallButton & WallButton;
+		WallButtonChange = prevWallButton ^ WallButton;
 
-		for( i=0; i<16; i++) {
-			if( WallButtonSlope & (1<<i) ) {
-				WallButtonTimeout[i] = SM8OutTimeoutValue[i];
-			}
-		}
 		Serial.println("---------------------------------------");
 		printWordBin("prevWallButton:  ", prevWallButton);
-		printWordBin("WallButtonSlope: ", WallButtonSlope);
 		printWordBin("WallButton:      ", WallButton);
+		printWordBin("WallButtonSlope: ", WallButtonSlope);
+		printWordBin("WallButtonChange:", WallButtonChange);
 
 		prevWallButton = curWallButton;
-	}
-
-	SM8OutOpen  =  SM8Status & 0xff;
-	SM8OutClose = (SM8Status>>8) & 0xff;
-
-	WallPBOpen  =  WallPB & 0xff;
-	WallPBClose = (WallPB>>8) & 0xff;
-
-	// wall push button slope
-	WallPBSlopeOpen	 = ~PrevWallPBOpen & WallPBOpen;
-	WallPBSlopeClose = ~PrevWallPBClose & WallPBClose;
-
-	// real output implemented as 2-phase shift register within isr2 routine
-
-	// Power depends on low-high/high-low slope, not on level
-	// Set only those bits to 1 where there was a 0->1 transition (Slope)
-	SlopeOpen  = ~PrevSM8OutOpen  & SM8OutOpen;		// Remember which bits having a 0-> slope
-	SlopeClose = ~PrevSM8OutClose & SM8OutClose;
-
-	LatchOpen  |= SlopeOpen;
-	LatchClose |= SlopeClose;
-
-	// Delete those bits to 0 where there was a 1->0 transition (Slope)
-	//	L	C~	=	~
-	//	0	01	=0	1
-	//	0	10	=0	1
-	//	1	01	=1	0
-	//	1	10	=0	1
-	LatchOpen  &= ~(PrevSM8OutOpen  & ~SM8OutOpen);
-	LatchClose &= ~(PrevSM8OutClose & ~SM8OutClose);
-
-	// disable opposite directions on FS20 Inputs based by slope
-
-	// Condition to push a FS20 In Key:
-	// Out	Slope	Key
-	// SM8OutOpen	SM8OutClose	SlopeOpen	SlopeClose	^	KeyOpen	KeyClose
-	// 1			1			x			x			0	1		1
-	// 1			1			0			1			1	1		0
-	// 1			1			1			0			1	0		1
-	MaskOpen   = (SM8OutOpen & SM8OutClose) & (SlopeOpen ^ SlopeClose) & SlopeClose;
-	MaskClose  = (SM8OutOpen & SM8OutClose) & (SlopeOpen ^ SlopeClose) & SlopeOpen;
-	MaskOpen  |= (SM8OutOpen & SM8OutClose) & ((SlopeOpen & SlopeClose) | (~SlopeOpen & ~SlopeClose));
-	MaskClose |= (SM8OutOpen & SM8OutClose) & ((SlopeOpen & SlopeClose) | (~SlopeOpen & ~SlopeClose));
-	SM8In |=   MaskOpen  | WallPBSlopeOpen | ((MaskClose | WallPBSlopeClose)<<8)
-			   // If WallPBOpen & WallPBclose hit, switch motor out off if on
-			 | SM8OutOpen & (WallPBOpen & WallPBClose) | ((SM8OutClose & (WallPBOpen & WallPBClose))<<8);
-
-
-	// 2. condition to push FS20 key is the timeout
-	for( i=0; i<16; i++) {
-		// disable timeout counter for outputs which are already inactive
-		if( (SM8Status & (1<<i)) == 0 ) {
-			SM8StatusTimeout[i] = -1;
-		}
-		// time out and output still active
-		if( SM8StatusTimeout[i]==0 && (SM8Status & (1<<i)) ) {
-			SM8StatusTimeout[i] = -1;	// disable timeout counter
-			SM8In |= (1<<i);			// push key for this ouput
-		}
-	}
-
-
-	// disable opposite directions based by slope
-	LatchOpen  &= ~SlopeClose;
-	LatchClose &= ~SlopeOpen;
-
-	if( RainDetect ) {
-		prevRainClosed = RainDetect;
-		LatchClose |=  RAINBITMASK;
-		LatchOpen  &= ~RAINBITMASK;
-	}
-	else if ( prevRainClosed ) {
-		prevRainClosed = false;
-		LatchClose &= ~RAINBITMASK;
-		LatchOpen  &= ~RAINBITMASK;
-	}
-
-	// power results from open XOR close:
-	//	open	close	power
-	//	0		0		off (0)
-	//	0		1		on  (1)
-	//	1		0		on  (1)
-	//	1		1		invalid (off)
-	MotorPower = (LatchOpen | LatchClose) & ~(LatchOpen & LatchClose);
-
-	// direction results from open and close pin:
-	//	open	close	dir
-	//	0		0 		close (0)
-	//	0		1 		close (0)
-	//	1		0 		open  (1)
-	//  1   	1		open  (1)
-	MotorDir = LatchOpen;
-
-	// Delay for Power on when Power previously was switched off and Dir has switchover
-	// PP	P	PD	D
-	//	0	1	x	~x
-	MotorSDelay = (~PrevMotorPower & MotorPower) & (PrevMotorDir ^ MotorDir);
-
-	// Delay for Power when Power is still on and Dir has switchover
-	MotorLDelay = (PrevMotorPower & MotorPower) & (PrevMotorDir ^ MotorDir);
-
-	// Delay for Power change when power switch from on to off and dir changed
-	// PP	P	PD	D
-	//	1	0	x	~x
-	DirDelay = (PrevMotorPower & ~MotorPower) & (PrevMotorDir ^ MotorDir);
-
-	for(i=0; i<MAX_MOTORS; i++) {
-		if( MotorLDelay & (1<<i) ) {
-			MotorPowerDelay[i] = MOTOR_SWITCHOVER;
-		}
-		else if( MotorSDelay & (1<<i) ) {
-			MotorPowerDelay[i] = OPERATE_TIME;
-		}
-		if( DirDelay & (1<<i) ) {
-			MotorDirDelay[i] = MOTOR_SWITCHOVER;
-		}
-	}
-
-	//~ if( PrevMotorPower != MotorPower ) {
-		//~ Serial.print("MotorPower: ");
-		//~ Serial.println(MotorPower,HEX);
-	//~ }
-	//~ if( PrevMotorDir != MotorDir ) {
-		//~ Serial.print("MotorDir: ");
-		//~ Serial.println(MotorDir,HEX);
-	//~ }
-
-	// Remember last status
-	PrevSM8OutOpen  = SM8OutOpen;
-	PrevSM8OutClose = SM8OutClose;
-
-	PrevWallPBOpen  = WallPBOpen;
-	PrevWallPBClose = WallPBClose;
-
-	PrevMotorDir   = MotorDir;
-	PrevMotorPower = MotorPower;
-
-	tmpMotorPower = MotorPower;
-
-
-	for(i=0; i<MAX_MOTORS; i++) {
-		if( MotorPowerDelay[i] > millis() ) {
-			// do not power motor as long as power delay is > 0
-			tmpMotorPower &= ~(1<<i);
-		}
-		if( MotorDirDelay[i] > millis() ) {
-			// do not change power as long as dir delay is > 0
-			tmpMotorPower = (tmpMotorPower & ~(1<<i)) | ( (byte)(valMotorRelais & 0x00FF) & ~(1<<i));
-		}
-	}
-
-	if ( valMotorRelais != ((MotorDir<<8) | tmpMotorPower) ) {
-		printWordBin("Old Motor control: ", valMotorRelais);
-		valMotorRelais = (MotorDir<<8) | tmpMotorPower;
-		printWordBin("New Motor control: ", valMotorRelais);
-		
-		expanderWriteWord(MPC_MOTORRELAIS, GPIOA, valMotorRelais);
 	}
 }
 
@@ -684,19 +449,20 @@ unsigned int tmpSM8Status  = 0x0000;
 unsigned int tmpWallButton  = 0x0000;
 void loop()
 {
+
 	if ( isrTrigger ) {
-		Serial.println("ISR occured");
+		//Serial.println("ISR occured");
 		handleMPCInt();
 	}
 
 	if ( (tmpSM8Status != curSM8Status) || (tmpWallButton != curWallButton) ) {
-		Serial.println("Status changed");
+		//Serial.println("Status changed");
 		ctrlMotor();
 		tmpSM8Status = curSM8Status;
 		tmpWallButton = curWallButton;
 	}
 
-	// turn LED off after 100 ms
+	// revers LED after 50 ms
 	if ( (ledSignalTimer != 0) && (millis() > (ledSignalTimer + 50)) )
 	{
 		digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
