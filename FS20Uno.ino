@@ -88,11 +88,21 @@
 #include <Wire.h>		
 #include <MsTimer2.h>	// http://playground.arduino.cc/Main/MsTimer2
 #include <Adafruit_SleepyDog.h>
+#include "FS20Uno.h"
 #include "I2C.h"
 
-#define VERSION "1.00.0001"
+#define PROGRAM "FS20Uno"
+#define VERSION "1.00"
 
+// enable next line to enable debug output pins
+#define DEBUG_PINS
+// enable next line to output debug prints
+#define DEBUG_OUTPUT
 
+#ifndef DEBUG_OUTPUT
+// enable next line to enable watchdog timer
+#define WATCHDOG_ENABLED
+#endif
 
 
 #define MPC1    0x20    // MCP23017 #1 I2C address
@@ -107,11 +117,13 @@
 
 
 #define ISR_INPUT 		2			// ISR Input from MPC = D2
+#define ONBOARD_LED 	LED_BUILTIN	// LED = D13
+#ifdef DEBUG_PINS
 #define DBG_INT 		12			// Debug PIN = D12
 #define DBG_MPC 		11			// Debug PIN = D11
 #define DBG_TIMER	 	10			// Debug PIN = D10
 #define DBG_TIMERLEN 	9			// Debug PIN = D9
-#define ONBOARD_LED 	LED_BUILTIN	// LED = D13
+#endif
 
 
 
@@ -138,27 +150,27 @@
 
 // MPC Data
 // MPC output data
-volatile unsigned int valMotorRelais = 0x0000;
-volatile unsigned int valSM8Button   = 0x0000;
+volatile WORD valMotorRelais = 0x0000;
+volatile WORD valSM8Button   = 0x0000;
 
 // values read from MPC port during MPC interrupt
-volatile unsigned int irqSM8Status  = 0x0000;
-volatile unsigned int irqWallButton = 0x0000;
+volatile WORD irqSM8Status   = 0x0000;
+volatile WORD irqWallButton  = 0x0000;
 
 // values currently used within program
-volatile unsigned int curSM8Status  = 0x0000;
-volatile unsigned int curWallButton = 0x0000;
+volatile WORD curSM8Status   = 0x0000;
+volatile WORD curWallButton  = 0x0000;
 
 // debounce counter für keys
-volatile char debSM8Status[16];
-volatile char debWallButton[16];
+volatile char debSM8Status[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+volatile char debWallButton[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 
 // time we turned LED on
-volatile unsigned long ledSignalTimer = 0;
-volatile unsigned long ledTimer = 0;
+volatile DWORD ledSignalTimer = 0;
+volatile DWORD ledTimer = 0;
 
-volatile bool isrTrigger;
+volatile bool isrTrigger = false;
 
 
 
@@ -170,26 +182,34 @@ volatile bool isrTrigger;
  */
 void setup()
 {
-	byte i;
+	Serial.begin(115200);
 
-	for(i=0; i<16; i++) {
-		debSM8Status[i] = 0;
-		debWallButton[i] = 0;
-	}
-	isrTrigger = false;
+	Serial.print(PROGRAM);
+	Serial.print(" v");
+	Serial.print(VERSION);
+	Serial.print(" (build ");
+	Serial.print(REVISION);
+	Serial.println(")");
+	Serial.println();
 
+#ifdef DEBUG_PINS
 	pinMode(DBG_INT, OUTPUT); 		// debugging
 	pinMode(DBG_MPC, OUTPUT); 		// debugging
 	pinMode(DBG_TIMER, OUTPUT);		// debugging
-	pinMode(ONBOARD_LED, OUTPUT);   // for onboard LED
+	pinMode(DBG_TIMERLEN, OUTPUT);		// debugging
+#endif
 
+	pinMode(ONBOARD_LED, OUTPUT);   // for onboard LED
+	digitalWrite(ONBOARD_LED, HIGH);
+	
+#ifdef DEBUG_PINS
 	digitalWrite(DBG_INT, LOW);  	// debugging
 	digitalWrite(DBG_MPC, LOW);		// debugging
 	digitalWrite(DBG_TIMER, LOW);	// debugging
+	digitalWrite(DBG_TIMERLEN, LOW);	// debugging
+#endif
 
 	Wire.begin();
-	Serial.begin(115200);
-	Serial.println("Setup");
 
 	// expander configuration register
 	expanderWriteBoth(MPC_MOTORRELAIS, IOCON, 0b00100100);	//                    sequential mode, INT Open-drain output
@@ -238,15 +258,19 @@ void setup()
 	MsTimer2::set(TIMER_MS, timer10ms); 				// 20ms period
 	MsTimer2::start();	
 
-	Serial.print("Starting v");
-	Serial.print(VERSION);
-	Serial.println("...");
+#ifdef WATCHDOG_ENABLED
+	int countdownMS = Watchdog.enable(4000);
+#ifdef DEBUG_OUTPUT
+	Serial.print("Enabled the watchdog with max countdown of ");
+	Serial.print(countdownMS, DEC);
+	Serial.println(" milliseconds!");
+	Serial.println();
+#endif
+#endif
 
-	//~ int countdownMS = Watchdog.enable(4000);
-	//~ Serial.print("Enabled the watchdog with max countdown of ");
-	//~ Serial.print(countdownMS, DEC);
-	//~ Serial.println(" milliseconds!");
-	//~ Serial.println();
+#ifdef DEBUG_OUTPUT
+	Serial.println("Setup done, starting main loop()");
+#endif
 }
 
 /*
@@ -258,7 +282,9 @@ void setup()
  */
 void isr()
 {
+#ifdef DEBUG_PINS
 	digitalWrite(DBG_INT, !digitalRead(DBG_INT));  			// debugging
+#endif
 	isrTrigger = true;
 	ledSignalTimer = millis();  							// remember when IR occured
 	digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));   // turn the LED on (HIGH is the voltage level)
@@ -275,25 +301,31 @@ void timer10ms()
 {
 	byte i;
 
+#ifdef DEBUG_PINS
 	digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	// debugging
+#endif
+#ifdef DEBUG_PINS
 	digitalWrite(DBG_TIMERLEN, HIGH);	// debugging
+#endif
 	for(i=0; i<16; i++) {
 		if( debSM8Status[i]>0 ) {
 			debSM8Status[i] -= TIMER_MS;
 		}
 		else if( (curSM8Status & (1<<i)) != (irqSM8Status & (1<<i)) ) {
-			curSM8Status = curSM8Status & (unsigned int)(~(1<<i)) | (irqSM8Status & (1<<i));
+			curSM8Status = curSM8Status & (WORD)(~(1<<i)) | (irqSM8Status & (1<<i));
 		}
 
 		if( debWallButton[i]>0 ) {
 			debWallButton[i] -= TIMER_MS;
 		}
 		else if( (curWallButton & (1<<i)) != (irqWallButton & (1<<i)) ) {
-			curWallButton = curWallButton & (unsigned int)(~(1<<i)) | (irqWallButton & (1<<i));
+			curWallButton = curWallButton & (WORD)(~(1<<i)) | (irqWallButton & (1<<i));
 		}
 	}
 	
+#ifdef DEBUG_PINS
 	digitalWrite(DBG_TIMERLEN, LOW);	// debugging
+#endif
 	
 }
 
@@ -310,38 +342,49 @@ void handleMPCInt()
 	byte portValue;
 	byte i;
 
+#ifdef DEBUG_PINS
 	//digitalWrite(DBG_INT, !digitalRead(DBG_INT));  		// debugging
-
+#endif
 	isrTrigger = false;
 
 	if ( expanderReadWord(MPC_SM8STATUS, INFTFA) )
 	{
+#ifdef DEBUG_PINS
 		digitalWrite(DBG_MPC, HIGH);	// debugging
+#endif
 		irqSM8Status = expanderReadWord(MPC_SM8STATUS, INTCAPA);
 		for(i=0; i<16; i++) {
 			if( (curSM8Status & (1<<i)) != (irqSM8Status & (1<<i)) ) {
 				debSM8Status[i]=DEBOUNCE_TIME;
 			}
 		}
+#ifdef DEBUG_PINS
 		digitalWrite(DBG_MPC, LOW);		// debugging
+#endif
 	}
 
 	if ( expanderReadWord(MPC_WALLBUTTON, INFTFA) )
 	{
+#ifdef DEBUG_PINS
 		digitalWrite(DBG_MPC, HIGH);	// debugging
+#endif
 		irqWallButton = expanderReadWord(MPC_WALLBUTTON, INTCAPA);
 		for(i=0; i<16; i++) {
 			if( (curWallButton & (1<<i)) != (irqWallButton & (1<<i)) ) {
 				debWallButton[i]=DEBOUNCE_TIME;
 			}
 		}
+#ifdef DEBUG_PINS
 		digitalWrite(DBG_MPC, LOW);		// debugging
+#endif
 	}
 
+#ifdef DEBUG_PINS
 	//digitalWrite(DBG_INT, !digitalRead(DBG_INT));  		// debugging
-
+#endif
 }
 
+#ifdef DEBUG_OUTPUT
 String addLeadingZeros(byte value)
 {
 	int zeros = 8 - String(value,BIN).length();
@@ -354,7 +397,7 @@ String addLeadingZeros(byte value)
 	return returnValue;
 }
 
-void printWordBin(const char *head, unsigned int value)
+void printWordBin(const char *head, WORD value)
 {
 	Serial.print(head);
 	Serial.print( addLeadingZeros(value >> 8) );
@@ -362,7 +405,7 @@ void printWordBin(const char *head, unsigned int value)
 	Serial.print( addLeadingZeros(value & 0xff) );
 	Serial.println();
 }
-
+#endif
 
 /*
  * Function:	ctrlMotor
@@ -373,11 +416,11 @@ void printWordBin(const char *head, unsigned int value)
 void ctrlMotor(void)
 {
 	/* FS20 SM8 Output */
-	static unsigned int SM8Status;
-	static unsigned int prevSM8Status = 0x0000;
+	static WORD SM8Status;
+	static WORD prevSM8Status = 0x0000;
 	/* Wall Button Output */
-	static unsigned int WallButton;
-	static unsigned int prevWallButton = 0x0000;
+	static WORD WallButton;
+	static WORD prevWallButton = 0x0000;
 
 	/* Wandtaster haben Vorrang vor SM8 Ausgänge */
 
@@ -397,18 +440,21 @@ void ctrlMotor(void)
 		  1  1   Ignorieren
 	*/
 	if( prevSM8Status != curSM8Status ) {
-		unsigned int SM8StatusSlope;
-		unsigned int SM8StatusChange;
+		WORD SM8StatusSlope;
+		WORD SM8StatusChange;
 
 		SM8Status = curSM8Status;
 		SM8StatusSlope = ~prevSM8Status & SM8Status;
 		SM8StatusChange= prevSM8Status ^ SM8Status;
 
+#ifdef DEBUG_OUTPUT
+		Serial.println();
 		Serial.println("---------------------------------------");
 		printWordBin("prevSM8Status:   ", prevSM8Status);
 		printWordBin("SM8Status:       ", SM8Status);
 		printWordBin("SM8StatusSlope:  ", SM8StatusSlope);
 		printWordBin("SM8StatusChange: ", SM8StatusChange);
+#endif
 
 		prevSM8Status = curSM8Status;
 	}
@@ -426,27 +472,32 @@ void ctrlMotor(void)
 		  - Taster entriegeln
 	*/
 	if( prevWallButton != curWallButton ) {
-		unsigned int WallButtonSlope;
-		unsigned int WallButtonChange;
+		WORD WallButtonSlope;
+		WORD WallButtonChange;
 
 		WallButton = curWallButton;
 		WallButtonSlope = ~prevWallButton & WallButton;
 		WallButtonChange = prevWallButton ^ WallButton;
 
+#ifdef DEBUG_OUTPUT
+		Serial.println();
 		Serial.println("---------------------------------------");
 		printWordBin("prevWallButton:  ", prevWallButton);
 		printWordBin("WallButton:      ", WallButton);
 		printWordBin("WallButtonSlope: ", WallButtonSlope);
 		printWordBin("WallButtonChange:", WallButtonChange);
-
+#endif
 		prevWallButton = curWallButton;
 	}
 }
 
 
 // the loop function runs over and over again forever
-unsigned int tmpSM8Status  = 0x0000;
-unsigned int tmpWallButton  = 0x0000;
+WORD tmpSM8Status  = 0x0000;
+WORD tmpWallButton  = 0x0000;
+#ifdef DEBUG_OUTPUT
+char liveToogle=0;
+#endif
 void loop()
 {
 
@@ -475,6 +526,12 @@ void loop()
 		{
 			digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
 			ledTimer = millis();
+#ifdef DEBUG_OUTPUT
+			if ((liveToogle--) < 1) {
+				Serial.print(".");
+				liveToogle=3;
+			}
+#endif
 			Watchdog.reset();
 		}
 	}
