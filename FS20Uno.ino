@@ -175,6 +175,7 @@ volatile char debWallButton[IOBITS_CNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 volatile MOTOR_CTRL    MotorCtrl[MAX_MOTORS]    = {MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF};
 volatile MOTOR_TIMEOUT MotorTimeout[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 
+// SM8 Tastensteuerung "gedrückt"-Zeit
 volatile SM8_TIMEOUT   SM8Timeout[IOBITS_CNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 // time we turned LED on
@@ -361,21 +362,32 @@ void timerISR()
 		// Motor Control
 		if ( MotorCtrl[i] > MOTOR_OPEN ) {
 			--MotorCtrl[i];
+			// Motor auf Öffnen, Motor AUS
+			bitSet(valMotorRelais, i+8);
+			bitClear(valMotorRelais, i);
 		}
 		else if ( MotorCtrl[i] < MOTOR_CLOSE ) {
 			++MotorCtrl[i];
-		}
-		else if ( MotorCtrl[i] == MOTOR_OPEN ) {
-			bitSet(valMotorRelais, i);
-			bitSet(valMotorRelais, i+8);
-		}
-		else if ( MotorCtrl[i] == MOTOR_CLOSE ) {
-			bitSet(valMotorRelais, i);
+			// Motor auf Schliessen, Motor AUS
 			bitClear(valMotorRelais, i+8);
-		}
-		else if ( MotorCtrl[i] == MOTOR_OFF ) {
 			bitClear(valMotorRelais, i);
-			bitClear(valMotorRelais, i+8);
+		}
+		else {
+			if ( MotorCtrl[i] == MOTOR_OPEN ) {
+				// Motor auf Öffnen, Motor EIN
+				bitSet(valMotorRelais, i+8);
+				bitSet(valMotorRelais, i);
+			}
+			else if ( MotorCtrl[i] == MOTOR_CLOSE ) {
+				// Motor auf Schliessen, Motor EIN
+				bitClear(valMotorRelais, i+8);
+				bitSet(valMotorRelais, i);
+			}
+			else if ( MotorCtrl[i] == MOTOR_OFF ) {
+				// Motor AUS, Motor auf Schliessen
+				bitClear(valMotorRelais, i);
+				bitClear(valMotorRelais, i+8);
+			}
 		}
 	}
 
@@ -761,7 +773,6 @@ void ctrlSM8Button(void)
 				Serial.print(" timeout to ");
 				Serial.print(FS20_SM8_IN_RESPONSE/TIMER_MS);
 				Serial.println(" ms");
-				
 #endif
 				SM8Timeout[i] = FS20_SM8_IN_RESPONSE/TIMER_MS;
 			}
