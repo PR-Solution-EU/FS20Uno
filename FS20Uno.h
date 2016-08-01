@@ -28,8 +28,8 @@
 // Fenster zu:   47s
 // Jalousie auf: 15s
 // Jalousie zu:  18s
-//#define MOTOR_MAXRUNTIME		47000
-#define MOTOR_MAXRUNTIME		10000
+#define MOTOR_MAXRUNTIME		50000
+//#define MOTOR_MAXRUNTIME		10000		// Test
 
 // SM8 IN Schaltzeit in ms
 #define FS20_SM8_IN_RESPONSE	150

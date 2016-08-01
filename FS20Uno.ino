@@ -328,16 +328,16 @@ void timerISR()
 		if ( debSM8Status[i]>0 ) {
 			debSM8Status[i]--;
 		}
-		else if ( (curSM8Status & (1<<i)) != (irqSM8Status & (1<<i)) ) {
-			curSM8Status = curSM8Status & (IOBITS)(~(1<<i)) | (irqSM8Status & (1<<i));
+		else if ( bitRead(curSM8Status, i) != bitRead(irqSM8Status, i) ) {
+			bitWrite(curSM8Status, i, bitRead(irqSM8Status, i));
 		}
 
 		// Tastenentprellung für Wandtaster
 		if ( debWallButton[i]>0 ) {
 			debWallButton[i]--;
 		}
-		else if ( (curWallButton & (1<<i)) != (irqWallButton & (1<<i)) ) {
-			curWallButton = curWallButton & (IOBITS)(~(1<<i)) | (irqWallButton & (1<<i));
+		else if ( bitRead(curWallButton, i) != bitRead(irqWallButton, i) ) {
+			bitWrite(curWallButton, i, bitRead(irqWallButton, i));
 		}
 
 		// SM8 Tastersteuerung Timeout
@@ -599,7 +599,7 @@ void ctrlSM8StatusWallButton(void)
 			SM8Status = curSM8Status;
 			SM8StatusSlope   = ~prevSM8Status & SM8Status;
 			SM8StatusChange  =  prevSM8Status ^ SM8Status;
-	#ifdef DEBUG_OUTPUT
+#ifdef DEBUG_OUTPUT_SM8STATUS
 			Serial.println();
 			Serial.print("---------------------------------------- "); Serial.println((float)millis()/1000.0,3);
 			printWordBin("prevSM8Status:   ", prevSM8Status);
@@ -607,13 +607,13 @@ void ctrlSM8StatusWallButton(void)
 			printWordBin("SM8StatusSlope:  ", SM8StatusSlope);
 			printWordBin("SM8StatusChange: ", SM8StatusChange);
 			printWordBin("SM8StatusIgnore: ", SM8StatusIgnore);
-	#endif
+#endif
 			// Eventuell Änderungen einzelner Bits ignorieren
 			SM8StatusChange &= ~SM8StatusIgnore;
 			SM8StatusIgnore = 0;
-	#ifdef DEBUG_OUTPUT
+#ifdef DEBUG_OUTPUT_SM8STATUS
 			printWordBin("SM8StatusChange: ", SM8StatusChange);
-	#endif
+#endif
 
 			for(i=0; i<8; i++) {
 				// Motor Öffnen
@@ -690,51 +690,15 @@ void ctrlSM8StatusWallButton(void)
 				// Flankenänderung von 0 auf 1 schaltet Motor ein/aus
 				if ( bitRead(WallButtonChange,i)!=0 && bitRead(WallButtonSlope,i)!=0 ) {
 					changeMotor=newMotorDirection(MOTOR_OPEN,  &MotorCtrl[i]);
-					//~ // Falls SM8 "Schliessen" (i) aktiv (=1)
-					//~ if ( bitRead(SM8Status, i)!=0 ) {
-						//~ // SM8 Taste für "Schliessen" zurücksetzen
-						//~ bitClear(valSM8Button, i);
-						//~ bitSet(SM8StatusIgnore, i);
-					//~ }
-					//~ // Falls SM8 "Öffnen" (i) aktiv (=1)
-					//~ if ( bitRead(SM8Status, i+8)!=0 ) {
-						//~ // SM8 Taste für "Öffnen" zurücksetzen
-						//~ bitClear(valSM8Button, i+8);
-						//~ bitSet(SM8StatusIgnore, i+8);
-					//~ }
 				}
 				else if ( bitRead(WallButtonChange,i+8)!=0 && bitRead(WallButtonSlope,i+8)!=0 ) {
 					changeMotor=newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
-					//~ // Falls SM8 "Schliessen" (i) aktiv (=1)
-					//~ if ( bitRead(SM8Status, i)!=0 ) {
-						//~ // SM8 Taste für "Schliessen" zurücksetzen
-						//~ bitClear(valSM8Button, i);
-						//~ bitSet(SM8StatusIgnore, i);
-					//~ }
-					//~ // Falls SM8 "Öffnen" (i) aktiv (=1)
-					//~ if ( bitRead(SM8Status, i+8)!=0 ) {
-						//~ // SM8 Taste für "Öffnen" zurücksetzen
-						//~ bitClear(valSM8Button, i+8);
-						//~ bitSet(SM8StatusIgnore, i+8);
-					//~ }
 				}
 				// Pegel Öffnen und Schliessen = 1:
 				if ( bitRead(WallButton,i)!=0 && bitRead(WallButton,i+8)!=0 ) {
 					changeMotor=newMotorDirection(MOTOR_OFF,   &MotorCtrl[i]);
 					bitSet(WallButtonLocked,i);
 					bitSet(WallButtonLocked,i+8);
-					//~ // Falls SM8 "Öffnen" (i) aktiv (=1)
-					//~ if ( bitRead(SM8Status, i)!=0 ) {
-						//~ // SM8 Taste für "Öffnen" zurücksetzen
-						//~ bitClear(valSM8Button, i);
-						//~ bitSet(SM8StatusIgnore, i);
-					//~ }
-					//~ // Falls SM8 "Schliessen" (i+8) aktiv (=1)
-					//~ if ( bitRead(SM8Status, i+8)!=0 ) {
-						//~ // SM8 Taste für "Schliessen" zurücksetzen
-						//~ bitClear(valSM8Button, i+8);
-						//~ bitSet(SM8StatusIgnore, i+8);
-					//~ }
 				}
 				// Pegel Öffnen und Schliessen = 0:
 				if ( bitRead(WallButton,i)==0 && bitRead(WallButton,i+8)==0 ) {
@@ -743,7 +707,7 @@ void ctrlSM8StatusWallButton(void)
 				}
 			}
 
-	#ifdef DEBUG_OUTPUT_WALLBUTTON
+#ifdef DEBUG_OUTPUT_WALLBUTTON
 			Serial.println();
 			Serial.print("---------------------------------------- "); Serial.println((float)millis()/1000.0,3);
 			printWordBin("prevWallButton:  ", prevWallButton);
@@ -752,7 +716,7 @@ void ctrlSM8StatusWallButton(void)
 			printWordBin("WallButtonChange:", WallButtonChange);
 			printWordBin("WallButtonLocked:", WallButtonLocked);
 
-	#endif
+#endif
 
 			prevWallButton = curWallButton;
 		}
@@ -760,7 +724,7 @@ void ctrlSM8StatusWallButton(void)
 		if ( changeMotor ) {
 			byte i;
 
-	#ifdef DEBUG_OUTPUT
+#ifdef DEBUG_OUTPUT_MOTOR
 			Serial.println();
 			Serial.print("---------------------------------------- "); Serial.println((float)millis()/1000.0,3);
 			Serial.println("   M1   M2   M3   M4   M5   M6   M7   M8");
@@ -774,7 +738,7 @@ void ctrlSM8StatusWallButton(void)
 				}
 			}
 			Serial.println();
-	#endif
+#endif
 
 		}
 
@@ -849,41 +813,23 @@ void ctrlMotorRelais(void)
 #endif
 				MotorTimeout[i] = MOTOR_MAXRUNTIME/TIMER_MS;
 			}
+			// SM8 Ausgang für "Öffnen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Schliessen"
+			if ( bitRead(curSM8Status, i)!=0
+			     && (bitRead(valMotorRelais,i)==0 
+			         || (bitRead(valMotorRelais,i)!=0 && bitRead(valMotorRelais,i+8)==0) ) ) {
+				// SM8 Taste für "Öffnen" zurücksetzen
+				bitClear( valSM8Button, i);
+				bitSet(SM8StatusIgnore, i);
+			}
 
-			//~ // M=0, D=x: Beide SM8 Ausgänge inaktiv schalten
-			//~ // eventuell aktive zugehörige SM8 Taste aktivieren
-			//~ if ( bitRead(valMotorRelais,i)==0 && (bitRead(tmpMotorRelais,i+8) != bitRead(valMotorRelais,i+8) ) ) {
-				//~ // Falls SM8 "Öffnen" (i) aktiv (=1)
-				//~ if ( bitRead(curSM8Status, i)!=0 ) {
-					//~ // SM8 Taste für "Öffnen" zurücksetzen
-					//~ bitClear(valSM8Button, i);
-					//~ bitSet(SM8StatusIgnore, i);
-				//~ }
-				//~ // Falls SM8 "Schliessen" (i+8) aktiv (=1)
-				//~ if ( bitRead(curSM8Status, i+8)!=0 ) {
-					//~ // SM8 Taste für "Schliessen" zurücksetzen
-					//~ bitClear(valSM8Button, i+8);
-					//~ bitSet(SM8StatusIgnore, i+8);
-				//~ }
-			//~ }
-			//~ // M=1, D= 0>1: Falls SM8 "Schliessen" (i+8) aktiv (=1)
-			//~ if ( bitRead(valMotorRelais,i)==1 && (bitRead(tmpMotorRelais,i+8)==0 && bitRead(valMotorRelais,i+8)!=0) ) {
-				//~ // Falls SM8 "Öffnen" (i) aktiv (=1)
-				//~ if ( bitRead(curSM8Status, i)!=0 ) {
-					//~ // SM8 Taste für "Öffnen" zurücksetzen
-					//~ bitClear(valSM8Button, i);
-					//~ bitSet(SM8StatusIgnore, i);
-				//~ }
-			//~ }
-			//~ // M=1, D= 1>0: Falls SM8 "Öffnen" (i) aktiv (=1)
-			//~ if ( bitRead(valMotorRelais,i)==1 && (bitRead(tmpMotorRelais,i+8)!=0 && bitRead(valMotorRelais,i+8)==0) ) {
-				//~ // Falls SM8 "Schliessen" (i+8) aktiv (=1)
-				//~ if ( bitRead(curSM8Status, i+8)!=0 ) {
-					//~ // SM8 Taste für "Schliessen" zurücksetzen
-					//~ bitClear(valSM8Button, i+8);
-					//~ bitSet(SM8StatusIgnore, i+8);
-				//~ }
-			//~ }
+			// SM8 Ausgang für "Schliessen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Öffnen"
+			if ( bitRead(curSM8Status, i+8)!=0
+			     && (bitRead(valMotorRelais,i)==0 
+			         || (bitRead(valMotorRelais,i)!=0 && bitRead(valMotorRelais,i+8)!=0) ) ) {
+				// SM8 Taste für "Schliessen" zurücksetzen
+				bitClear(valSM8Button, i+8);
+				bitSet(SM8StatusIgnore, i+8);
+			}
 		}
 
 		tmpMotorRelais = valMotorRelais;
