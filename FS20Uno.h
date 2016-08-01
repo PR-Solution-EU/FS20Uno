@@ -8,9 +8,33 @@
  * Hardware definition (I/O Ports...)
  * Zeiten in ms müssen Vielfache von 10 sein
  * ========================================================================== */
+// MCP23017 Adressen
+#define MPC1    			0x0    // MCP23017 #1 I2C Adresse
+#define MPC2    			0x1    // MCP23017 #2 I2C Adresse
+#define MPC3				0x2    // MCP23017 #3 I2C Adresse
+#define MPC4    			0x3    // MCP23017 #4 I2C Adresse
+
+#define MPC_MOTORRELAIS		MPC1
+#define MPC_SM8BUTTON		MPC2
+#define MPC_SM8STATUS		MPC3
+#define MPC_WALLBUTTON		MPC4
+
+#define ISR_INPUT 			2			// ISR Input from MPC = D2
+#define ONBOARD_LED 		LED_BUILTIN	// LED = D13
+
+#define RAIN_INPUT 			4			// Input Signal für Regensensor
+#define RAIN_INPUT_AKTIV	0
+
+#define RAIN_ENABLE			5			// Input Signal für Regensensor aktiv
+#define RAIN_ENABLE_AKTIV	0
+
+#define RAIN_BITMASK		0b00001111	// Bitmask for Close output during rain
+
+
+// Anzahl der Motoren
 #define MAX_MOTORS				8
 
-// timer period in ms
+// Timer2 Intervall in ms
 #define TIMER_MS				10
 
 // Relais Ansprechzeit in ms (Datenblatt 5 ms)
@@ -37,6 +61,10 @@
 // Tasten Entprellzeit in ms
 #define DEBOUNCE_TIME			20
 
+// LED Blink Interval in ms
+#define LED_BLINK_INTERVAL		2000
+// LED Blink Length in ms
+#define LED_BLINK_LEN			100
 
 /* ==========================================================================
  * Type & Constant Definition

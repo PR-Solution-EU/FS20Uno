@@ -72,6 +72,9 @@
  *
  * ========================================================================== */
 /* TODO
+ * - Regensensoreingänge
+ * 		- Entprellen
+ * 		+ Funktionalität (OK)
  * - Lernbarer Timeout (optional)
  * - Commands (ATx) über RS232. 
  *   x:
@@ -87,7 +90,6 @@
 #include "FS20Uno.h"
 #include "I2C.h"
 
-
 // enable next line to enable debug output pins
 #define DEBUG_PINS
 // enable next line to output debug prints
@@ -98,26 +100,13 @@
 #define WATCHDOG_ENABLED
 #endif
 
-
-#define MPC1    0x20    // MCP23017 #1 I2C address
-#define MPC2    0x21    // MCP23017 #2 I2C address
-#define MPC3    0x22    // MCP23017 #3 I2C address
-#define MPC4    0x23    // MCP23017 #4 I2C address
-
-#define MPC_MOTORRELAIS	MPC1
-#define MPC_SM8BUTTON	MPC2
-#define MPC_SM8STATUS	MPC3
-#define MPC_WALLBUTTON	MPC4
-
-
-#define ISR_INPUT 		2			// ISR Input from MPC = D2
-#define ONBOARD_LED 	LED_BUILTIN	// LED = D13
 #ifdef DEBUG_PINS
-#define DBG_INT 		12			// Debug PIN = D12
-#define DBG_MPC 		11			// Debug PIN = D11
-#define DBG_TIMER	 	10			// Debug PIN = D10
-#define DBG_TIMERLEN 	9			// Debug PIN = D9
+#define DBG_INT 			12			// Debug PIN = D12
+#define DBG_MPC 			11			// Debug PIN = D11
+#define DBG_TIMER	 		10			// Debug PIN = D10
+#define DBG_TIMERLEN 		9			// Debug PIN = D9
 #endif
+
 
 
 
@@ -157,9 +146,13 @@ volatile IOBITS curSM8Status   = IOBITS_ZERO;
 volatile IOBITS SM8StatusIgnore= IOBITS_ZERO;
 volatile IOBITS curWallButton  = IOBITS_ZERO;
 
-// debounce counter für keys
+// Entprellzähler für SM8-Ausgänge und Wandtaster
 volatile char debSM8Status[IOBITS_CNT]  = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 volatile char debWallButton[IOBITS_CNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
+// Entprellzähler für Sensoreingänge
+volatile char debRainInput  = 0;
+volatile char debRainEnable = 0;
 
 // Motor Steuerungskommandos:
 //   0: Motor AUS
@@ -180,8 +173,9 @@ volatile MOTOR_TIMEOUT MotorTimeout[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 volatile SM8_TIMEOUT   SM8Timeout[IOBITS_CNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 // time we turned LED on
-volatile TIMER ledSignalTimer = 0;
-volatile TIMER ledTimer = 0;
+TIMER ledTimer = 0;
+char  ledCounter = 0;
+TIMER runTimer = 0;
 
 volatile bool isrTrigger = false;
 
@@ -213,7 +207,10 @@ void setup()
 #endif
 
 	pinMode(ONBOARD_LED, OUTPUT);   // for onboard LED
-	digitalWrite(ONBOARD_LED, HIGH);
+	digitalWrite(ONBOARD_LED, LOW);
+	
+	pinMode(RAIN_INPUT, INPUT_PULLUP);
+	pinMode(RAIN_ENABLE, INPUT_PULLUP);
 
 #ifdef DEBUG_PINS
 	digitalWrite(DBG_INT, LOW);  	// debugging
@@ -266,11 +263,6 @@ void setup()
 	pinMode(ISR_INPUT, INPUT);					// make sure input
 	digitalWrite(ISR_INPUT, HIGH);				// enable pull-up as we have made the interrupt pins open drain
 
-	attachInterrupt(digitalPinToInterrupt(2), extISR, FALLING);
-
-	MsTimer2::set(TIMER_MS, timerISR); 				// 20ms period
-	MsTimer2::start();
-
 #ifdef WATCHDOG_ENABLED
 	int countdownMS = Watchdog.enable(4000);
 #ifdef DEBUG_OUTPUT
@@ -281,10 +273,18 @@ void setup()
 #endif
 #endif
 
+	digitalWrite(ONBOARD_LED, HIGH);
+
 #ifdef DEBUG_OUTPUT
 	Serial.println("Setup done, starting main loop()");
 #endif
 
+	// External interrupt
+	attachInterrupt(digitalPinToInterrupt(ISR_INPUT), extISR, FALLING);
+
+	// Timer2 interrupt
+	MsTimer2::set(TIMER_MS, timerISR);
+	MsTimer2::start();
 }
 
 /*
@@ -300,8 +300,6 @@ void extISR()
 	digitalWrite(DBG_INT, !digitalRead(DBG_INT));  			// debugging
 #endif
 	isrTrigger = true;
-	ledSignalTimer = millis();  							// remember when IR occured
-	digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));   // turn the LED on (HIGH is the voltage level)
 }
 
 /*
@@ -809,7 +807,6 @@ void ctrlMotorRelais(void)
 				Serial.print(" timeout to ");
 				Serial.print(MOTOR_MAXRUNTIME/1000);
 				Serial.println(" sec.");
-				
 #endif
 				MotorTimeout[i] = MOTOR_MAXRUNTIME/TIMER_MS;
 			}
@@ -836,9 +833,57 @@ void ctrlMotorRelais(void)
 	}
 }
 
+/*
+ * Function:	ctrlRainSensor
+ * Return:
+ * Arguments:
+ * Description: Kontrolle der Regensensor Eingänge
+ */
+bool prevRainInput = false;
+bool prevRainEnable = false;
+void ctrlRainSensor(void)
+{
+	bool RainInput;
+	bool RainEnable;
 
+	RainInput  = digitalRead(RAIN_INPUT)==RAIN_INPUT_AKTIV;
+	RainEnable = digitalRead(RAIN_ENABLE)==RAIN_ENABLE_AKTIV;
 
+	if( prevRainInput != RainInput || prevRainEnable!=RainEnable) {
+		if ( RainEnable ) {
 #ifdef DEBUG_OUTPUT
+			Serial.println("Rain input changed and enabled");
+#endif
+			if ( RainInput ) {
+#ifdef DEBUG_OUTPUT
+				Serial.println("Rain detect, close all windows");
+#endif
+				byte i;
+				
+				for (i=0; i<MAX_MOTORS; i++) {
+					if( bitRead(RAIN_BITMASK,i) ) {
+						newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
+					}
+				}
+			}
+			else {
+#ifdef DEBUG_OUTPUT
+				Serial.println("No rain");
+#endif
+			}
+		}
+#ifdef DEBUG_OUTPUT
+		else {
+			Serial.println("Rain input changed but ignored");
+		}
+#endif
+		prevRainEnable =RainEnable;
+		prevRainInput = RainInput;
+	}
+}
+
+
+#ifdef DEBUG_OUTPUT_LIVE
 char liveToogle=0;
 byte liveDots=0;
 #endif
@@ -851,44 +896,45 @@ void loop()
 		// MPC Interrupt-Behandlung außerhalb extISR
 		handleMPCInt();
 	}
-
 	// Kontrolle der Eingangssignale von SM8 und Wandtaster
 	ctrlSM8StatusWallButton();
-
 	// Kontrolle der SM8 Tastensteuerung
 	ctrlSM8Button();
-
 	// Kontrolle der Motor Ausgangssignale
 	ctrlMotorRelais();
+	// Regensensor abfragen
+	ctrlRainSensor();
 
-
-	// revers LED after 50 ms
-	if ( (ledSignalTimer != 0) && (millis() > (ledSignalTimer + 50)) )
+	// Live timer und watchdog handling
+	if ( millis()>(runTimer+500) )
 	{
-		digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
-		ledSignalTimer = 0;
-	}
-	else
-	{
-		// toggle LED to indicate main loop is running
-		if ( millis()>(ledTimer+500) )
-		{
-			digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
-			ledTimer = millis();
-
-#ifdef DEBUG_OUTPUT
-			if ((liveToogle--) < 1) {
-				Serial.print(".");
-				liveToogle=3;
-				liveDots++;
-				if ( liveDots>76 ) {
-					Serial.println();
-					liveDots = 0;
-				}
-			}
+		runTimer = millis();
+#ifdef WATCHDOG_ENABLED
+		Watchdog.reset();
 #endif
-			Watchdog.reset();
+#ifdef DEBUG_OUTPUT_LIVE
+		if ((liveToogle--) < 1) {
+			Serial.print(".");
+			liveToogle=3;
+			liveDots++;
+			if ( liveDots>76 ) {
+				Serial.println();
+				liveDots = 0;
+			}
 		}
-	}
+#endif
+	}	
 
+	// toggle LED to indicate main loop is running
+	if ( millis()>(ledTimer+LED_BLINK_LEN) )
+	{
+		if ( --ledCounter == 1 ) {
+			digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
+		}
+		else if ( --ledCounter < 1 ) {
+			digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
+			ledCounter = LED_BLINK_INTERVAL/LED_BLINK_LEN;
+		}
+		ledTimer = millis();
+	}
 }
