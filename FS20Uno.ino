@@ -174,7 +174,7 @@ volatile SM8_TIMEOUT   SM8Timeout[IOBITS_CNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
 // time we turned LED on
 TIMER ledTimer = 0;
-char  ledCounter = 0;
+char  ledCounter = LED_BLINK_INTERVAL/LED_BLINK_LEN;
 TIMER runTimer = 0;
 
 volatile bool isrTrigger = false;
@@ -207,7 +207,7 @@ void setup()
 #endif
 
 	pinMode(ONBOARD_LED, OUTPUT);   // for onboard LED
-	digitalWrite(ONBOARD_LED, LOW);
+	digitalWrite(ONBOARD_LED, HIGH);
 	
 	pinMode(RAIN_INPUT, INPUT_PULLUP);
 	pinMode(RAIN_ENABLE, INPUT_PULLUP);
@@ -273,7 +273,7 @@ void setup()
 #endif
 #endif
 
-	digitalWrite(ONBOARD_LED, HIGH);
+	digitalWrite(ONBOARD_LED, LOW);
 
 #ifdef DEBUG_OUTPUT
 	Serial.println("Setup done, starting main loop()");
@@ -839,12 +839,12 @@ void ctrlMotorRelais(void)
  * Arguments:
  * Description: Kontrolle der Regensensor Eingänge
  */
-bool prevRainInput = false;
-bool prevRainEnable = false;
 void ctrlRainSensor(void)
 {
 	bool RainInput;
 	bool RainEnable;
+	static bool prevRainInput = false;
+	static bool prevRainEnable = false;
 
 	RainInput  = digitalRead(RAIN_INPUT)==RAIN_INPUT_AKTIV;
 	RainEnable = digitalRead(RAIN_ENABLE)==RAIN_ENABLE_AKTIV;
@@ -862,13 +862,17 @@ void ctrlRainSensor(void)
 				
 				for (i=0; i<MAX_MOTORS; i++) {
 					if( bitRead(RAIN_BITMASK,i) ) {
-						newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
+						if( MotorCtrl[i] != MOTOR_CLOSE ) {
+							newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
+						}
 					}
 				}
+				digitalWrite(ONBOARD_LED, HIGH);
 			}
 			else {
 #ifdef DEBUG_OUTPUT
 				Serial.println("No rain");
+				digitalWrite(ONBOARD_LED, LOW);
 #endif
 			}
 		}
