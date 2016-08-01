@@ -1,7 +1,7 @@
 #include "REVISION.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "1.00"
+#define VERSION "1.01"
 
 
 /* ==========================================================================
