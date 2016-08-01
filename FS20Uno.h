@@ -22,6 +22,7 @@
 // Motor Umschaltdelay in ms
 #define MOTOR_SWITCHOVER		250
 
+// Motor Timeout
 // Motor maximale Laufzeit in ms
 // Fenster auf:  47s
 // Fenster zu:   47s
@@ -30,13 +31,19 @@
 //#define MOTOR_MAXRUNTIME		47000
 #define MOTOR_MAXRUNTIME		10000
 
-// SM8 IN Schaltzeit in ms (muss Vielfaches von 10 sein)
+// SM8 IN Schaltzeit in ms
 #define FS20_SM8_IN_RESPONSE	150
+
+// SM8 IN Taster Autooff
+#define FS20_SM8_AUTOOFF		2000
 
 // Tasten Entprellzeit in ms
 #define DEBOUNCE_TIME			20
 
 
+/* ==========================================================================
+ * Type & Constant Definition
+ * ========================================================================== */
 typedef unsigned int  WORD;
 typedef unsigned long DWORD;
 typedef DWORD TIMER;
@@ -58,10 +65,19 @@ typedef DWORD TIMER;
 
 typedef char MOTOR_CTRL;
 
-#if   MOTOR_MAXRUNTIME<=255
+#if   (MOTOR_MAXRUNTIME/TIMER_MS)<=255
 typedef byte MOTOR_TIMEOUT;
-#elif MOTOR_MAXRUNTIME<=65535
+#elif (MOTOR_MAXRUNTIME/TIMER_MS)<=65535
 typedef WORD MOTOR_TIMEOUT;
 #else
 typedef DWORD MOTOR_TIMEOUT;
+#endif
+
+
+#if   (FS20_SM8_IN_RESPONSE/TIMER_MS)<=255
+typedef byte SM8_TIMEOUT;
+#elif (FS20_SM8_IN_RESPONSE/TIMER_MS)<=65535
+typedef WORD SM8_TIMEOUT;
+#else
+typedef DWORD SM8_TIMEOUT;
 #endif
