@@ -72,14 +72,7 @@
 
 	 ========================================================================== */
 /* TODO
-	 - Commands (ATx) über RS232
-	 x:
-	 - I - Get Info
-	 - T - Get/Set Date/Time
-	 - F - Get FS20 Status
-	 - M - Get/Set Motor Status
-	 - E - Get/Set EEPROM value
-	 - Lernbarer Timeout (optional)
+	 - Kommandos über RS232
 */
 
 #include <Arduino.h>
@@ -89,11 +82,13 @@
 #include <MsTimer2.h>			// http://playground.arduino.cc/Main/MsTimer2
 #include <Bounce2.h>			// https://github.com/thomasfredericks/Bounce2
 #include <Adafruit_SleepyDog.h> // 
+#include <SerialCommand.h>		// https://github.com/scogswell/ArduinoSerialCommand
+
 #include "FS20Uno.h"
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "1.05"
+#define VERSION "2.06"
 #include "REVISION.h"
 #define DATAVERSION 105
 
@@ -102,26 +97,28 @@
 #undef DEBUG_PINS
 // define next macros to output debug prints
 #define DEBUG_OUTPUT
+#undef DEBUG_OUTPUT_SETUP
 #undef DEBUG_OUTPUT_WATCHDOG
+#define DEBUG_OUTPUT_EEPROM
 #undef DEBUG_OUTPUT_SM8STATUS
 #undef DEBUG_OUTPUT_WALLBUTTON
-#undef DEBUG_OUTPUT_RAIN
-#undef DEBUG_OUTPUT_MOTOR
-#undef DEBUG_OUTPUT_LIVE
-#undef DEBUG_OUTPUT_SETUP
 #undef DEBUG_OUTPUT_SM8OUTPUT
+#undef DEBUG_OUTPUT_MOTOR
+#undef DEBUG_OUTPUT_RAIN
+#undef DEBUG_OUTPUT_LIVE
 
 #ifndef DEBUG_OUTPUT
 	// enable next line to enable watchdog timer
 	#define WATCHDOG_ENABLED
+	#undef DEBUG_OUTPUT_SETUP
 	#undef DEBUG_OUTPUT_WATCHDOG
+	#undef DEBUG_OUTPUT_EEPROM
 	#undef DEBUG_OUTPUT_SM8STATUS
 	#undef DEBUG_OUTPUT_WALLBUTTON
-	#undef DEBUG_OUTPUT_RAIN
-	#undef DEBUG_OUTPUT_MOTOR
-	#undef DEBUG_OUTPUT_LIVE
-	#undef DEBUG_OUTPUT_SETUP
 	#undef DEBUG_OUTPUT_SM8OUTPUT
+	#undef DEBUG_OUTPUT_MOTOR
+	#undef DEBUG_OUTPUT_RAIN
+	#undef DEBUG_OUTPUT_LIVE
 #endif
 
 #ifdef DEBUG_PINS
@@ -134,10 +131,11 @@
 
 
 
+// loop() timer vars
+TIMER ledTimer = 0;
+char  ledCounter = 0;
+TIMER runTimer = 0;
 
-/* ==========================================================================
-	 MPC Data
-	 ========================================================================== */
 
 // MPC output data
 
@@ -193,20 +191,16 @@ volatile MOTOR_TIMEOUT MotorTimeout[MAX_MOTORS] = {0, 0, 0, 0, 0, 0, 0, 0};
 // SM8 Tastensteuerung "gedrückt"-Zeit
 volatile SM8_TIMEOUT   SM8Timeout[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-// time we turned LED on
-TIMER ledTimer = 0;
-char  ledCounter = 0;
-TIMER runTimer = 0;
-
 volatile bool isrTrigger = false;
-
-StreamEx mySerial = Serial;
 
 // EEPROM Variablen
 MOTORBITS	eepromMTypeBitmask;
 DWORD 		eepromMaxRuntime[MAX_MOTORS];
 WORD 		eepromBlinkInterval;
 WORD 		eepromBlinkLen;
+
+
+StreamEx mySerial = Serial; // StreamEx object
 
 
 // Rain Sensor inputs and vars
@@ -225,7 +219,7 @@ bool RainDetect = false;
 */
 void setup()
 {
-	Serial.begin(115200);
+	Serial.begin(SERIAL_BAUDRATE);
 
 	printProgramInfo();
 
@@ -319,6 +313,8 @@ void setup()
 #endif
 #endif
 
+	setupSerialCommand();
+
 #ifdef DEBUG_OUTPUT_SETUP
 	printUptime();
 	Serial.println("Setup done, starting main loop()");
@@ -385,12 +381,12 @@ void setupEEPROMVars()
 #endif
 		eepromWriteLong(EEPROM_ADDR_LED_BLINK_INTERVAL, LED_BLINK_INTERVAL);
 		eepromWriteLong(EEPROM_ADDR_LED_BLINK_LEN, 		LED_BLINK_LEN);
-		eepromWriteLong(EEPROM_ADDR_RAIN_BITMASK, 		MTYPE_BITMASK);
+		eepromWriteLong(EEPROM_ADDR_MTYPE_BITMASK, 		MTYPE_BITMASK);
 		for(i=0; i<MAX_MOTORS; i++) {
 			eepromWriteLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*i), 
 				bitRead(MTYPE_BITMASK,i)!=0?MOTOR_WINDOW_MAXRUNTIME:MOTOR_JALOUSIE_MAXRUNTIME);
 		}
-		eepromWriteLong(EEPROM_ADDR_CRC32, 				eepromCalcCRC());
+		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
 	}
 #ifdef DEBUG_OUTPUT_EEPROM
 	else {
@@ -404,7 +400,7 @@ void setupEEPROMVars()
 #endif
 	eepromBlinkInterval	= eepromReadLong(EEPROM_ADDR_LED_BLINK_INTERVAL);
 	eepromBlinkLen		= eepromReadLong(EEPROM_ADDR_LED_BLINK_LEN);
-	eepromMTypeBitmask 	= eepromReadLong(EEPROM_ADDR_RAIN_BITMASK);
+	eepromMTypeBitmask 	= eepromReadLong(EEPROM_ADDR_MTYPE_BITMASK);
 	for(i=0; i<MAX_MOTORS; i++) {
 		eepromMaxRuntime[i]	= eepromReadLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*i));
 	}
@@ -608,6 +604,7 @@ void printProgramInfo(void)
 	mySerial.printf("Norbert Richter <norbert-richter@p-r-solution.de>\n\n");
 }
 
+//#ifdef DEBUG_OUTPUT
 /*	====================================================================
 	Function:	 printUptime
 	Return:
@@ -639,62 +636,67 @@ void printUptime(void)
 		mySerial.printf("%02d:%02d:%02d.%03ld ", hours, minutes, seconds, t);
 	}
 }
+//#endif
 
 
 
 /*	====================================================================
-	Function:	 newMotorDirection
+	Function:	 setMotorDirection
 	Return:
 	Arguments:
 	Description: Motor in neue Laufrichtung (oder AUS) schalten
 	====================================================================
 */
-bool newMotorDirection(MOTOR_CTRL newDirection, MOTOR_CTRL *newMotorDirection)
+bool setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 {
-	MOTOR_CTRL oldMotorCtrl = *newMotorDirection;
+	MOTOR_CTRL currentMotorCtrl = MotorCtrl[motorNum];
 
-	// Neue Richtung: Öffnen
-	if ( newDirection >= MOTOR_OPEN ) {
-		// Motor läuft auf Schliessen
-		if (*newMotorDirection <= MOTOR_CLOSE) {
-			// Motor auf Öffnen mit Umschaltdelay
-			*newMotorDirection = MOTOR_DELAYED_OPEN;
+	if( motorNum < MAX_MOTORS ) {
+		// Neue Richtung: Öffnen
+		if ( newDirection >= MOTOR_OPEN ) {
+			// Motor läuft auf Schliessen
+			if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
+				// Motor auf Öffnen mit Umschaltdelay
+				MotorCtrl[motorNum] = MOTOR_DELAYED_OPEN;
+			}
+			// Motor läuft auf Öffnen
+			else if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
+				// Motor aus
+				MotorCtrl[motorNum] = MOTOR_OFF;
+			}
+			// Motor ist aus
+			else {
+				// Motor auf öffnen ohne Umschaltdelay
+				MotorCtrl[motorNum] = MOTOR_OPEN;
+			}
 		}
-		// Motor läuft auf Öffnen
-		else if (*newMotorDirection >= MOTOR_OPEN) {
-			// Motor aus
-			*newMotorDirection = MOTOR_OFF;
+		// Neue Richtung: Schliessen
+		else if ( newDirection <= MOTOR_CLOSE ) {
+			// Motor läuft auf Öffnen
+			if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
+				// Motor auf Schliessen mit Umschaltdelay
+				MotorCtrl[motorNum] = MOTOR_DELAYED_CLOSE;
+			}
+			// Motor läuft auf Schliessen
+			else if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
+				// Motor aus
+				MotorCtrl[motorNum] = MOTOR_OFF;
+			}
+			// Motor ist aus
+			else {
+				// Motor auf Schliessen ohne Umschaltdelay
+				MotorCtrl[motorNum] = MOTOR_CLOSE;
+			}
 		}
-		// Motor ist aus
+		// Neue Richtung: AUS
 		else {
-			// Motor auf öffnen ohne Umschaltdelay
-			*newMotorDirection = MOTOR_OPEN;
+			// Motor AUS
+			MotorCtrl[motorNum] = MOTOR_OFF;
 		}
+		return (currentMotorCtrl != MotorCtrl[motorNum]);
 	}
-	// Neue Richtung: Schliessen
-	else if ( newDirection <= MOTOR_CLOSE ) {
-		// Motor läuft auf Öffnen
-		if (*newMotorDirection >= MOTOR_OPEN) {
-			// Motor auf Schliessen mit Umschaltdelay
-			*newMotorDirection = MOTOR_DELAYED_CLOSE;
-		}
-		// Motor läuft auf Schliessen
-		else if (*newMotorDirection <= MOTOR_CLOSE) {
-			// Motor aus
-			*newMotorDirection = MOTOR_OFF;
-		}
-		// Motor ist aus
-		else {
-			// Motor auf Schliessen ohne Umschaltdelay
-			*newMotorDirection = MOTOR_CLOSE;
-		}
-	}
-	// Neue Richtung: AUS
-	else {
-		// Motor AUS
-		*newMotorDirection = MOTOR_OFF;
-	}
-	return (oldMotorCtrl != *newMotorDirection);
+
+	return false;
 }
 
 
@@ -772,7 +774,7 @@ void ctrlSM8Status(void)
 				if ( bitRead(SM8StatusChange, i) != 0 && bitRead(SM8StatusChange, i + 8) == 0 ) {
 					if ( bitRead(SM8StatusSlope, i) != 0 ) {
 						// Flanke von 0 nach 1: Motor Ein
-						changeMotor = newMotorDirection(MOTOR_OPEN, &MotorCtrl[i]);
+						changeMotor = setMotorDirection(i, MOTOR_OPEN);
 						// Taste für Schliessen aktiv?
 						if ( bitRead(SM8Status, i + 8) != 0 ) {
 							// Taste für Schliessen zurücksetzen
@@ -782,14 +784,14 @@ void ctrlSM8Status(void)
 					}
 					else {
 						// Flanke von 0 nach 1: Motor Aus
-						changeMotor = newMotorDirection(MOTOR_OFF, &MotorCtrl[i]);;
+						changeMotor = setMotorDirection(i, MOTOR_OFF);
 					}
 				}
 				// Motor Schliessen
 				else if ( bitRead(SM8StatusChange, i) == 0 && bitRead(SM8StatusChange, i + 8) != 0 ) {
 					if ( bitRead(SM8StatusSlope, i + 8) != 0 ) {
 						// Flanke von 0 nach 1: Motor Ein
-						changeMotor = newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
+						changeMotor = setMotorDirection(i, MOTOR_CLOSE);
 						// Taste für Öffnen aktiv?
 						if ( bitRead(SM8Status, i) != 0 ) {
 							// Taste für Öffnen zurücksetzen
@@ -799,7 +801,7 @@ void ctrlSM8Status(void)
 					}
 					else {
 						// Flanke von 0 nach 1: Motor Aus
-						changeMotor = newMotorDirection(MOTOR_OFF, &MotorCtrl[i]);;
+						changeMotor = setMotorDirection(i, MOTOR_OFF);;
 					}
 				}
 				// Ungültig: Änderungen beider Eingänge zur gleichen Zeit
@@ -886,14 +888,14 @@ void ctrlWallButton(void)
 			for (i = 0; i < 8; i++) {
 				// Flankenänderung von 0 auf 1 schaltet Motor ein/aus
 				if ( bitRead(WallButtonChange, i) != 0 && bitRead(WallButtonSlope, i) != 0 ) {
-					changeMotor = newMotorDirection(MOTOR_OPEN,  &MotorCtrl[i]);
+					changeMotor = setMotorDirection(i, MOTOR_OPEN);
 				}
 				else if ( bitRead(WallButtonChange, i + 8) != 0 && bitRead(WallButtonSlope, i + 8) != 0 ) {
-					changeMotor = newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
+					changeMotor = setMotorDirection(i, MOTOR_CLOSE);
 				}
 				// Pegel Öffnen und Schliessen = 1:
 				if ( bitRead(WallButton, i) != 0 && bitRead(WallButton, i + 8) != 0 ) {
-					changeMotor = newMotorDirection(MOTOR_OFF,   &MotorCtrl[i]);
+					changeMotor = setMotorDirection(i, MOTOR_OFF);
 					bitSet(WallButtonLocked, i);
 					bitSet(WallButtonLocked, i + 8);
 				}
@@ -1076,7 +1078,7 @@ void ctrlRainSensor(void)
 				for (i = 0; i < MAX_MOTORS; i++) {
 					if ( bitRead(eepromMTypeBitmask, i) ) {
 						if ( MotorCtrl[i] != MOTOR_CLOSE ) {
-							newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
+							setMotorDirection(i, MOTOR_CLOSE);
 						}
 					}
 				}
@@ -1106,11 +1108,64 @@ void ctrlRainSensor(void)
 }
 
 
+/*	====================================================================
+	Function:	 beAlive()
+	Return:
+	Arguments:
+	Description: Lebenszeichen (watchdog bedienen, debug output)
+	====================================================================
+*/
+void beAlive(void)
+{
 #ifdef DEBUG_OUTPUT_LIVE
-char liveToogle = 0;
-byte liveDots = 0;
+	static char liveToogle = 0;
+	static byte liveDots = 0;
 #endif
 
+	// Live timer und watchdog handling
+	if ( millis() > (runTimer + 500) )
+	{
+		runTimer = millis();
+#ifdef WATCHDOG_ENABLED
+		Watchdog.reset();
+#endif
+#ifdef DEBUG_OUTPUT_LIVE
+		if ((liveToogle--) < 1) {
+			Serial.print(".");
+			liveToogle = 3;
+			liveDots++;
+			if ( liveDots > 76 ) {
+				Serial.println();
+				liveDots = 0;
+			}
+		}
+#endif
+	}
+}
+
+
+/*	====================================================================
+	Function:	 blinkLED()
+	Return:
+	Arguments:
+	Description: Onboard LED Blink-Funktion
+	====================================================================
+*/
+void blinkLED(void) 
+{
+	// toggle LED to indicate main loop is running
+	if ( millis() > (ledTimer + eepromBlinkLen) )
+	{
+		if ( --ledCounter == 1 ) {
+			digitalWrite(ONBOARD_LED, RainDetect?LOW:HIGH);
+		}
+		else if ( --ledCounter < 1 ) {
+			digitalWrite(ONBOARD_LED, RainDetect?HIGH:LOW);
+			ledCounter = eepromBlinkInterval / eepromBlinkLen;
+		}
+		ledTimer = millis();
+	}
+}
 
 
 /*	====================================================================
@@ -1139,36 +1194,9 @@ void loop()
 	// Regensensor abfragen
 	ctrlRainSensor();
 
-	// Live timer und watchdog handling
-	if ( millis() > (runTimer + 500) )
-	{
-		runTimer = millis();
-#ifdef WATCHDOG_ENABLED
-		Watchdog.reset();
-#endif
-#ifdef DEBUG_OUTPUT_LIVE
-		if ((liveToogle--) < 1) {
-			Serial.print(".");
-			liveToogle = 3;
-			liveDots++;
-			if ( liveDots > 76 ) {
-				Serial.println();
-				liveDots = 0;
-			}
-		}
-#endif
-	}
-
-	// toggle LED to indicate main loop is running
-	if ( millis() > (ledTimer + eepromBlinkLen) )
-	{
-		if ( --ledCounter == 1 ) {
-			digitalWrite(ONBOARD_LED, RainDetect?LOW:HIGH);
-		}
-		else if ( --ledCounter < 1 ) {
-			digitalWrite(ONBOARD_LED, RainDetect?HIGH:LOW);
-			ledCounter = eepromBlinkInterval / eepromBlinkLen;
-		}
-		ledTimer = millis();
-	}
+	beAlive();
+	
+	blinkLED();
+	
+	processSerialCommand();
 }
