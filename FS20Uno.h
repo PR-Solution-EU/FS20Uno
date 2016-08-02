@@ -1,9 +1,3 @@
-#include "REVISION.h"
-
-#define PROGRAM "FS20Uno"
-#define VERSION "1.01"
-
-
 /* ==========================================================================
  * Hardware definition (I/O Ports...)
  * Zeiten in ms müssen Vielfache von 10 sein

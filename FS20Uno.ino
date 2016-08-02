@@ -1,110 +1,136 @@
 /* ==========================================================================
- * File:    FS20Uno.ino
- * Author:  Norbert Richter <mail@norbert-richter.info>
- * Project: Dachflächenfenster/-Jalousie Steuerung
- *          mit 2x FS20 SM8
- * Desc:    Die Steuerung besteht aus
- * 			- einem Arduino Uno
- * 			- drei Porterweterungen MCP23017
- * 			- zwei ELV FS20 SM8
- *          Der Uno über 16 Relais ingesamt acht Motoren
- *          - Ein Relais für Motor Ein/Aus
- * 			- Ein Relais für die Drehrichtung.
- *
- * Funktionsweise der Steuerung:
- * Zwei FS20 SM8 dienen als FS20 Empfänger für Dachflächenfenstersteuerung (DFF)
- * Mit Hilfer zweier FS20-SM8 stehen stehen 16 FS20 Kanäle zur Verfügung.
- * Jeweils zwei steuern einen Motor:
- * - ein Kanal steuert Linkslauf
- * - ein Kanal steuert Rechtslauf
- *
- * Damit lassen sich insgesamt 4 DF-Fenster mit jeweils zwei 24V Motoren ansteuern:
- * - ein Motor zum Öffnen/Schliessen des Fensters
- * - ein Motor für die Jalousie
- * Der Uno übernimmt dabei die 'Übersetzung' von Öffnen/Schliessen
- * auf die Motorzustände
- * - Aus
- * - Öffnen
- * - Schließen
- *
- * Da wir in den Ablauf des FS20 SM8 nur bedingt eingreifen können, werden die
- * FS20 SM8 nur als 'Geber' eingesetzt. Die Motorsteuerung erfolgt komplett
- * über dieses Steuerungsprogramm.
- *
- * Verdrahtung:
- * MPC1
- *   Port A (Output): Relais Motor 1-8 EIN/AUS
- *   Port B (Output): Relais Motor 1-8 Drehrichtung
- * MPC2
- *   Port A (Output): FS20-SM8 #1 Taster 1-8 ("Auf" Funktion: 1=DFF1, 2=DFF2, 3=DFF3, 4=DFF4, 5=Jal1...)
- *   Port B (Output): FS20-SM8 #2 Taster 1-8 ("Zu" Funktion)
- * MPC3
- *   Port A (Input) : FS20-SM8 #1 Status 1-8 ("Auf" Funktion)
- *   Port B (Input) : FS20-SM8 #2 Status 1-8 ("Zu" Funktion)
- *   Die FS20-SM8 Ausgänge schalten das Signal gegen Masse (0=Aktiv)
- * MPC4
- *   Port A (Input) : Wandtaster             ("Auf" Funktion)
- *   Port B (Input) : Wandtaster             ("Zu" Funktion)
- *   Die Taster schalten das Signal gegen Masse (0=Aktiv).
- *   Die Wandtaster haben folgende Funktion:
- *   - Taste Auf: "Auf" einschalten, nochmaliger Druck schaltet Motor ab.
- *   - Taste Zu : "Zu" einschalten, nochmaliger Druck schaltet Motor ab.
- *   - Beide Tasten: Schaltet Motor ab.
- *
- * Zwei Digitaleingänge des Uno werden für Zustandsvorgänge benutzt:
- * D7: Regensensor (Aktiv Low)
- * D8: Regensensor aktiv (Aktiv Low)
- *
- * Vom SM8 werden jeweils die Ausgänge als Steuereingang für die Motorsteuerung
- * herangezogen, dabei werden folgende Bedingungen besonders berücksichtigt:
- * - gleichzeitig aktivierte Ausgänge (Auf & Zu aktiv) werden entkoppelt
- *   Nur die jweils steigende Flanke eines Ausgangs steuert die Richtung.
- *   War bereits die entgegengesetzte Richtung aktiv, wird die Richtung
- *   umgeschaltet.
- * - Motorschutz:
- *   Das Einschalten der Motorspannung erfolgt erst, nachdem das Richtungsrelais
- *   auch wirklich umgeschalten hat (OPERATE_TIME).
- *   Ebenso wird bei laufendem Motor und Richtungsumkehr der Motor zuerst abge-
- *   schaltet, die Laufrichtung geändert und danach der Motor wieder einge-
- *   schaltet (MOTOR_SWITCHOVER).
- * - Die fallende Flanke des SM8 Ausgangs schaltet die jeweilige Drehrichtung ab
- *
- *
- * ========================================================================== */
+	 File:    FS20Uno.ino
+	 Author:  Norbert Richter <mail@norbert-richter.info>
+	 Project: Dachflächenfenster/-Jalousie Steuerung
+			mit 2x FS20 SM8
+	 Desc:    Die Steuerung besteht aus
+				- einem Arduino Uno
+				- drei Porterweterungen MCP23017
+				- zwei ELV FS20 SM8
+			Der Uno über 16 Relais ingesamt acht Motoren
+			- Ein Relais für Motor Ein/Aus
+				- Ein Relais für die Drehrichtung.
+
+	 Funktionsweise der Steuerung:
+	 Zwei FS20 SM8 dienen als FS20 Empfänger für Dachflächenfenstersteuerung (DFF)
+	 Mit Hilfer zweier FS20-SM8 stehen stehen 16 FS20 Kanäle zur Verfügung.
+	 Jeweils zwei steuern einen Motor:
+	 - ein Kanal steuert Linkslauf
+	 - ein Kanal steuert Rechtslauf
+
+	 Damit lassen sich insgesamt 4 DF-Fenster mit jeweils zwei 24V Motoren ansteuern:
+	 - ein Motor zum Öffnen/Schliessen des Fensters
+	 - ein Motor für die Jalousie
+	 Der Uno übernimmt dabei die 'Übersetzung' von Öffnen/Schliessen
+	 auf die Motorzustände
+	 - Aus
+	 - Öffnen
+	 - Schließen
+
+	 Da wir in den Ablauf des FS20 SM8 nur bedingt eingreifen können, werden die
+	 FS20 SM8 nur als 'Geber' eingesetzt. Die Motorsteuerung erfolgt komplett
+	 über dieses Steuerungsprogramm.
+
+	 Verdrahtung:
+	 MPC1
+	 Port A (Output): Relais Motor 1-8 EIN/AUS
+	 Port B (Output): Relais Motor 1-8 Drehrichtung
+	 MPC2
+	 Port A (Output): FS20-SM8 #1 Taster 1-8 ("Auf" Funktion: 1=DFF1, 2=DFF2, 3=DFF3, 4=DFF4, 5=Jal1...)
+	 Port B (Output): FS20-SM8 #2 Taster 1-8 ("Zu" Funktion)
+	 MPC3
+	 Port A (Input) : FS20-SM8 #1 Status 1-8 ("Auf" Funktion)
+	 Port B (Input) : FS20-SM8 #2 Status 1-8 ("Zu" Funktion)
+	 Die FS20-SM8 Ausgänge schalten das Signal gegen Masse (0=Aktiv)
+	 MPC4
+	 Port A (Input) : Wandtaster             ("Auf" Funktion)
+	 Port B (Input) : Wandtaster             ("Zu" Funktion)
+	 Die Taster schalten das Signal gegen Masse (0=Aktiv).
+	 Die Wandtaster haben folgende Funktion:
+	 - Taste Auf: "Auf" einschalten, nochmaliger Druck schaltet Motor ab.
+	 - Taste Zu : "Zu" einschalten, nochmaliger Druck schaltet Motor ab.
+	 - Beide Tasten: Schaltet Motor ab.
+
+	 Zwei Digitaleingänge des Uno werden für Zustandsvorgänge benutzt:
+	 D7: Regensensor (Aktiv Low)
+	 D8: Regensensor aktiv (Aktiv Low)
+
+	 Vom SM8 werden jeweils die Ausgänge als Steuereingang für die Motorsteuerung
+	 herangezogen, dabei werden folgende Bedingungen besonders berücksichtigt:
+	 - gleichzeitig aktivierte Ausgänge (Auf & Zu aktiv) werden entkoppelt
+	 Nur die jweils steigende Flanke eines Ausgangs steuert die Richtung.
+	 War bereits die entgegengesetzte Richtung aktiv, wird die Richtung
+	 umgeschaltet.
+	 - Motorschutz:
+	 Das Einschalten der Motorspannung erfolgt erst, nachdem das Richtungsrelais
+	 auch wirklich umgeschalten hat (OPERATE_TIME).
+	 Ebenso wird bei laufendem Motor und Richtungsumkehr der Motor zuerst abge-
+	 schaltet, die Laufrichtung geändert und danach der Motor wieder einge-
+	 schaltet (MOTOR_SWITCHOVER).
+	 - Die fallende Flanke des SM8 Ausgangs schaltet die jeweilige Drehrichtung ab
+
+
+	 ========================================================================== */
 /* TODO
- * - Regensensoreingänge
- * 		- Entprellen
- * 		+ Funktionalität (OK)
- * - Lernbarer Timeout (optional)
- * - Commands (ATx) über RS232. 
- *   x:
+	 - RAIN_BITMASK in EEPROM
+	 - MOTOR_MAXRUNTIME in EEPROM
+	 - LED_BLINK_INTERVAL in EEPROM
+	 - LED_BLINK_LEN in EEPROM
+	 - Commands (ATx) über RS232
+	 x:
 	 - I - Get Info
-     - T - Get/Set Date/Time
-     - F - Get FS20 Status
-     - M - Get Motor Status
- */
+	 - T - Get/Set Date/Time
+	 - F - Get FS20 Status
+	 - M - Get/Set Motor Status
+	 - E - Get/Set EEPROM value
+	 - Lernbarer Timeout (optional)
+*/
 
 #include <Wire.h>
-#include <MsTimer2.h>	// http://playground.arduino.cc/Main/MsTimer2
-#include <Adafruit_SleepyDog.h>
+#include <PrintEx.h>			// https://github.com/Chris--A/PrintEx#printex-library-for-arduino-
+#include <MsTimer2.h>			// http://playground.arduino.cc/Main/MsTimer2
+#include <Adafruit_SleepyDog.h> // 
 #include "FS20Uno.h"
 #include "I2C.h"
 
-// enable next line to enable debug output pins
-#define DEBUG_PINS
-// enable next line to output debug prints
+#define PROGRAM "FS20Uno"
+#define VERSION "1.02"
+#include "REVISION.h"
+
+
+// define next macro to enable debug output pins
+#undef DEBUG_PINS
+// define next macros to output debug prints
 #define DEBUG_OUTPUT
+#undef DEBUG_OUTPUT_WATCHDOG
+#undef DEBUG_OUTPUT_SM8STATUS
+#undef DEBUG_OUTPUT_WALLBUTTON
+#undef DEBUG_OUTPUT_MOTOR
 
 #ifndef DEBUG_OUTPUT
-// enable next line to enable watchdog timer
-#define WATCHDOG_ENABLED
+	// enable next line to enable watchdog timer
+	#define WATCHDOG_ENABLED
+	
+	#ifdef DEBUG_OUTPUT_WATCHDOG
+		#undef DEBUG_OUTPUT_WATCHDOG
+	#endif
+
+	#ifdef DEBUG_OUTPUT_SM8STATUS
+		#undef DEBUG_OUTPUT_SM8STATUS
+	#endif
+	#ifdef DEBUG_OUTPUT_WALLBUTTON
+		#undef DEBUG_OUTPUT_WALLBUTTON
+	#endif
+	#ifdef DEBUG_OUTPUT_MOTOR
+		#undef DEBUG_OUTPUT_MOTOR
+	#endif
 #endif
 
 #ifdef DEBUG_PINS
-#define DBG_INT 			12			// Debug PIN = D12
-#define DBG_MPC 			11			// Debug PIN = D11
-#define DBG_TIMER	 		10			// Debug PIN = D10
-#define DBG_TIMERLEN 		9			// Debug PIN = D9
+	#define DBG_INT 			12			// Debug PIN = D12
+	#define DBG_MPC 			11			// Debug PIN = D11
+	#define DBG_TIMER	 		10			// Debug PIN = D10
+	#define DBG_TIMERLEN 		9			// Debug PIN = D9
 #endif
 
 
@@ -112,43 +138,43 @@
 
 
 /* ==========================================================================
- * MPC Data
- * ========================================================================== */
+	 MPC Data
+	 ========================================================================== */
 
 // MPC output data
 
 /* Motor
- * Unteren Bits: Motor Ein/Aus
- * Oberen Bits:  Motor Drehrichtung
- */
+	 Unteren Bits: Motor Ein/Aus
+	 Oberen Bits:  Motor Drehrichtung
+*/
 volatile IOBITS valMotorRelais = IOBITS_ZERO;
 
 /* SM8 Tasten
- * Unteren Bits: Motor Öffnen
- * Oberen Bits:  Motor Schliessen
- */
+	 Unteren Bits: Motor Öffnen
+	 Oberen Bits:  Motor Schliessen
+*/
 volatile IOBITS valSM8Button   = ~IOBITS_ZERO;
 
 // values read from MPC port during MPC interrupt
 /*
- * Unteren Bits: Motor Öffnen
- * Oberen Bits:  Motor Schliessen
- */
+	 Unteren Bits: Motor Öffnen
+	 Oberen Bits:  Motor Schliessen
+*/
 volatile IOBITS irqSM8Status   = IOBITS_ZERO;
 volatile IOBITS irqWallButton  = IOBITS_ZERO;
 
 // values currently used within program
 /*
- * Unteren Bits: Motor Öffnen
- * Oberen Bits:  Motor Schliessen
- */
+	 Unteren Bits: Motor Öffnen
+	 Oberen Bits:  Motor Schliessen
+*/
 volatile IOBITS curSM8Status   = IOBITS_ZERO;
-volatile IOBITS SM8StatusIgnore= IOBITS_ZERO;
+volatile IOBITS SM8StatusIgnore = IOBITS_ZERO;
 volatile IOBITS curWallButton  = IOBITS_ZERO;
 
 // Entprellzähler für SM8-Ausgänge und Wandtaster
-volatile char debSM8Status[IOBITS_CNT]  = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-volatile char debWallButton[IOBITS_CNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+volatile char debSM8Status[IOBITS_CNT]  = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+volatile char debWallButton[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // Entprellzähler für Sensoreingänge
 volatile char debRainInput  = 0;
@@ -166,38 +192,34 @@ volatile char debRainEnable = 0;
 #define MOTOR_CLOSE			-1
 #define MOTOR_DELAYED_CLOSE	(-MOTOR_SWITCHOVER/TIMER_MS)
 #define MOTOR_OFF			0
-volatile MOTOR_CTRL    MotorCtrl[MAX_MOTORS]    = {MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF};
-volatile MOTOR_TIMEOUT MotorTimeout[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
+volatile MOTOR_CTRL    MotorCtrl[MAX_MOTORS]    = {MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF};
+volatile MOTOR_TIMEOUT MotorTimeout[MAX_MOTORS] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 // SM8 Tastensteuerung "gedrückt"-Zeit
-volatile SM8_TIMEOUT   SM8Timeout[IOBITS_CNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+volatile SM8_TIMEOUT   SM8Timeout[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // time we turned LED on
 TIMER ledTimer = 0;
-char  ledCounter = LED_BLINK_INTERVAL/LED_BLINK_LEN;
+char  ledCounter = LED_BLINK_INTERVAL / LED_BLINK_LEN;
 TIMER runTimer = 0;
 
 volatile bool isrTrigger = false;
 
 
+StreamEx mySerial = Serial;
+
 
 /*
- * Function:	setup
- * Return:
- * Arguments:
- * Description: setup function runs once when you press reset or power the board
- */
+	 Function:	setup
+	 Return:
+	 Arguments:
+	 Description: setup function runs once when you press reset or power the board
+*/
 void setup()
 {
 	Serial.begin(115200);
 
-	Serial.print(PROGRAM);
-	Serial.print(" v");
-	Serial.print(VERSION);
-	Serial.print(" (build ");
-	Serial.print(REVISION);
-	Serial.println(")");
-	Serial.println();
+	printProgramInfo();
 
 #ifdef DEBUG_PINS
 	pinMode(DBG_INT, OUTPUT); 		// debugging
@@ -208,7 +230,7 @@ void setup()
 
 	pinMode(ONBOARD_LED, OUTPUT);   // for onboard LED
 	digitalWrite(ONBOARD_LED, HIGH);
-	
+
 	pinMode(RAIN_INPUT, INPUT_PULLUP);
 	pinMode(RAIN_ENABLE, INPUT_PULLUP);
 
@@ -240,18 +262,18 @@ void setup()
 	expanderWriteWord(MPC_WALLBUTTON,  GPIOA, ~IOBITS_ZERO);
 
 	// port direction
-	expanderWriteBoth(MPC_MOTORRELAIS,IODIRA,0x00);		// OUTPUT
-	expanderWriteBoth(MPC_SM8BUTTON,  IODIRA,0x00);		// OUTPUT
-	expanderWriteBoth(MPC_SM8STATUS,  IODIRA,0xFF);		// INPUT
-	expanderWriteBoth(MPC_WALLBUTTON, IODIRA,0xFF);		// INPUT
+	expanderWriteBoth(MPC_MOTORRELAIS, IODIRA, 0x00);		// OUTPUT
+	expanderWriteBoth(MPC_SM8BUTTON,   IODIRA, 0x00);		// OUTPUT
+	expanderWriteBoth(MPC_SM8STATUS,   IODIRA, 0xFF);		// INPUT
+	expanderWriteBoth(MPC_WALLBUTTON,  IODIRA, 0xFF);		// INPUT
 
 	// invert polarity
-	expanderWriteBoth(MPC_SM8STATUS,  IOPOLA,0xFF);		// invert polarity of signal
-	expanderWriteBoth(MPC_WALLBUTTON, IOPOLA,0xFF);		// invert polarity of signal
+	expanderWriteBoth(MPC_SM8STATUS,   IOPOLA, 0xFF);		// invert polarity of signal
+	expanderWriteBoth(MPC_WALLBUTTON,  IOPOLA, 0xFF);		// invert polarity of signal
 
 	// enable interrupts on input MPC
-	expanderWriteBoth(MPC_SM8STATUS,  GPINTENA, 0xFF); 		// enable interrupts
-	expanderWriteBoth(MPC_WALLBUTTON, GPINTENA, 0xFF); 		// enable interrupts
+	expanderWriteBoth(MPC_SM8STATUS,   GPINTENA, 0xFF); 	// enable interrupts
+	expanderWriteBoth(MPC_WALLBUTTON,  GPINTENA, 0xFF); 	// enable interrupts
 
 	// read from interrupt capture ports to clear them
 	expanderRead(MPC_SM8STATUS,  INTCAPA);
@@ -265,7 +287,8 @@ void setup()
 
 #ifdef WATCHDOG_ENABLED
 	int countdownMS = Watchdog.enable(4000);
-#ifdef DEBUG_OUTPUT
+#ifdef DEBUG_OUTPUT_WATCHDOG
+	printUptime();
 	Serial.print("Enabled the watchdog with max countdown of ");
 	Serial.print(countdownMS, DEC);
 	Serial.println(" milliseconds!");
@@ -276,6 +299,7 @@ void setup()
 	digitalWrite(ONBOARD_LED, LOW);
 
 #ifdef DEBUG_OUTPUT
+	printUptime();
 	Serial.println("Setup done, starting main loop()");
 #endif
 
@@ -288,12 +312,12 @@ void setup()
 }
 
 /*
- * Function:	extISR
- * Return:
- * Arguments:
- * Description: Interrupt service routine
- * 				called when external pin D2 goes from 1 to 0
- */
+	 Function:	extISR
+	 Return:
+	 Arguments:
+	 Description: Interrupt service routine
+					called when external pin D2 goes from 1 to 0
+*/
 void extISR()
 {
 #ifdef DEBUG_PINS
@@ -303,12 +327,12 @@ void extISR()
 }
 
 /*
- * Function:	timerISR
- * Return:
- * Arguments:
- * Description: Timer Interrupt service routine
- * 				Wird alle 10 ms aufgerufen
- */
+	 Function:	timerISR
+	 Return:
+	 Arguments:
+	 Description: Timer Interrupt service routine
+					Wird alle 10 ms aufgerufen
+*/
 void timerISR()
 {
 	byte i;
@@ -321,9 +345,9 @@ void timerISR()
 	digitalWrite(DBG_TIMERLEN, HIGH);	// debugging
 #endif
 
-	for(i=0; i<IOBITS_CNT; i++) {
+	for (i = 0; i < IOBITS_CNT; i++) {
 		// Tastenentprellung für SM8 Ausgänge
-		if ( debSM8Status[i]>0 ) {
+		if ( debSM8Status[i] > 0 ) {
 			debSM8Status[i]--;
 		}
 		else if ( bitRead(curSM8Status, i) != bitRead(irqSM8Status, i) ) {
@@ -331,7 +355,7 @@ void timerISR()
 		}
 
 		// Tastenentprellung für Wandtaster
-		if ( debWallButton[i]>0 ) {
+		if ( debWallButton[i] > 0 ) {
 			debWallButton[i]--;
 		}
 		else if ( bitRead(curWallButton, i) != bitRead(irqWallButton, i) ) {
@@ -339,8 +363,8 @@ void timerISR()
 		}
 
 		// SM8 Tastersteuerung Timeout
-		if ( SM8Timeout[i]>0 ) {
-			if ( --SM8Timeout[i]==0 ) {
+		if ( SM8Timeout[i] > 0 ) {
+			if ( --SM8Timeout[i] == 0 ) {
 				// SM8 Taster Timeout abgelaufen, Tasterausgang abschalten
 				bitSet(valSM8Button, i);
 			}
@@ -349,11 +373,11 @@ void timerISR()
 	}
 
 	// MPC Motor bits steuern (das MPC Register wird außerhalb der ISR geschrieben)
-	for(i=0; i<MAX_MOTORS; i++) {
+	for (i = 0; i < MAX_MOTORS; i++) {
 		// Motor Zeitablauf
-		if ( MotorTimeout[i]>0 ) {
+		if ( MotorTimeout[i] > 0 ) {
 			--MotorTimeout[i];
-			if ( MotorTimeout[i]==0 ) {
+			if ( MotorTimeout[i] == 0 ) {
 				MotorCtrl[i] = MOTOR_OFF;
 			}
 		}
@@ -362,30 +386,30 @@ void timerISR()
 		if ( MotorCtrl[i] > MOTOR_OPEN ) {
 			--MotorCtrl[i];
 			// Motor auf Öffnen, Motor AUS
-			bitSet(valMotorRelais, i+8);
+			bitSet(valMotorRelais, i + 8);
 			bitClear(valMotorRelais, i);
 		}
 		else if ( MotorCtrl[i] < MOTOR_CLOSE ) {
 			++MotorCtrl[i];
 			// Motor auf Schliessen, Motor AUS
-			bitClear(valMotorRelais, i+8);
+			bitClear(valMotorRelais, i + 8);
 			bitClear(valMotorRelais, i);
 		}
 		else {
 			if ( MotorCtrl[i] == MOTOR_OPEN ) {
 				// Motor auf Öffnen, Motor EIN
-				bitSet(valMotorRelais, i+8);
+				bitSet(valMotorRelais, i + 8);
 				bitSet(valMotorRelais, i);
 			}
 			else if ( MotorCtrl[i] == MOTOR_CLOSE ) {
 				// Motor auf Schliessen, Motor EIN
-				bitClear(valMotorRelais, i+8);
+				bitClear(valMotorRelais, i + 8);
 				bitSet(valMotorRelais, i);
 			}
 			else if ( MotorCtrl[i] == MOTOR_OFF ) {
 				// Motor AUS, Motor auf Schliessen
 				bitClear(valMotorRelais, i);
-				bitClear(valMotorRelais, i+8);
+				bitClear(valMotorRelais, i + 8);
 			}
 		}
 	}
@@ -397,13 +421,13 @@ void timerISR()
 }
 
 /*
- * Function:	handleMPCInt
- * Return:
- * Arguments:
- * Description: MPC Interrupt-Behandlung außerhalb extISR
- *              Liest die MPC Register in globale Variablen
- *              Aufruf aus loop(), nicht von der ISR
- */
+	 Function:	handleMPCInt
+	 Return:
+	 Arguments:
+	 Description: MPC Interrupt-Behandlung außerhalb extISR
+								Liest die MPC Register in globale Variablen
+								Aufruf aus loop(), nicht von der ISR
+*/
 void handleMPCInt()
 {
 	byte portValue;
@@ -420,9 +444,9 @@ void handleMPCInt()
 		digitalWrite(DBG_MPC, HIGH);	// debugging
 #endif
 		irqSM8Status = expanderReadWord(MPC_SM8STATUS, INTCAPA);
-		for(i=0; i<IOBITS_CNT; i++) {
-			if ( (curSM8Status & (1<<i)) != (irqSM8Status & (1<<i)) ) {
-				debSM8Status[i]=DEBOUNCE_TIME/TIMER_MS;
+		for (i = 0; i < IOBITS_CNT; i++) {
+			if ( (curSM8Status & (1 << i)) != (irqSM8Status & (1 << i)) ) {
+				debSM8Status[i] = DEBOUNCE_TIME / TIMER_MS;
 			}
 		}
 #ifdef DEBUG_PINS
@@ -436,9 +460,9 @@ void handleMPCInt()
 		digitalWrite(DBG_MPC, HIGH);	// debugging
 #endif
 		irqWallButton = expanderReadWord(MPC_WALLBUTTON, INTCAPA);
-		for(i=0; i<IOBITS_CNT; i++) {
-			if ( (curWallButton & (1<<i)) != (irqWallButton & (1<<i)) ) {
-				debWallButton[i]=DEBOUNCE_TIME/TIMER_MS;
+		for (i = 0; i < IOBITS_CNT; i++) {
+			if ( (curWallButton & (1 << i)) != (irqWallButton & (1 << i)) ) {
+				debWallButton[i] = DEBOUNCE_TIME / TIMER_MS;
 			}
 		}
 #ifdef DEBUG_PINS
@@ -450,6 +474,8 @@ void handleMPCInt()
 	//digitalWrite(DBG_INT, !digitalRead(DBG_INT));  		// debugging
 #endif
 }
+
+
 
 #ifdef DEBUG_OUTPUT
 String addLeadingSpace(char value, byte len)
@@ -468,7 +494,7 @@ String addLeadingSpace(char value, byte len)
 #ifdef DEBUG_OUTPUT
 String addLeadingZeros(byte value)
 {
-	int zeros = 8 - String(value,BIN).length();
+	int zeros = 8 - String(value, BIN).length();
 	String returnValue = "";
 	for (int i = 0; i < zeros; i++) {
 		returnValue += "0";
@@ -481,6 +507,7 @@ String addLeadingZeros(byte value)
 #ifdef DEBUG_OUTPUT
 void printWordBin(const char *head, WORD value)
 {
+	printUptime();
 	Serial.print(head);
 	Serial.print( addLeadingZeros(value >> 8) );
 	Serial.print(" ");
@@ -490,12 +517,53 @@ void printWordBin(const char *head, WORD value)
 #endif
 
 
+void printProgramInfo(void)
+{
+	mySerial.printf("%s v%s (build %s)\n", PROGRAM, VERSION, REVISION);
+	mySerial.printf("compiled on %s %s (GnuC%s %d.%d.%d)\n", __DATE__, __TIME__, __GNUG__?"++ v":" v", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
+	mySerial.printf("(c) 2016 by PR-Solution (http://p-r-solution.de)\n");
+	mySerial.printf("Norbert Richter <norbert-richter@p-r-solution.de>\n\n");
+}
+
 /*
- * Function:	newMotorDirection
- * Return:
- * Arguments:
- * Description: Motor in neue Laufrichtung (oder AUS) schalten
- */
+	 Function:	display_uptime
+	 Return:
+	 Arguments:
+	 Description: Print uptime
+*/
+void printUptime(void)
+{
+	uint32_t t;
+	uint16_t days;
+	uint8_t hours, minutes, seconds;
+
+	t = millis();
+	/* div_t div(int number, int denom) */
+	days = (uint16_t)(t / (24L * 60L * 60L * 1000L));
+	t -= (uint32_t)days * (24L * 60L * 60L * 1000L);
+	hours = (uint8_t)(t / (60L * 60L * 1000L));
+	t -= (uint32_t)hours * (60L * 60L * 1000L);
+	minutes = (uint8_t)(t / (60L * 1000L));
+	t -= (uint32_t)minutes * (60L * 1000L);
+	seconds = (uint8_t)(t / 1000L);
+	t -= (uint32_t)seconds * 1000L;
+
+	if( days ) {
+		mySerial.printf("%d day%s, %02d:%02d:%02d.%03ld ", days, days==1?"":"s", hours, minutes, seconds, t);
+	}
+	else {
+		mySerial.printf("%02d:%02d:%02d.%03ld ", hours, minutes, seconds, t);
+	}
+}
+
+
+
+/*
+	 Function:	newMotorDirection
+	 Return:
+	 Arguments:
+	 Description: Motor in neue Laufrichtung (oder AUS) schalten
+*/
 bool newMotorDirection(MOTOR_CTRL newDirection, MOTOR_CTRL *newMotorDirection)
 {
 	MOTOR_CTRL oldMotorCtrl = *newMotorDirection;
@@ -513,7 +581,7 @@ bool newMotorDirection(MOTOR_CTRL newDirection, MOTOR_CTRL *newMotorDirection)
 			*newMotorDirection = MOTOR_OFF;
 		}
 		// Motor ist aus
-		else {	
+		else {
 			// Motor auf öffnen ohne Umschaltdelay
 			*newMotorDirection = MOTOR_OPEN;
 		}
@@ -521,17 +589,17 @@ bool newMotorDirection(MOTOR_CTRL newDirection, MOTOR_CTRL *newMotorDirection)
 	// Neue Richtung: Schliessen
 	else if ( newDirection <= MOTOR_CLOSE ) {
 		// Motor läuft auf Öffnen
-		if (*newMotorDirection >= MOTOR_OPEN) {	
+		if (*newMotorDirection >= MOTOR_OPEN) {
 			// Motor auf Schliessen mit Umschaltdelay
 			*newMotorDirection = MOTOR_DELAYED_CLOSE;
 		}
 		// Motor läuft auf Schliessen
-		else if (*newMotorDirection <= MOTOR_CLOSE) {	
+		else if (*newMotorDirection <= MOTOR_CLOSE) {
 			// Motor aus
 			*newMotorDirection = MOTOR_OFF;
 		}
 		// Motor ist aus
-		else {	
+		else {
 			// Motor auf Schliessen ohne Umschaltdelay
 			*newMotorDirection = MOTOR_CLOSE;
 		}
@@ -545,48 +613,46 @@ bool newMotorDirection(MOTOR_CTRL newDirection, MOTOR_CTRL *newMotorDirection)
 }
 
 
+
 /*
- * Function:	ctrlSM8StatusWallButton
- * Return:
- * Arguments:
- * Description: Kontrolle der Eingangssignale von SM8 und Wandtaster
- */
-void ctrlSM8StatusWallButton(void)
+	 Function:	ctrlSM8Status
+	 Return:
+	 Arguments:
+	 Description: Kontrolle der Eingangssignale der SM8
+*/
+void ctrlSM8Status(void)
 {
 	static IOBITS tmpSM8Status   = IOBITS_ZERO;
-	static IOBITS tmpWallButton  = IOBITS_ZERO;
 
 	/* FS20 SM8 Output */
 	static IOBITS SM8Status;
 	static IOBITS prevSM8Status = IOBITS_ZERO;
+	bool changeMotor;
 
-	/* Wall Button Output */
-	static IOBITS WallButton;
-	static IOBITS prevWallButton = IOBITS_ZERO;
-	static IOBITS WallButtonLocked = IOBITS_ZERO;
-
-	bool changeMotor = false;
-
-	if ( (tmpSM8Status != curSM8Status) || (tmpWallButton != curWallButton) ) {
-#ifdef DEBUG_OUTPUT
-		Serial.println("Input Status changed");
+#ifdef DEBUG_OUTPUT_MOTOR
+	changeMotor = false;
 #endif
-		/* Wandtaster haben Vorrang vor SM8 Ausgänge */
-		/* Lese SM8 Ausgänge
-			* die unteren 8-bits sind "Öffnen" Befehle
-			* die oberen 8-bits sind "Schliessen" Befehle
-			* Flankengesteuert
-				* Flanke von 0 nach 1 bedeuted: Motor Ein
-				* Flanke von 1 nach 0 bedeuted: Motor Aus
-				* Gleiche Flanken für Öffnen und Schliessen
-				  sind ungültig
 
-			  Fo Fc  Motor
-			  -- --  ----------
-			  0  0   Aus
-			  1  0   Öffnen
-			  0  1   Schliessen
-			  1  1   Ignorieren
+	if ( (tmpSM8Status != curSM8Status) ) {
+#ifdef DEBUG_OUTPUT
+		printUptime();
+		Serial.println("SM8 Input Status changed");
+#endif
+		/* Lese SM8 Ausgänge
+			 die unteren 8-bits sind "Öffnen" Befehle
+			 die oberen 8-bits sind "Schliessen" Befehle
+			 Flankengesteuert
+				 Flanke von 0 nach 1 bedeuted: Motor Ein
+				 Flanke von 1 nach 0 bedeuted: Motor Aus
+				 Gleiche Flanken für Öffnen und Schliessen
+					sind ungültig
+
+				Fo Fc  Motor
+				-- --  ----------
+				0  0   Aus
+				1  0   Öffnen
+				0  1   Schliessen
+				1  1   Ignorieren
 		*/
 		if ( prevSM8Status != curSM8Status ) {
 			byte i;
@@ -597,9 +663,11 @@ void ctrlSM8StatusWallButton(void)
 			SM8Status = curSM8Status;
 			SM8StatusSlope   = ~prevSM8Status & SM8Status;
 			SM8StatusChange  =  prevSM8Status ^ SM8Status;
+
 #ifdef DEBUG_OUTPUT_SM8STATUS
 			Serial.println();
-			Serial.print("---------------------------------------- "); Serial.println((float)millis()/1000.0,3);
+			printUptime();
+			Serial.print("---------------------------------------- "); Serial.println((float)millis() / 1000.0, 3);
 			printWordBin("prevSM8Status:   ", prevSM8Status);
 			printWordBin("SM8Status:       ", SM8Status);
 			printWordBin("SM8StatusSlope:  ", SM8StatusSlope);
@@ -613,31 +681,31 @@ void ctrlSM8StatusWallButton(void)
 			printWordBin("SM8StatusChange: ", SM8StatusChange);
 #endif
 
-			for(i=0; i<8; i++) {
+			for (i = 0; i < 8; i++) {
 				// Motor Öffnen
-				if ( bitRead(SM8StatusChange,i)!=0 && bitRead(SM8StatusChange,i+8)==0 ) {
-					if ( bitRead(SM8StatusSlope,i)!=0 ) {
+				if ( bitRead(SM8StatusChange, i) != 0 && bitRead(SM8StatusChange, i + 8) == 0 ) {
+					if ( bitRead(SM8StatusSlope, i) != 0 ) {
 						// Flanke von 0 nach 1: Motor Ein
-						changeMotor=newMotorDirection(MOTOR_OPEN, &MotorCtrl[i]);
+						changeMotor = newMotorDirection(MOTOR_OPEN, &MotorCtrl[i]);
 						// Taste für Schliessen aktiv?
-						if ( bitRead(SM8Status, i+8)!=0 ) {
+						if ( bitRead(SM8Status, i + 8) != 0 ) {
 							// Taste für Schliessen zurücksetzen
-							bitClear(valSM8Button, i+8);
-							bitSet(SM8StatusIgnore, i+8);
+							bitClear(valSM8Button, i + 8);
+							bitSet(SM8StatusIgnore, i + 8);
 						}
 					}
 					else {
 						// Flanke von 0 nach 1: Motor Aus
-						changeMotor=newMotorDirection(MOTOR_OFF, &MotorCtrl[i]);;
+						changeMotor = newMotorDirection(MOTOR_OFF, &MotorCtrl[i]);;
 					}
 				}
 				// Motor Schliessen
-				else if ( bitRead(SM8StatusChange,i)==0 && bitRead(SM8StatusChange,i+8)!=0 ) {
-					if ( bitRead(SM8StatusSlope,i+8)!=0 ) {
+				else if ( bitRead(SM8StatusChange, i) == 0 && bitRead(SM8StatusChange, i + 8) != 0 ) {
+					if ( bitRead(SM8StatusSlope, i + 8) != 0 ) {
 						// Flanke von 0 nach 1: Motor Ein
-						changeMotor=newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
+						changeMotor = newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
 						// Taste für Öffnen aktiv?
-						if ( bitRead(SM8Status, i)!=0 ) {
+						if ( bitRead(SM8Status, i) != 0 ) {
 							// Taste für Öffnen zurücksetzen
 							bitClear(valSM8Button, i);
 							bitSet(SM8StatusIgnore, i);
@@ -645,34 +713,79 @@ void ctrlSM8StatusWallButton(void)
 					}
 					else {
 						// Flanke von 0 nach 1: Motor Aus
-						changeMotor=newMotorDirection(MOTOR_OFF, &MotorCtrl[i]);;
+						changeMotor = newMotorDirection(MOTOR_OFF, &MotorCtrl[i]);;
 					}
 				}
 				// Ungültig: Änderungen beider Eingänge zur gleichen Zeit
-				else if ( bitRead(SM8StatusChange,i)!=0 && bitRead(SM8StatusChange,i+8)!=0 ) {
+				else if ( bitRead(SM8StatusChange, i) != 0 && bitRead(SM8StatusChange, i + 8) != 0 ) {
 					// Beide Tasten zurücksetzen
 					bitClear(valSM8Button, i);
-					bitClear(valSM8Button, i+8);
+					bitClear(valSM8Button, i + 8);
 					bitSet(SM8StatusIgnore, i);
-					bitSet(SM8StatusIgnore, i+8);
+					bitSet(SM8StatusIgnore, i + 8);
 				}
 			}
 
 			prevSM8Status = curSM8Status;
-			changeMotor = true;
 		}
 
+#ifdef DEBUG_OUTPUT_MOTOR
+		if ( changeMotor ) {
+			byte i;
+
+			Serial.println();
+			printUptime();
+			Serial.print("---------------------------------------- "); Serial.println((float)millis() / 1000.0, 3);
+			Serial.println("   M1   M2   M3   M4   M5   M6   M7   M8");
+			for (i = 0; i < 8; i++) {
+				if (MotorCtrl[i] == 0) {
+					Serial.print("  off");
+				}
+				else {
+					String mtime =  String(MotorCtrl[i]);
+					Serial.print(addLeadingSpace(MotorCtrl[i], 5));
+				}
+			}
+			Serial.println();
+		}
+#endif
+
+		tmpSM8Status  = curSM8Status;
+	}
+}
+
+/*
+	 Function:	ctrlWallButton
+	 Return:
+	 Arguments:
+	 Description: Kontrolle der Eingangssignale der Wandtaster
+*/
+void ctrlWallButton(void)
+{
+	static IOBITS tmpWallButton  = IOBITS_ZERO;
+
+	/* Wall Button Output */
+	static IOBITS WallButton;
+	static IOBITS prevWallButton = IOBITS_ZERO;
+	static IOBITS WallButtonLocked = IOBITS_ZERO;
+	bool changeMotor;
+
+#ifdef DEBUG_OUTPUT_MOTOR
+	changeMotor = false;
+#endif
+
+	if ( (tmpWallButton != curWallButton) ) {
 		/* Lese Wandtaster
-			* die unteren 8-bits sind "Öffnen" Befehle
-			* die oberen 8-bits sind "Schliessen" Befehle
-			* Flankenänderung von 0 auf 1 schaltet Motor ein/aus
-			* Flankenänderung von 1 auf 0 bewirkt nichts
-			* Einzelpegel bewirkt nichts
-			* Pegel Öffnen und Schliessen = 1:
-			  - Motor Aus
-			  - Taster verriegeln
-			* Pegel Öffnen und Schliessen = 0:
-			  - Taster entriegeln
+			 die unteren 8-bits sind "Öffnen" Befehle
+			 die oberen 8-bits sind "Schliessen" Befehle
+			 Flankenänderung von 0 auf 1 schaltet Motor ein/aus
+			 Flankenänderung von 1 auf 0 bewirkt nichts
+			 Einzelpegel bewirkt nichts
+			 Pegel Öffnen und Schliessen = 1:
+				- Motor Aus
+				- Taster verriegeln
+			 Pegel Öffnen und Schliessen = 0:
+				- Taster entriegeln
 		*/
 		if ( prevWallButton != curWallButton ) {
 			byte i;
@@ -684,30 +797,31 @@ void ctrlSM8StatusWallButton(void)
 			WallButtonSlope = ~prevWallButton & WallButton;
 			WallButtonChange = prevWallButton ^ WallButton;
 
-			for(i=0; i<8; i++) {
+			for (i = 0; i < 8; i++) {
 				// Flankenänderung von 0 auf 1 schaltet Motor ein/aus
-				if ( bitRead(WallButtonChange,i)!=0 && bitRead(WallButtonSlope,i)!=0 ) {
-					changeMotor=newMotorDirection(MOTOR_OPEN,  &MotorCtrl[i]);
+				if ( bitRead(WallButtonChange, i) != 0 && bitRead(WallButtonSlope, i) != 0 ) {
+					changeMotor = newMotorDirection(MOTOR_OPEN,  &MotorCtrl[i]);
 				}
-				else if ( bitRead(WallButtonChange,i+8)!=0 && bitRead(WallButtonSlope,i+8)!=0 ) {
-					changeMotor=newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
+				else if ( bitRead(WallButtonChange, i + 8) != 0 && bitRead(WallButtonSlope, i + 8) != 0 ) {
+					changeMotor = newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
 				}
 				// Pegel Öffnen und Schliessen = 1:
-				if ( bitRead(WallButton,i)!=0 && bitRead(WallButton,i+8)!=0 ) {
-					changeMotor=newMotorDirection(MOTOR_OFF,   &MotorCtrl[i]);
-					bitSet(WallButtonLocked,i);
-					bitSet(WallButtonLocked,i+8);
+				if ( bitRead(WallButton, i) != 0 && bitRead(WallButton, i + 8) != 0 ) {
+					changeMotor = newMotorDirection(MOTOR_OFF,   &MotorCtrl[i]);
+					bitSet(WallButtonLocked, i);
+					bitSet(WallButtonLocked, i + 8);
 				}
 				// Pegel Öffnen und Schliessen = 0:
-				if ( bitRead(WallButton,i)==0 && bitRead(WallButton,i+8)==0 ) {
-					bitClear(WallButtonLocked,i);
-					bitClear(WallButtonLocked,i+8);
+				if ( bitRead(WallButton, i) == 0 && bitRead(WallButton, i + 8) == 0 ) {
+					bitClear(WallButtonLocked, i);
+					bitClear(WallButtonLocked, i + 8);
 				}
 			}
 
 #ifdef DEBUG_OUTPUT_WALLBUTTON
 			Serial.println();
-			Serial.print("---------------------------------------- "); Serial.println((float)millis()/1000.0,3);
+			printUptime();
+			Serial.print("---------------------------------------- "); Serial.println((float)millis() / 1000.0, 3);
 			printWordBin("prevWallButton:  ", prevWallButton);
 			printWordBin("WallButton:      ", WallButton);
 			printWordBin("WallButtonSlope: ", WallButtonSlope);
@@ -719,15 +833,16 @@ void ctrlSM8StatusWallButton(void)
 			prevWallButton = curWallButton;
 		}
 
+#ifdef DEBUG_OUTPUT_MOTOR
 		if ( changeMotor ) {
 			byte i;
 
-#ifdef DEBUG_OUTPUT_MOTOR
 			Serial.println();
-			Serial.print("---------------------------------------- "); Serial.println((float)millis()/1000.0,3);
+			printUptime();
+			Serial.print("---------------------------------------- "); Serial.println((float)millis() / 1000.0, 3);
 			Serial.println("   M1   M2   M3   M4   M5   M6   M7   M8");
-			for(i=0; i<8; i++) {
-				if (MotorCtrl[i]==0) {
+			for (i = 0; i < 8; i++) {
+				if (MotorCtrl[i] == 0) {
 					Serial.print("  off");
 				}
 				else {
@@ -736,21 +851,19 @@ void ctrlSM8StatusWallButton(void)
 				}
 			}
 			Serial.println();
+		}
 #endif
 
-		}
-
-		tmpSM8Status  = curSM8Status;
 		tmpWallButton = curWallButton;
 	}
 }
 
 /*
- * Function:	ctrlSM8Button
- * Return:
- * Arguments:
- * Description: Kontrolle der SM8 Tastensteuerung
- */
+	 Function:	ctrlSM8Button
+	 Return:
+	 Arguments:
+	 Description: Kontrolle der SM8 Tastensteuerung
+*/
 void ctrlSM8Button(void)
 {
 	static IOBITS tmpSM8Button   = IOBITS_ZERO;
@@ -758,34 +871,36 @@ void ctrlSM8Button(void)
 
 	if ( tmpSM8Button != valSM8Button ) {
 #ifdef DEBUG_OUTPUT
+		printUptime();
 		Serial.println("SM8 output changed");
 #endif
 		expanderWriteWord(MPC_SM8BUTTON,   GPIOA, valSM8Button);
 
-		for(i=0; i<IOBITS_CNT; i++) {
+		for (i = 0; i < IOBITS_CNT; i++) {
 			// SM8 Taste Timeout setzen, falls Tastenausgang gerade aktiviert wurde
-			if ( (bitRead(tmpSM8Button,i) != bitRead(valSM8Button,i)) && (bitRead(valSM8Button,i) == 0) ) {
+			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) && (bitRead(valSM8Button, i) == 0) ) {
 #ifdef DEBUG_OUTPUT
+				printUptime();
 				Serial.print("Set SM8 key ");
-				Serial.print(i+1);
+				Serial.print(i + 1);
 				Serial.print(" timeout to ");
-				Serial.print(FS20_SM8_IN_RESPONSE/TIMER_MS);
+				Serial.print(FS20_SM8_IN_RESPONSE / TIMER_MS);
 				Serial.println(" ms");
 #endif
-				SM8Timeout[i] = FS20_SM8_IN_RESPONSE/TIMER_MS;
+				SM8Timeout[i] = FS20_SM8_IN_RESPONSE / TIMER_MS;
 			}
 		}
-		
+
 		tmpSM8Button = valSM8Button;
 	}
 }
 
 /*
- * Function:	ctrlMotorRelais
- * Return:
- * Arguments:
- * Description: Kontrolle der Motor Ausgangssignale
- */
+	 Function:	ctrlMotorRelais
+	 Return:
+	 Arguments:
+	 Description: Kontrolle der Motor Ausgangssignale
+*/
 void ctrlMotorRelais(void)
 {
 	static IOBITS tmpMotorRelais = IOBITS_ZERO;
@@ -793,39 +908,41 @@ void ctrlMotorRelais(void)
 
 	if ( tmpMotorRelais != valMotorRelais ) {
 #ifdef DEBUG_OUTPUT
+		printUptime();
 		Serial.println("Motor output changed");
 #endif
 		expanderWriteWord(MPC_MOTORRELAIS, GPIOA, valMotorRelais);
-		for(i=0; i<MAX_MOTORS; i++) {
+		for (i = 0; i < MAX_MOTORS; i++) {
 			// Motor Timeout setzen, falls Motor
 			// gerade aktiviert oder die Laufrichtung geändert wurde
-			if (    (bitRead(tmpMotorRelais,i  )==0 && bitRead(valMotorRelais,i  )!=0)
-			     || (bitRead(tmpMotorRelais,i+8) != bitRead(valMotorRelais,i+8)           ) ) {
+			if (    (bitRead(tmpMotorRelais, i  ) == 0 && bitRead(valMotorRelais, i  ) != 0)
+					|| (bitRead(tmpMotorRelais, i + 8) != bitRead(valMotorRelais, i + 8)           ) ) {
 #ifdef DEBUG_OUTPUT
+				printUptime();
 				Serial.print("Set motor ");
-				Serial.print(i+1);
+				Serial.print(i + 1);
 				Serial.print(" timeout to ");
-				Serial.print(MOTOR_MAXRUNTIME/1000);
+				Serial.print(MOTOR_MAXRUNTIME / 1000);
 				Serial.println(" sec.");
 #endif
-				MotorTimeout[i] = MOTOR_MAXRUNTIME/TIMER_MS;
+				MotorTimeout[i] = MOTOR_MAXRUNTIME / TIMER_MS;
 			}
 			// SM8 Ausgang für "Öffnen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Schliessen"
-			if ( bitRead(curSM8Status, i)!=0
-			     && (bitRead(valMotorRelais,i)==0 
-			         || (bitRead(valMotorRelais,i)!=0 && bitRead(valMotorRelais,i+8)==0) ) ) {
+			if ( bitRead(curSM8Status, i) != 0
+				 && (bitRead(valMotorRelais, i) == 0
+					 || (bitRead(valMotorRelais, i) != 0 && bitRead(valMotorRelais, i + 8) == 0) ) ) {
 				// SM8 Taste für "Öffnen" zurücksetzen
 				bitClear( valSM8Button, i);
 				bitSet(SM8StatusIgnore, i);
 			}
 
 			// SM8 Ausgang für "Schliessen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Öffnen"
-			if ( bitRead(curSM8Status, i+8)!=0
-			     && (bitRead(valMotorRelais,i)==0 
-			         || (bitRead(valMotorRelais,i)!=0 && bitRead(valMotorRelais,i+8)!=0) ) ) {
+			if ( bitRead(curSM8Status, i + 8) != 0
+				 && (bitRead(valMotorRelais, i) == 0
+					 || (bitRead(valMotorRelais, i) != 0 && bitRead(valMotorRelais, i + 8) != 0) ) ) {
 				// SM8 Taste für "Schliessen" zurücksetzen
-				bitClear(valSM8Button, i+8);
-				bitSet(SM8StatusIgnore, i+8);
+				bitClear(valSM8Button, i + 8);
+				bitSet(SM8StatusIgnore, i + 8);
 			}
 		}
 
@@ -834,11 +951,11 @@ void ctrlMotorRelais(void)
 }
 
 /*
- * Function:	ctrlRainSensor
- * Return:
- * Arguments:
- * Description: Kontrolle der Regensensor Eingänge
- */
+	 Function:	ctrlRainSensor
+	 Return:
+	 Arguments:
+	 Description: Kontrolle der Regensensor Eingänge
+*/
 void ctrlRainSensor(void)
 {
 	bool RainInput;
@@ -846,23 +963,25 @@ void ctrlRainSensor(void)
 	static bool prevRainInput = false;
 	static bool prevRainEnable = false;
 
-	RainInput  = digitalRead(RAIN_INPUT)==RAIN_INPUT_AKTIV;
-	RainEnable = digitalRead(RAIN_ENABLE)==RAIN_ENABLE_AKTIV;
+	RainInput  = digitalRead(RAIN_INPUT) == RAIN_INPUT_AKTIV;
+	RainEnable = digitalRead(RAIN_ENABLE) == RAIN_ENABLE_AKTIV;
 
-	if( prevRainInput != RainInput || prevRainEnable!=RainEnable) {
+	if ( prevRainInput != RainInput || prevRainEnable != RainEnable) {
 		if ( RainEnable ) {
 #ifdef DEBUG_OUTPUT
-			Serial.println("Rain input changed and enabled");
+			printUptime();
+			Serial.println("Rain sensor enabled and changed");
 #endif
 			if ( RainInput ) {
 #ifdef DEBUG_OUTPUT
-				Serial.println("Rain detect, close all windows");
+				printUptime();
+				Serial.println("Rain sensor active, close all windows");
 #endif
 				byte i;
-				
-				for (i=0; i<MAX_MOTORS; i++) {
-					if( bitRead(RAIN_BITMASK,i) ) {
-						if( MotorCtrl[i] != MOTOR_CLOSE ) {
+
+				for (i = 0; i < MAX_MOTORS; i++) {
+					if ( bitRead(RAIN_BITMASK, i) ) {
+						if ( MotorCtrl[i] != MOTOR_CLOSE ) {
 							newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
 						}
 					}
@@ -871,26 +990,29 @@ void ctrlRainSensor(void)
 			}
 			else {
 #ifdef DEBUG_OUTPUT
-				Serial.println("No rain");
+				printUptime();
+				Serial.println("Rain sensor inactive");
 				digitalWrite(ONBOARD_LED, LOW);
 #endif
 			}
 		}
 #ifdef DEBUG_OUTPUT
 		else {
-			Serial.println("Rain input changed but ignored");
+			printUptime();
+			Serial.println("Rain sensor changed but disabled");
 		}
 #endif
-		prevRainEnable =RainEnable;
+		prevRainEnable = RainEnable;
 		prevRainInput = RainInput;
 	}
 }
 
 
 #ifdef DEBUG_OUTPUT_LIVE
-char liveToogle=0;
-byte liveDots=0;
+char liveToogle = 0;
+byte liveDots = 0;
 #endif
+
 
 // the loop function runs over and over again forever
 void loop()
@@ -900,8 +1022,11 @@ void loop()
 		// MPC Interrupt-Behandlung außerhalb extISR
 		handleMPCInt();
 	}
+
 	// Kontrolle der Eingangssignale von SM8 und Wandtaster
-	ctrlSM8StatusWallButton();
+	ctrlSM8Status();
+	/* Wandtaster haben Vorrang vor SM8 Ausgänge, daher Auslesen nach SM8 */
+	ctrlWallButton();
 	// Kontrolle der SM8 Tastensteuerung
 	ctrlSM8Button();
 	// Kontrolle der Motor Ausgangssignale
@@ -910,7 +1035,7 @@ void loop()
 	ctrlRainSensor();
 
 	// Live timer und watchdog handling
-	if ( millis()>(runTimer+500) )
+	if ( millis() > (runTimer + 500) )
 	{
 		runTimer = millis();
 #ifdef WATCHDOG_ENABLED
@@ -919,25 +1044,25 @@ void loop()
 #ifdef DEBUG_OUTPUT_LIVE
 		if ((liveToogle--) < 1) {
 			Serial.print(".");
-			liveToogle=3;
+			liveToogle = 3;
 			liveDots++;
-			if ( liveDots>76 ) {
+			if ( liveDots > 76 ) {
 				Serial.println();
 				liveDots = 0;
 			}
 		}
 #endif
-	}	
+	}
 
 	// toggle LED to indicate main loop is running
-	if ( millis()>(ledTimer+LED_BLINK_LEN) )
+	if ( millis() > (ledTimer + LED_BLINK_LEN) )
 	{
 		if ( --ledCounter == 1 ) {
 			digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
 		}
 		else if ( --ledCounter < 1 ) {
 			digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
-			ledCounter = LED_BLINK_INTERVAL/LED_BLINK_LEN;
+			ledCounter = LED_BLINK_INTERVAL / LED_BLINK_LEN;
 		}
 		ledTimer = millis();
 	}
