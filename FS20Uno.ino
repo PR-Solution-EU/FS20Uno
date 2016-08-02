@@ -72,10 +72,6 @@
 
 	 ========================================================================== */
 /* TODO
-	 - RAIN_BITMASK in EEPROM
-	 - MOTOR_MAXRUNTIME in EEPROM
-	 - LED_BLINK_INTERVAL in EEPROM
-	 - LED_BLINK_LEN in EEPROM
 	 - Commands (ATx) über RS232
 	 x:
 	 - I - Get Info
@@ -86,6 +82,8 @@
 	 - Lernbarer Timeout (optional)
 */
 
+#include <Arduino.h>
+#include <EEPROM.h>
 #include <Wire.h>
 #include <PrintEx.h>			// https://github.com/Chris--A/PrintEx#printex-library-for-arduino-
 #include <MsTimer2.h>			// http://playground.arduino.cc/Main/MsTimer2
@@ -94,8 +92,9 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "1.02"
+#define VERSION "1.03"
 #include "REVISION.h"
+#define DATAVERSION 103
 
 
 // define next macro to enable debug output pins
@@ -200,20 +199,27 @@ volatile SM8_TIMEOUT   SM8Timeout[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 // time we turned LED on
 TIMER ledTimer = 0;
-char  ledCounter = LED_BLINK_INTERVAL / LED_BLINK_LEN;
+char  ledCounter = 0;
 TIMER runTimer = 0;
 
 volatile bool isrTrigger = false;
 
-
 StreamEx mySerial = Serial;
 
 
-/*
-	 Function:	setup
-	 Return:
-	 Arguments:
-	 Description: setup function runs once when you press reset or power the board
+// EEPROM Variablen
+MOTORBITS	eepromRainBitmask;
+DWORD 		eepromMaxRuntime;
+WORD 		eepromBlinkInterval;
+WORD 		eepromBlinkLen;
+
+/*	====================================================================
+	Function:	 setup
+	Return:
+	Arguments:
+	Description: setup function runs once 
+	             when you press reset or power the board
+	====================================================================
 */
 void setup()
 {
@@ -229,10 +235,13 @@ void setup()
 #endif
 
 	pinMode(ONBOARD_LED, OUTPUT);   // for onboard LED
+	// indicate setup started
 	digitalWrite(ONBOARD_LED, HIGH);
 
+	// Input pins pulled-up
 	pinMode(RAIN_INPUT, INPUT_PULLUP);
 	pinMode(RAIN_ENABLE, INPUT_PULLUP);
+
 
 #ifdef DEBUG_PINS
 	digitalWrite(DBG_INT, LOW);  	// debugging
@@ -242,7 +251,6 @@ void setup()
 #endif
 
 	Wire.begin();
-
 	// expander configuration register
 	expanderWriteBoth(MPC_MOTORRELAIS, IOCON, 0b00100100);	//                    sequential mode, INT Open-drain output
 	expanderWriteBoth(MPC_SM8BUTTON,   IOCON, 0b00100100);	//                    sequential mode, INT Open-drain output
@@ -285,6 +293,11 @@ void setup()
 	pinMode(ISR_INPUT, INPUT);					// make sure input
 	digitalWrite(ISR_INPUT, HIGH);				// enable pull-up as we have made the interrupt pins open drain
 
+	// Read EEPROM program variables
+	setupEEPROMVars();
+
+	ledCounter = eepromBlinkInterval / eepromBlinkLen;
+
 #ifdef WATCHDOG_ENABLED
 	int countdownMS = Watchdog.enable(4000);
 #ifdef DEBUG_OUTPUT_WATCHDOG
@@ -296,12 +309,13 @@ void setup()
 #endif
 #endif
 
-	digitalWrite(ONBOARD_LED, LOW);
-
 #ifdef DEBUG_OUTPUT
 	printUptime();
 	Serial.println("Setup done, starting main loop()");
 #endif
+
+	// indicate setup was done
+	digitalWrite(ONBOARD_LED, LOW);
 
 	// External interrupt
 	attachInterrupt(digitalPinToInterrupt(ISR_INPUT), extISR, FALLING);
@@ -309,14 +323,93 @@ void setup()
 	// Timer2 interrupt
 	MsTimer2::set(TIMER_MS, timerISR);
 	MsTimer2::start();
+
 }
 
-/*
-	 Function:	extISR
-	 Return:
-	 Arguments:
-	 Description: Interrupt service routine
-					called when external pin D2 goes from 1 to 0
+
+
+/*	====================================================================
+	Function:	 setupEEPROMVars
+	Return:
+	Arguments:
+	Description: Initalisiere Standard Werte einiger Programmvariablen
+			     aus EEPROM-Daten
+	====================================================================
+*/
+void setupEEPROMVars()
+{
+#ifdef DEBUG_OUTPUT
+	//Print length of data to run CRC on.
+	printUptime();
+	Serial.print("EEPROM length: ");
+	Serial.println(EEPROM.length());
+#endif
+	// Write data version into EEPROM before checking CRC32
+	eepromWriteLong(EEPROM_ADDR_DATAVERSION, DATAVERSION);
+	
+	unsigned long dataCRC = eepromCalcCRC();
+	unsigned long eepromCRC = eepromReadLong(EEPROM_ADDR_CRC32);
+
+#ifdef DEBUG_OUTPUT
+	//Print length of data to run CRC on.
+	printUptime();
+	Serial.print("EEPROM length: ");
+	Serial.println(EEPROM.length());
+
+	//Print the result of calling eepromCRC()
+	printUptime();
+	Serial.print("CRC32 of EEPROM data: 0x");
+	Serial.println(dataCRC, HEX);
+
+	printUptime();
+	Serial.print("Stored CRC32: 0x");
+	Serial.println(eepromCRC, HEX);
+#endif
+
+	if ( dataCRC != eepromCRC ) {
+#ifdef DEBUG_OUTPUT
+		printUptime();
+		Serial.println("EEPROM CRC32 not matching, write defaults...");
+#endif
+		eepromWriteLong(EEPROM_ADDR_RAIN_BITMASK, 		RAIN_BITMASK);
+		eepromWriteLong(EEPROM_ADDR_MOTOR_MAXRUNTIME, 	MOTOR_MAXRUNTIME);
+		eepromWriteLong(EEPROM_ADDR_LED_BLINK_INTERVAL, LED_BLINK_INTERVAL);
+		eepromWriteLong(EEPROM_ADDR_LED_BLINK_LEN, 		LED_BLINK_LEN);
+		eepromWriteLong(EEPROM_ADDR_CRC32, 				eepromCalcCRC());
+	}
+#ifdef DEBUG_OUTPUT
+	else {
+		printUptime();
+		Serial.println("EEPROM CRC232 is valid");
+	}
+#endif
+#ifdef DEBUG_OUTPUT
+	printUptime();
+	Serial.println("EEPROM read defaults...");
+#endif
+	eepromRainBitmask 	= eepromReadLong(EEPROM_ADDR_RAIN_BITMASK);
+	eepromMaxRuntime	= eepromReadLong(EEPROM_ADDR_MOTOR_MAXRUNTIME);
+	eepromBlinkInterval	= eepromReadLong(EEPROM_ADDR_LED_BLINK_INTERVAL);
+	eepromBlinkLen		= eepromReadLong(EEPROM_ADDR_LED_BLINK_LEN);
+#ifdef DEBUG_OUTPUT
+	printUptime();
+	Serial.println("EEPROM values:");
+	mySerial.printf("  eepromRainBitmask: %02x\n", eepromRainBitmask);
+	mySerial.printf("  eepromMaxRuntime: %ld\n", eepromMaxRuntime);
+	mySerial.printf("  eepromBlinkInterval: %d\n", eepromBlinkInterval);
+	mySerial.printf("  eepromBlinkLen: %d\n", eepromBlinkLen);
+#endif
+}
+
+
+
+/*	====================================================================
+	Function:	 extISR
+	Return:
+	Arguments:
+	Description: Interrupt service routine
+				 called when external pin D2 goes from 1 to 0
+	====================================================================
 */
 void extISR()
 {
@@ -326,12 +419,13 @@ void extISR()
 	isrTrigger = true;
 }
 
-/*
-	 Function:	timerISR
-	 Return:
-	 Arguments:
-	 Description: Timer Interrupt service routine
-					Wird alle 10 ms aufgerufen
+/*	====================================================================
+	Function:	 timerISR
+	Return:
+	Arguments:
+	Description: Timer Interrupt service routine
+				 Wird alle 10 ms aufgerufen
+	====================================================================
 */
 void timerISR()
 {
@@ -420,13 +514,14 @@ void timerISR()
 
 }
 
-/*
-	 Function:	handleMPCInt
-	 Return:
-	 Arguments:
-	 Description: MPC Interrupt-Behandlung außerhalb extISR
-								Liest die MPC Register in globale Variablen
-								Aufruf aus loop(), nicht von der ISR
+/*	====================================================================
+	Function:	 handleMPCInt
+	Return:
+	Arguments:
+	Description: MPC Interrupt-Behandlung außerhalb extISR
+				 Liest die MPC Register in globale Variablen
+				 Aufruf aus loop(), nicht von der ISR
+	====================================================================
 */
 void handleMPCInt()
 {
@@ -517,6 +612,13 @@ void printWordBin(const char *head, WORD value)
 #endif
 
 
+/*	====================================================================
+	Function:	 printProgramInfo
+	Return:
+	Arguments:
+	Description: Print program info
+	====================================================================
+*/
 void printProgramInfo(void)
 {
 	mySerial.printf("%s v%s (build %s)\n", PROGRAM, VERSION, REVISION);
@@ -525,11 +627,12 @@ void printProgramInfo(void)
 	mySerial.printf("Norbert Richter <norbert-richter@p-r-solution.de>\n\n");
 }
 
-/*
-	 Function:	display_uptime
-	 Return:
-	 Arguments:
-	 Description: Print uptime
+/*	====================================================================
+	Function:	 printUptime
+	Return:
+	Arguments:
+	Description: Print uptime
+	====================================================================
 */
 void printUptime(void)
 {
@@ -558,11 +661,12 @@ void printUptime(void)
 
 
 
-/*
-	 Function:	newMotorDirection
-	 Return:
-	 Arguments:
-	 Description: Motor in neue Laufrichtung (oder AUS) schalten
+/*	====================================================================
+	Function:	 newMotorDirection
+	Return:
+	Arguments:
+	Description: Motor in neue Laufrichtung (oder AUS) schalten
+	====================================================================
 */
 bool newMotorDirection(MOTOR_CTRL newDirection, MOTOR_CTRL *newMotorDirection)
 {
@@ -614,11 +718,12 @@ bool newMotorDirection(MOTOR_CTRL newDirection, MOTOR_CTRL *newMotorDirection)
 
 
 
-/*
-	 Function:	ctrlSM8Status
-	 Return:
-	 Arguments:
-	 Description: Kontrolle der Eingangssignale der SM8
+/*	====================================================================
+	Function:	 ctrlSM8Status
+	Return:
+	Arguments:
+	Description: Kontrolle der Eingangssignale der SM8
+	====================================================================
 */
 void ctrlSM8Status(void)
 {
@@ -754,11 +859,12 @@ void ctrlSM8Status(void)
 	}
 }
 
-/*
-	 Function:	ctrlWallButton
-	 Return:
-	 Arguments:
-	 Description: Kontrolle der Eingangssignale der Wandtaster
+/*	====================================================================
+	Function:	 ctrlWallButton
+	Return:
+	Arguments:
+	Description: Kontrolle der Eingangssignale der Wandtaster
+	====================================================================
 */
 void ctrlWallButton(void)
 {
@@ -858,11 +964,12 @@ void ctrlWallButton(void)
 	}
 }
 
-/*
-	 Function:	ctrlSM8Button
-	 Return:
-	 Arguments:
-	 Description: Kontrolle der SM8 Tastensteuerung
+/*	====================================================================
+	Function:	 ctrlSM8Button
+	Return:
+	Arguments:
+	Description: Kontrolle der SM8 Tastensteuerung
+	====================================================================
 */
 void ctrlSM8Button(void)
 {
@@ -895,11 +1002,12 @@ void ctrlSM8Button(void)
 	}
 }
 
-/*
-	 Function:	ctrlMotorRelais
-	 Return:
-	 Arguments:
-	 Description: Kontrolle der Motor Ausgangssignale
+/*	====================================================================
+	Function:	 ctrlMotorRelais
+	Return:
+	Arguments:
+	Description: Kontrolle der Motor Ausgangssignale
+	====================================================================
 */
 void ctrlMotorRelais(void)
 {
@@ -922,10 +1030,10 @@ void ctrlMotorRelais(void)
 				Serial.print("Set motor ");
 				Serial.print(i + 1);
 				Serial.print(" timeout to ");
-				Serial.print(MOTOR_MAXRUNTIME / 1000);
+				Serial.print(eepromMaxRuntime / 1000);
 				Serial.println(" sec.");
 #endif
-				MotorTimeout[i] = MOTOR_MAXRUNTIME / TIMER_MS;
+				MotorTimeout[i] = eepromMaxRuntime / TIMER_MS;
 			}
 			// SM8 Ausgang für "Öffnen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Schliessen"
 			if ( bitRead(curSM8Status, i) != 0
@@ -950,11 +1058,12 @@ void ctrlMotorRelais(void)
 	}
 }
 
-/*
-	 Function:	ctrlRainSensor
-	 Return:
-	 Arguments:
-	 Description: Kontrolle der Regensensor Eingänge
+/*	====================================================================
+	Function:	 ctrlRainSensor
+	Return:
+	Arguments:
+	Description: Kontrolle der Regensensor Eingänge
+	====================================================================
 */
 void ctrlRainSensor(void)
 {
@@ -980,7 +1089,7 @@ void ctrlRainSensor(void)
 				byte i;
 
 				for (i = 0; i < MAX_MOTORS; i++) {
-					if ( bitRead(RAIN_BITMASK, i) ) {
+					if ( bitRead(eepromRainBitmask, i) ) {
 						if ( MotorCtrl[i] != MOTOR_CLOSE ) {
 							newMotorDirection(MOTOR_CLOSE, &MotorCtrl[i]);
 						}
@@ -1014,7 +1123,14 @@ byte liveDots = 0;
 #endif
 
 
-// the loop function runs over and over again forever
+
+/*	====================================================================
+	Function:	 loop()
+	Return:
+	Arguments:
+	Description: the loop function runs over and over again forever
+	====================================================================
+*/
 void loop()
 {
 	// MPC Interrupt aufgetreten?
@@ -1055,14 +1171,14 @@ void loop()
 	}
 
 	// toggle LED to indicate main loop is running
-	if ( millis() > (ledTimer + LED_BLINK_LEN) )
+	if ( millis() > (ledTimer + eepromBlinkLen) )
 	{
 		if ( --ledCounter == 1 ) {
 			digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
 		}
 		else if ( --ledCounter < 1 ) {
 			digitalWrite(ONBOARD_LED, !digitalRead(ONBOARD_LED));
-			ledCounter = LED_BLINK_INTERVAL / LED_BLINK_LEN;
+			ledCounter = eepromBlinkInterval / eepromBlinkLen;
 		}
 		ledTimer = millis();
 	}

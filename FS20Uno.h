@@ -60,6 +60,7 @@
 // LED Blink Length in ms
 #define LED_BLINK_LEN			100
 
+
 /* ==========================================================================
  * Type & Constant Definition
  * ========================================================================== */
@@ -67,17 +68,30 @@ typedef unsigned int  WORD;
 typedef unsigned long DWORD;
 typedef DWORD TIMER;
 
+
+// EEPROM Data Adressen
+#define EEPROM_ADDR_CRC32				0
+#define EEPROM_ADDR_DATAVERSION			(4+EEPROM_ADDR_CRC32)
+#define EEPROM_ADDR_RAIN_BITMASK		(4+EEPROM_ADDR_DATAVERSION)
+#define EEPROM_ADDR_MOTOR_MAXRUNTIME	(4+EEPROM_ADDR_RAIN_BITMASK)
+#define EEPROM_ADDR_LED_BLINK_INTERVAL	(4+EEPROM_ADDR_MOTOR_MAXRUNTIME)
+#define EEPROM_ADDR_LED_BLINK_LEN		(4+EEPROM_ADDR_LED_BLINK_INTERVAL)
+
+
 #if MAX_MOTORS<=4
 	#define IOBITS_ZERO	0x00
+	typedef byte MOTORBITS;
 	typedef byte IOBITS;
 #elif MAX_MOTORS<=8
 	#define IOBITS_ZERO	0x0000
+	typedef byte MOTORBITS;
 	typedef unsigned int IOBITS;
 #elif MAX_MOTORS<=16
 	#define IOBITS_ZERO	0x00000000
+	typedef unsigned int MOTORBITS;
 	typedef unsigned long IOBITS;
 #else
-#assert Too many motor devices (MAX_MOTORS > 16)
+	#assert Too many motor devices (MAX_MOTORS > 16)
 #endif
 
 #define IOBITS_CNT	(MAX_MOTORS * 2)
@@ -85,18 +99,18 @@ typedef DWORD TIMER;
 typedef char MOTOR_CTRL;
 
 #if   (MOTOR_MAXRUNTIME/TIMER_MS)<=255
-typedef byte MOTOR_TIMEOUT;
+	typedef byte MOTOR_TIMEOUT;
 #elif (MOTOR_MAXRUNTIME/TIMER_MS)<=65535
-typedef WORD MOTOR_TIMEOUT;
+	typedef WORD MOTOR_TIMEOUT;
 #else
-typedef DWORD MOTOR_TIMEOUT;
+	typedef DWORD MOTOR_TIMEOUT;
 #endif
 
 
 #if   (FS20_SM8_IN_RESPONSE/TIMER_MS)<=255
-typedef byte SM8_TIMEOUT;
+	typedef byte SM8_TIMEOUT;
 #elif (FS20_SM8_IN_RESPONSE/TIMER_MS)<=65535
-typedef WORD SM8_TIMEOUT;
+	typedef WORD SM8_TIMEOUT;
 #else
-typedef DWORD SM8_TIMEOUT;
+	typedef DWORD SM8_TIMEOUT;
 #endif
