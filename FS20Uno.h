@@ -22,7 +22,7 @@
 #define RAIN_ENABLE			5			// Input Signal für Regensensor aktiv
 #define RAIN_ENABLE_AKTIV	0
 
-#define RAIN_BITMASK		0b00001111	// Bitmask for Close output during rain
+#define MTYPE_BITMASK		0b00001111	// Bitmask für Fenster Motoren (DFF=1, Jalousien=0)
 
 
 // Anzahl der Motoren
@@ -40,14 +40,13 @@
 // Motor Umschaltdelay in ms
 #define MOTOR_SWITCHOVER		250
 
-// Motor Timeout
 // Motor maximale Laufzeit in ms
 // Fenster auf:  47s
 // Fenster zu:   47s
 // Jalousie auf: 15s
 // Jalousie zu:  18s
-#define MOTOR_MAXRUNTIME		50000
-//#define MOTOR_MAXRUNTIME		10000		// Test
+#define MOTOR_WINDOW_MAXRUNTIME		50000
+#define MOTOR_JALOUSIE_MAXRUNTIME	20000
 
 // SM8 IN Schaltzeit in ms
 #define FS20_SM8_IN_RESPONSE	150
@@ -72,11 +71,11 @@ typedef DWORD TIMER;
 // EEPROM Data Adressen
 #define EEPROM_ADDR_CRC32				0
 #define EEPROM_ADDR_DATAVERSION			(4+EEPROM_ADDR_CRC32)
-#define EEPROM_ADDR_RAIN_BITMASK		(4+EEPROM_ADDR_DATAVERSION)
-#define EEPROM_ADDR_MOTOR_MAXRUNTIME	(4+EEPROM_ADDR_RAIN_BITMASK)
-#define EEPROM_ADDR_LED_BLINK_INTERVAL	(4+EEPROM_ADDR_MOTOR_MAXRUNTIME)
+#define EEPROM_ADDR_LED_BLINK_INTERVAL	(4+EEPROM_ADDR_DATAVERSION)
 #define EEPROM_ADDR_LED_BLINK_LEN		(4+EEPROM_ADDR_LED_BLINK_INTERVAL)
-
+#define EEPROM_ADDR_RAIN_BITMASK		(4+EEPROM_ADDR_LED_BLINK_LEN)
+#define EEPROM_ADDR_MOTOR_MAXRUNTIME	(4+EEPROM_ADDR_RAIN_BITMASK)
+#define EEPROM_ADDR_FREE				((4*MAX_MOTORS)+EEPROM_ADDR_MOTOR_MAXRUNTIME)
 
 #if MAX_MOTORS<=4
 	#define IOBITS_ZERO	0x00
@@ -98,9 +97,9 @@ typedef DWORD TIMER;
 
 typedef char MOTOR_CTRL;
 
-#if   (MOTOR_MAXRUNTIME/TIMER_MS)<=255
+#if   (MOTOR_WINDOW_MAXRUNTIME/TIMER_MS)<=255
 	typedef byte MOTOR_TIMEOUT;
-#elif (MOTOR_MAXRUNTIME/TIMER_MS)<=65535
+#elif (MOTOR_WINDOW_MAXRUNTIME/TIMER_MS)<=65535
 	typedef WORD MOTOR_TIMEOUT;
 #else
 	typedef DWORD MOTOR_TIMEOUT;
