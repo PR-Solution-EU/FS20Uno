@@ -88,7 +88,7 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.06"
+#define VERSION "2.07"
 #include "REVISION.h"
 #define DATAVERSION 105
 
@@ -104,7 +104,7 @@
 #undef DEBUG_OUTPUT_WALLBUTTON
 #undef DEBUG_OUTPUT_SM8OUTPUT
 #undef DEBUG_OUTPUT_MOTOR
-#undef DEBUG_OUTPUT_RAIN
+#define DEBUG_OUTPUT_RAIN
 #undef DEBUG_OUTPUT_LIVE
 
 #ifndef DEBUG_OUTPUT
@@ -237,12 +237,12 @@ void setup()
 	// Input pins pulled-up
 	pinMode(RAIN_ENABLE, INPUT_PULLUP);
 	// After setting up the button, setup the Bounce instance :
-	debInput.attach(RAIN_ENABLE);
-	debInput.interval(DEBOUNCE_TIME); // interval in ms
+	debEnable.attach(RAIN_ENABLE);
+	debEnable.interval(DEBOUNCE_TIME); // interval in ms
 
 	pinMode(RAIN_INPUT, INPUT_PULLUP);
-	debEnable.attach(RAIN_INPUT);
-	debEnable.interval(DEBOUNCE_TIME);
+	debInput.attach(RAIN_INPUT);
+	debInput.interval(DEBOUNCE_TIME);
 
 
 
@@ -306,9 +306,9 @@ void setup()
 	int countdownMS = Watchdog.enable(4000);
 #ifdef DEBUG_OUTPUT_WATCHDOG
 	printUptime();
-	Serial.print("Enabled the watchdog with max countdown of ");
+	Serial.print(F("Enabled the watchdog with max countdown of "));
 	Serial.print(countdownMS, DEC);
-	Serial.println(" milliseconds!");
+	Serial.println(F(" milliseconds!"));
 	Serial.println();
 #endif
 #endif
@@ -317,7 +317,7 @@ void setup()
 
 #ifdef DEBUG_OUTPUT_SETUP
 	printUptime();
-	Serial.println("Setup done, starting main loop()");
+	Serial.println(F("Setup done, starting main loop()"));
 #endif
 
 	// indicate setup was done
@@ -349,7 +349,7 @@ void setupEEPROMVars()
 #ifdef DEBUG_OUTPUT_EEPROM
 	//Print length of data to run CRC on.
 	printUptime();
-	Serial.print("EEPROM length: ");
+	Serial.print(F("EEPROM length: "));
 	Serial.println(EEPROM.length());
 #endif
 	// Write data version into EEPROM before checking CRC32
@@ -361,23 +361,23 @@ void setupEEPROMVars()
 #ifdef DEBUG_OUTPUT_EEPROM
 	//Print length of data to run CRC on.
 	printUptime();
-	Serial.print("EEPROM length: ");
+	Serial.print(F("EEPROM length: "));
 	Serial.println(EEPROM.length());
 
 	//Print the result of calling eepromCRC()
 	printUptime();
-	Serial.print("CRC32 of EEPROM data: 0x");
+	Serial.print(F("CRC32 of EEPROM data: 0x"));
 	Serial.println(dataCRC, HEX);
 
 	printUptime();
-	Serial.print("Stored CRC32: 0x");
+	Serial.print(F("Stored CRC32: 0x"));
 	Serial.println(eepromCRC, HEX);
 #endif
 
 	if ( dataCRC != eepromCRC ) {
 #ifdef DEBUG_OUTPUT_EEPROM
 		printUptime();
-		Serial.println("EEPROM CRC32 not matching, write defaults...");
+		Serial.println(F("EEPROM CRC32 not matching, write defaults..."));
 #endif
 		eepromWriteLong(EEPROM_ADDR_LED_BLINK_INTERVAL, LED_BLINK_INTERVAL);
 		eepromWriteLong(EEPROM_ADDR_LED_BLINK_LEN, 		LED_BLINK_LEN);
@@ -391,12 +391,12 @@ void setupEEPROMVars()
 #ifdef DEBUG_OUTPUT_EEPROM
 	else {
 		printUptime();
-		Serial.println("EEPROM CRC232 is valid");
+		Serial.println(F("EEPROM CRC232 is valid"));
 	}
 #endif
 #ifdef DEBUG_OUTPUT_EEPROM
 	printUptime();
-	Serial.println("EEPROM read defaults...");
+	Serial.println(F("EEPROM read defaults..."));
 #endif
 	eepromBlinkInterval	= eepromReadLong(EEPROM_ADDR_LED_BLINK_INTERVAL);
 	eepromBlinkLen		= eepromReadLong(EEPROM_ADDR_LED_BLINK_LEN);
@@ -406,10 +406,10 @@ void setupEEPROMVars()
 	}
 #ifdef DEBUG_OUTPUT_EEPROM
 	printUptime();
-	Serial.println("EEPROM values:");
+	Serial.println(F("EEPROM values:"));
 	mySerial.printf("  eepromBlinkInterval: %d\n",     eepromBlinkInterval);
 	mySerial.printf("  eepromBlinkLen:      %d\n",     eepromBlinkLen);
-	mySerial.printf("  eepromMTypeBitmask:   0x%02x\n", eepromMTypeBitmask);
+	mySerial.printf("  eepromMTypeBitmask:  0x%02x\n", eepromMTypeBitmask);
 	mySerial.printf("  eepromMaxRuntime:    " );
 	for(i=0; i<MAX_MOTORS; i++) {
 		mySerial.printf("%s%ld", i?",":"", eepromMaxRuntime[i]);
@@ -724,7 +724,7 @@ void ctrlSM8Status(void)
 	if ( (tmpSM8Status != curSM8Status) ) {
 #ifdef DEBUG_OUTPUT_SM8STATUS
 		printUptime();
-		Serial.println("SM8 Input Status changed");
+		Serial.println(F("SM8 Input Status changed"));
 #endif
 		/* Lese SM8 Ausgänge
 			 die unteren 8-bits sind "Öffnen" Befehle
@@ -755,7 +755,7 @@ void ctrlSM8Status(void)
 #ifdef DEBUG_OUTPUT_SM8STATUS
 			Serial.println();
 			printUptime();
-			Serial.print("---------------------------------------- "); Serial.println((float)millis() / 1000.0, 3);
+			Serial.print(F("---------------------------------------- ")); Serial.println((float)millis() / 1000.0, 3);
 			mySerial.printf("prevSM8Status:   0x%04x\n", prevSM8Status);
 			mySerial.printf("SM8Status:       0x%04x\n", SM8Status);
 			mySerial.printf("SM8StatusSlope:  0x%04x\n", SM8StatusSlope);
@@ -823,11 +823,11 @@ void ctrlSM8Status(void)
 
 			Serial.println();
 			printUptime();
-			Serial.print("---------------------------------------- "); Serial.println((float)millis() / 1000.0, 3);
-			Serial.println("   M1   M2   M3   M4   M5   M6   M7   M8");
+			Serial.print(F("---------------------------------------- ")); Serial.println((float)millis() / 1000.0, 3);
+			Serial.println(F("   M1   M2   M3   M4   M5   M6   M7   M8"));
 			for (i = 0; i < 8; i++) {
 				if (MotorCtrl[i] == 0) {
-					Serial.print("  off");
+					Serial.print(F("  off"));
 				}
 				else {
 					mySerial.printf("%5d", MotorCtrl[i]);
@@ -909,7 +909,7 @@ void ctrlWallButton(void)
 #ifdef DEBUG_OUTPUT_WALLBUTTON
 			Serial.println();
 			printUptime();
-			Serial.print("---------------------------------------- "); Serial.println((float)millis() / 1000.0, 3);
+			Serial.print(F("---------------------------------------- ")); Serial.println((float)millis() / 1000.0, 3);
 			mySerial.printf("prevWallButton:   0x%04x\n", prevWallButton);
 			mySerial.printf("WallButton:       0x%04x\n", WallButton);
 			mySerial.printf("WallButtonSlope:  0x%04x\n", WallButtonSlope);
@@ -927,11 +927,11 @@ void ctrlWallButton(void)
 
 			Serial.println();
 			printUptime();
-			Serial.print("---------------------------------------- "); Serial.println((float)millis() / 1000.0, 3);
-			Serial.println("   M1   M2   M3   M4   M5   M6   M7   M8");
+			Serial.print(F("---------------------------------------- ")); Serial.println((float)millis() / 1000.0, 3);
+			Serial.println(F("   M1   M2   M3   M4   M5   M6   M7   M8"));
 			for (i = 0; i < 8; i++) {
 				if (MotorCtrl[i] == 0) {
-					Serial.print("  off");
+					Serial.print(F("  off"));
 				}
 				else {
 					mySerial.printf("%5d", MotorCtrl[i]);
@@ -960,7 +960,7 @@ void ctrlSM8Button(void)
 	if ( tmpSM8Button != valSM8Button ) {
 #ifdef DEBUG_OUTPUT_SM8OUTPUT
 		printUptime();
-		Serial.println("SM8 output changed");
+		Serial.println(F("SM8 output changed"));
 #endif
 		expanderWriteWord(MPC_SM8BUTTON,   GPIOA, valSM8Button);
 
@@ -969,11 +969,11 @@ void ctrlSM8Button(void)
 			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) && (bitRead(valSM8Button, i) == 0) ) {
 #ifdef DEBUG_OUTPUT_SM8OUTPUT
 				printUptime();
-				Serial.print("Set SM8 key ");
+				Serial.print(F("Set SM8 key "));
 				Serial.print(i + 1);
-				Serial.print(" timeout to ");
+				Serial.print(F(" timeout to "));
 				Serial.print(FS20_SM8_IN_RESPONSE / TIMER_MS);
-				Serial.println(" ms");
+				Serial.println(F(" ms"));
 #endif
 				SM8Timeout[i] = FS20_SM8_IN_RESPONSE / TIMER_MS;
 			}
@@ -998,7 +998,7 @@ void ctrlMotorRelais(void)
 	if ( tmpMotorRelais != valMotorRelais ) {
 #ifdef DEBUG_OUTPUT_MOTOR
 		printUptime();
-		Serial.println("Motor output changed");
+		Serial.println(F("Motor output changed"));
 #endif
 		expanderWriteWord(MPC_MOTORRELAIS, GPIOA, valMotorRelais);
 		for (i = 0; i < MAX_MOTORS; i++) {
@@ -1008,11 +1008,11 @@ void ctrlMotorRelais(void)
 					|| (bitRead(tmpMotorRelais, i + 8) != bitRead(valMotorRelais, i + 8)           ) ) {
 #ifdef DEBUG_OUTPUT_MOTOR
 				printUptime();
-				Serial.print("Set motor ");
+				Serial.print(F("Set motor "));
 				Serial.print(i + 1);
-				Serial.print(" timeout to ");
+				Serial.print(F(" timeout to "));
 				Serial.print(eepromMaxRuntime[i] / 1000);
-				Serial.println(" sec.");
+				Serial.println(F(" sec."));
 #endif
 				MotorTimeout[i] = eepromMaxRuntime[i] / TIMER_MS;
 			}
@@ -1060,26 +1060,32 @@ void ctrlRainSensor(void)
 
 	// Get the updated value :
 	RainEnable = debEnable.read() == RAIN_ENABLE_AKTIV;
-	RainInput = debInput.read() == RAIN_INPUT_AKTIV;
+	RainInput  = debInput.read() == RAIN_INPUT_AKTIV;
 
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable) {
+#ifdef DEBUG_OUTPUT_RAIN
+		Serial.print(F("RainEnable: ")); Serial.println(RainEnable);
+		Serial.print(F("RainInput:  ")); Serial.println(RainInput);
+#endif
 		if ( RainEnable ) {
 #ifdef DEBUG_OUTPUT_RAIN
 			printUptime();
-			Serial.println("Rain inputs changed, sensor enabled");
+			Serial.println(F("Rain inputs changed, sensor enabled"));
 #endif
 			if ( RainInput ) {
 #ifdef DEBUG_OUTPUT_RAIN
 				printUptime();
-				Serial.println("Rain active, close all windows");
+				Serial.println(F("Rain active, close all windows"));
 #endif
 				byte i;
 
 				for (i = 0; i < MAX_MOTORS; i++) {
 					if ( bitRead(eepromMTypeBitmask, i) ) {
-						if ( MotorCtrl[i] != MOTOR_CLOSE ) {
-							setMotorDirection(i, MOTOR_CLOSE);
-						}
+#ifdef DEBUG_OUTPUT_RAIN
+						Serial.print(F("Close window "));
+						Serial.println(i);
+#endif
+						setMotorDirection(i, MOTOR_CLOSE);
 					}
 				}
 				RainDetect = true;
@@ -1088,20 +1094,20 @@ void ctrlRainSensor(void)
 			else {
 #ifdef DEBUG_OUTPUT_RAIN
 				printUptime();
-				Serial.println("Rain inactive, do nothing");
+				Serial.println(F("Rain inactive, do nothing"));
 #endif
 				digitalWrite(ONBOARD_LED, LOW);
 				RainDetect = false;
 			}
 		}
-#ifdef DEBUG_OUTPUT_RAIN
 		else {
+#ifdef DEBUG_OUTPUT_RAIN
 			printUptime();
-			Serial.println("Rain inputs changed, sensor disabled");
+			Serial.println(F("Rain inputs changed, sensor disabled"));
+#endif
 			digitalWrite(ONBOARD_LED, LOW);
 			RainDetect = false;
 		}
-#endif
 		prevRainEnable = RainEnable;
 		prevRainInput = RainInput;
 	}
@@ -1131,7 +1137,7 @@ void beAlive(void)
 #endif
 #ifdef DEBUG_OUTPUT_LIVE
 		if ((liveToogle--) < 1) {
-			Serial.print(".");
+			Serial.print(F("."));
 			liveToogle = 3;
 			liveDots++;
 			if ( liveDots > 76 ) {

@@ -8,12 +8,12 @@
  *         m    motor number 1..8
  *         cmd  OPEN, CLOSE, OFF, STATUS
  *              if ommitted returns current value
- * RUNTIME x [s]
+ * MOTORTIME x [sec]
  *       Set motor runtime
  *         m    motor number 1..8
- *         s    max run-time in sec
+ *         sec  max run-time in sec
  *              if ommitted returns current value
- * TYPE x [cmd]
+ * MOTORTYPE x [cmd]
  *       Motor type control
  *         m    motor number 1..8
  *         cmd  WINDOW, JALOUSIE
@@ -25,11 +25,12 @@ SerialCommand SCmd;   		// SerialCommand object
 void setupSerialCommand(void)
 {
 	// Setup callbacks for SerialCommand commands
+	SCmd.addCommand("?",cmdHelp);
 	SCmd.addCommand("HELP",cmdHelp);
 	SCmd.addCommand("INFO",cmdInfo);
 	SCmd.addCommand("MOTOR",cmdMotor);
-	SCmd.addCommand("RUNTIME",cmdRuntime);
-	SCmd.addCommand("TYPE",cmdType);
+	SCmd.addCommand("MOTORTIME",cmdRuntime);
+	SCmd.addCommand("MOTORTYPE",cmdType);
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
 
 }
@@ -42,8 +43,9 @@ void processSerialCommand(void)
 
 void cmdHelp()
 {
-	Serial.println(F("= Command interface help ="));
+	Serial.println(F("= Command Help ="));
 	Serial.println();
+	Serial.println(F("  ?"));
 	Serial.println(F("  HELP"));
 	Serial.println(F("  	     List all commands"));
 	Serial.println(F("  INFO"));
@@ -53,12 +55,12 @@ void cmdHelp()
 	Serial.println(F("          m    motor number 1..8"));
 	Serial.println(F("          cmd  OPEN, CLOSE, OFF, STATUS"));
 	Serial.println(F("               if ommitted returns current value"));
-	Serial.println(F("  RUNTIME x [s]"));
+	Serial.println(F("  MOTORTIME x [sec]"));
 	Serial.println(F("        Set motor runtime"));
 	Serial.println(F("          m    motor number 1..8"));
-	Serial.println(F("          s    max run-time in sec"));
+	Serial.println(F("          sec  max run-time in sec"));
 	Serial.println(F("               if ommitted returns current value"));
-	Serial.println(F("  TYPE x [cmd]"));
+	Serial.println(F("  MOTORTYPE x [cmd]"));
 	Serial.println(F("        Motor type control"));
 	Serial.println(F("          m    motor number 1..8"));
 	Serial.println(F("          cmd  WINDOW, JALOUSIE"));
@@ -68,6 +70,7 @@ void cmdHelp()
 
 void cmdInfo()
 {
+	Serial.println();
 	printProgramInfo();
 	Serial.print(F("Uptime: "));
 	printUptime();
@@ -131,10 +134,10 @@ void cmdMotor()
 void cmdRuntime()
 {
 /*
- * RUNTIME x [s]
+ * MOTORTIME x [sec]
  *       Set motor runtime
  *         m    motor number 1..8
- *         s    max run-time in sec
+ *         sec  max run-time in sec
  *              if ommitted returns current value
 */
 	int motor;
@@ -180,7 +183,7 @@ void cmdRuntime()
 void cmdType()
 {
 /*
- * TYPE x [cmd]
+ * MOTORTYPE x [cmd]
  *       Motor type control
  *         m    motor number 1..8
  *         cmd  WINDOW, JALOUSIE
@@ -211,6 +214,12 @@ void cmdType()
 			bitClear(eepromMTypeBitmask, motor);
 			cmdOK();
 		}
+		// Write new value into EEPROM
+		eepromWriteLong(EEPROM_ADDR_MTYPE_BITMASK, (DWORD)eepromMTypeBitmask);
+
+		// Write new EEPROM checksum
+		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		cmdOK();
 	}
 	if (arg == NULL || stricmp(arg, "STATUS")==0 ) {
 		if ( bitRead(eepromMTypeBitmask, motor)!=0 ) {
@@ -219,27 +228,22 @@ void cmdType()
 		else {
 			Serial.println(F("JALOUSIE"));
 		}
-		// Write new value into EEPROM
-		eepromWriteLong(EEPROM_ADDR_MTYPE_BITMASK, eepromMTypeBitmask);
-		// Write new EEPROM checksum
-		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
-		cmdOK();
 	}
 }
 
 void cmdOK(void)
 {
-	Serial.println("OK");
+	Serial.println(F("OK"));
 }
 
 void cmdError(String err)
 {
-	Serial.print("ERROR: ");
+	Serial.print(F("ERROR: "));
 	Serial.println(err);
 }
 
 // This gets set as the default handler, and gets called when no other command matches.
 void unrecognized()
 {
-	Serial.println("What?");
+	Serial.println(F("What?"));
 }

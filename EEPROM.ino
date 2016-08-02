@@ -25,6 +25,11 @@ unsigned long eepromCalcCRC(void)
 			crc = ~crc;
 		}
 	}
+#ifdef DEBUG_OUTPUT_EEPROM
+	printUptime();
+	Serial.print(F("eepromCalcCRC() returns 0x"));
+	Serial.println(crc,HEX);
+#endif
 	return crc;
 }
 
@@ -44,6 +49,13 @@ unsigned long eepromReadLong(int address)
 		data &= 0xffffff00;
 		data |= EEPROM[address+i];
 	}
+#ifdef DEBUG_OUTPUT_EEPROM
+	printUptime();
+	Serial.print(F("eepromReadLong(0x"));
+	Serial.print(address,HEX);
+	Serial.print(F(") returns 0x"));
+	Serial.println(data,HEX);
+#endif
 	return data;
 }
 
@@ -57,6 +69,14 @@ unsigned long eepromReadLong(int address)
 */
 void eepromWriteLong(int address, unsigned long data)
 {
+#ifdef DEBUG_OUTPUT_EEPROM
+	printUptime();
+	Serial.print(F("eepromWriteLong(0x"));
+	Serial.print(address,HEX);
+	Serial.print(F(",0x"));
+	Serial.print(data,HEX);
+	Serial.println(F(")"));
+#endif
 	for (char i=3 ; i>=0; --i) {
 		EEPROM.update(address+i, (byte)(data & 0xff));
 		data >>= 8;
