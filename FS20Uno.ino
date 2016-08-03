@@ -72,7 +72,10 @@
 
 	 ========================================================================== */
 /* TODO
-	 - Kommandos über RS232
+ *  Cmd:
+ * 		Cmd für Regensensor
+ *     Cmds ohne Motornummer: Ausgabe des Gesamtstatus
+ *     Cmd für SM8 Status 
 */
 
 #include <Arduino.h>
@@ -133,9 +136,11 @@
 
 // loop() timer vars
 TIMER ledTimer = 0;
-char  ledCounter = 0;
-TIMER runTimer = 0;
+WORD  ledDelay = 0;
+bool  ledStatus = false;
+int  ledCounter = 0;
 
+TIMER runTimer = 0;
 
 // MPC output data
 
@@ -1154,22 +1159,24 @@ void beAlive(void)
 	Function:	 blinkLED()
 	Return:
 	Arguments:
-	Description: Onboard LED Blink-Funktion
+	Description: LED Blinken, um anzuzeigen, dass die Hauptschleife läuft
 	====================================================================
 */
 void blinkLED(void) 
 {
-	// toggle LED to indicate main loop is running
-	if ( millis() > (ledTimer + eepromBlinkLen) )
+	if ( millis() > (ledTimer + ledDelay) )
 	{
-		if ( --ledCounter == 1 ) {
-			digitalWrite(ONBOARD_LED, RainDetect?LOW:HIGH);
-		}
-		else if ( --ledCounter < 1 ) {
-			digitalWrite(ONBOARD_LED, RainDetect?HIGH:LOW);
-			ledCounter = eepromBlinkInterval / eepromBlinkLen;
-		}
 		ledTimer = millis();
+		if( !ledStatus ) {
+			digitalWrite(ONBOARD_LED, RainDetect?LOW:HIGH);
+			ledDelay = eepromBlinkLen;
+			ledStatus = true;
+		}
+		else {
+			digitalWrite(ONBOARD_LED, RainDetect?HIGH:LOW);
+			ledDelay = eepromBlinkInterval;
+			ledStatus = false;
+		}
 	}
 }
 
@@ -1200,9 +1207,11 @@ void loop()
 	// Regensensor abfragen
 	ctrlRainSensor();
 
+	// Live timer und watchdog handling
 	beAlive();
-	
+	// LED Blinken, um anzuzeigen, dass die Hauptschleife läuft
 	blinkLED();
-	
+
+	// Pro
 	processSerialCommand();
 }

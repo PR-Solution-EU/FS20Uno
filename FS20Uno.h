@@ -22,27 +22,27 @@
 #define RAIN_ENABLE			5			// Input Signal für Regensensor aktiv
 #define RAIN_ENABLE_AKTIV	0
 
-#define MTYPE_BITMASK		0b00001111	// Bitmask für Fenster Motoren (DFF=1, Jalousien=0)
-
 
 // Serial
 #define SERIAL_BAUDRATE		115200
-
 
 // Anzahl der Motoren
 #define MAX_MOTORS				8
 
 // Timer2 Intervall in ms
-#define TIMER_MS				10
+#define TIMER_MS					10
 
+/* ==========================================================================
+ * Standardwerte
+ * ========================================================================== */
 // Relais Ansprechzeit in ms (Datenblatt 5 ms)
-#define OPERATE_TIME			20
+#define OPERATE_TIME				20
 
 // Relais Rückfallzeit in ms (Datenblatt 4 ms))
-#define RELEASE_TIME			20
+#define RELEASE_TIME				20
 
 // Motor Umschaltdelay in ms
-#define MOTOR_SWITCHOVER		250
+#define MOTOR_SWITCHOVER			250
 
 // Motor maximale Laufzeit in ms
 // Fenster auf:  47s
@@ -53,15 +53,17 @@
 #define MOTOR_JALOUSIE_MAXRUNTIME	20000
 
 // SM8 IN Schaltzeit in ms
-#define FS20_SM8_IN_RESPONSE	150
+#define FS20_SM8_IN_RESPONSE		150
 
 // Tasten Entprellzeit in ms
-#define DEBOUNCE_TIME			20
+#define DEBOUNCE_TIME				20
+
+#define MTYPE_BITMASK				0b00001111	// Bitmask für Fenster Motoren (DFF=1, Jalousien=0)
 
 // LED Blink Interval in ms
-#define LED_BLINK_INTERVAL		2000
+#define LED_BLINK_INTERVAL			1900
 // LED Blink Length in ms
-#define LED_BLINK_LEN			100
+#define LED_BLINK_LEN				100
 
 
 /* ==========================================================================
