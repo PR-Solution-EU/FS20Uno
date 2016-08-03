@@ -18,12 +18,15 @@
  *         m    motor number 1..8
  *         cmd  WINDOW, JALOUSIE
  *              if ommitted returns current value
- * RAINSENSOR [ENABLE|DISABLE|ON/OFF]
+ * RAINSENSOR [cmd]
  *       Set/Get Rain sensor
- *         ON/OFF   Switch rain detection
- *         ENABLE/  Enable or
- *         DISABLE  disable rain detection
- *                  if ommitted returns current values
+ * 		   cmd
+ *           AUTO     Enable rain hardware inputs
+ *           ON       Raining
+ *           OFF      No raining
+ *           ENABLE   Enable rain detection (disables AUTO)
+ *           DISABLE  disable rain detection (disables AUTO)
+ *                    if cmd is ommitted, return current values
  * LED [period flash]
  *       Set/Get LED blink interval/flash time
  *         interval blink interval in ms
@@ -44,6 +47,7 @@ void setupSerialCommand(void)
 	SCmd.addCommand("MOTORTIME",cmdRuntime);
 	SCmd.addCommand("MOTORTYPE",cmdType);
 	SCmd.addCommand("RAINSENSOR",cmdRainSensor);
+	SCmd.addCommand("RAIN",cmdRainSensor);
 	SCmd.addCommand("LED",cmdLed);
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
 }
@@ -56,34 +60,43 @@ void processSerialCommand(void)
 
 void cmdHelp()
 {
-	Serial.println(F("= Command Help ="));
-	Serial.println();
-	Serial.println(F("  ?"));
-	Serial.println(F("  HELP"));
-	Serial.println(F("  	     List all commands"));
-	Serial.println(F("  INFO"));
-	Serial.println(F("        Get info about system"));
-	Serial.println(F("  MOTOR m [cmd]"));
-	Serial.println(F("        Set/Get motor control"));
-	Serial.println(F("          m    motor number 1..8"));
-	Serial.println(F("          cmd  OPEN, CLOSE, OFF, STATUS"));
-	Serial.println(F("               if ommitted returns current value"));
-	Serial.println(F("  MOTORTIME x [sec]"));
-	Serial.println(F("        Set/Get motor runtime"));
-	Serial.println(F("          m    motor number 1..8"));
-	Serial.println(F("          sec  max run-time in sec"));
-	Serial.println(F("               if ommitted returns current value"));
-	Serial.println(F("  MOTORTYPE x [cmd]"));
-	Serial.println(F("        Set/Get motor type control"));
-	Serial.println(F("          m    motor number 1..8"));
-	Serial.println(F("          cmd  WINDOW, JALOUSIE"));
-	Serial.println(F("               if ommitted returns current value"));
-	Serial.println(F("  LED [period flash]"));
-	Serial.println(F("        Set/Get LED blink interval/flash time"));
-	Serial.println(F("          interval blink interval in ms"));
-	Serial.println(F("          flash    flash time in ms"));
-	Serial.println(F("                   if ommitted returns current values"));
-	Serial.println();
+	Serial.println(F("= Command Help =\n"
+		             "\n"
+	                 "  ?\n"
+	                 "  HELP\n"
+	                 "  	     List all commands\n"
+	                 "  INFO\n"
+	                 "        Get info about system\n"
+	                 "  MOTOR m [cmd]\n"
+	                 "        Set/Get motor control\n"
+	                 "          m    motor number 1..8\n"
+	                 "          cmd  OPEN, CLOSE, OFF, STATUS\n"
+	                 "               if ommitted returns current value\n"
+	                 "  MOTORTIME x [sec]\n"
+	                 "        Set/Get motor runtime\n"
+	                 "          m    motor number 1..8\n"
+	                 "          sec  max run-time in sec\n"
+	                 "               if ommitted returns current value\n"
+	                 "  MOTORTYPE x [cmd]\n"
+	                 "        Set/Get motor type control\n"
+	                 "          m    motor number 1..8\n"
+	                 "          cmd  WINDOW, JALOUSIE\n"
+	                 "               if ommitted returns current value\n"
+	                 "  RAIN [cmd]\n"
+	                 "  RAINSENSOR [cmd]\n"
+	                 "        Set/Get Rain sensor\n"
+	                 "          cmd\n"
+	                 "            AUTO     Enable rain hardware inputs\n"
+	                 "            ON       Raining\n"
+	                 "            OFF      No raining\n"
+	                 "            ENABLE   Enable rain detection (disables AUTO)\n"
+	                 "            DISABLE  disable rain detection (disables AUTO)\n"
+	                 "                     if cmd is ommitted, return current values\n"
+	                 "  LED [period flash]\n"
+	                 "        Set/Get LED blink interval/flash time\n"
+	                 "          interval blink interval in ms\n"
+	                 "          flash    flash time in ms\n"
+	                 "                   if ommitted returns current values\n"));
 }
 
 void cmdInfo()
@@ -109,11 +122,19 @@ void cmdMotor()
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		cmdError(F("To less arguments"));
+		for(motor=0; motor<MAX_MOTORS; motor++) {
+			mySerial.printf("%-2d ", motor+1);
+		}
+		Serial.println();
+		for(motor=0; motor<MAX_MOTORS; motor++) {
+			Serial.print(getMotorDirection(motor)==MOTOR_OFF?"--":(getMotorDirection(motor)==MOTOR_OPEN)?"OP":"CL");
+			Serial.print(" ");
+		}
+		Serial.println();
 	}
 	else {
 		motor=atoi(arg)-1;
-		if( motor<0 || motor>=MAX_MOTORS ) {
+		if ( motor<0 || motor>=MAX_MOTORS ) {
 			cmdError(F("Motor number out of range"));
 		}
 		else {
@@ -164,11 +185,18 @@ void cmdRuntime()
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		cmdError(F("To less arguments"));
+		for(motor=0; motor<MAX_MOTORS; motor++) {
+			mySerial.printf("%-7d", motor+1);
+		}
+		Serial.println();
+		for(motor=0; motor<MAX_MOTORS; motor++) {
+			mySerial.printf("%-6.1f ", (double)eepromMaxRuntime[motor]/1000.0);
+		}
+		Serial.println();
 	}
 	else {
 		motor=atoi(arg)-1;
-		if( motor<0 || motor>=MAX_MOTORS ) {
+		if ( motor<0 || motor>=MAX_MOTORS ) {
 			cmdError(F("Motor number out of range"));
 		}
 		else {
@@ -181,7 +209,7 @@ void cmdRuntime()
 			else {
 				// Set new runtime value
 				runtime = atof(arg);
-				if( runtime<5.0 || runtime>300.0) {
+				if ( runtime<5.0 || runtime>300.0) {
 					cmdError(F("Runtime value out of range"));
 				}
 				else {
@@ -213,11 +241,19 @@ void cmdType()
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		cmdError(F("To less arguments"));
+		for(motor=0; motor<MAX_MOTORS; motor++) {
+			mySerial.printf("%-2d ", motor+1);
+		}
+		Serial.println();
+		for(motor=0; motor<MAX_MOTORS; motor++) {
+			Serial.print(bitRead(eepromMTypeBitmask, motor)?"WI":"JA");
+			Serial.print(" ");
+		}
+		Serial.println();
 	}
 	else {
 		motor=atoi(arg)-1;
-		if( motor<0 || motor>=MAX_MOTORS ) {
+		if ( motor<0 || motor>=MAX_MOTORS ) {
 			cmdError(F("Motor number out of range"));
 		}
 		else {
@@ -258,33 +294,66 @@ void cmdType()
 void cmdRainSensor()
 {
 /*
- * RAINSENSOR [ENABLE|DISABLE|ON/OFF]
+ * RAINSENSOR [cmd]
  *       Set/Get Rain sensor
- *         ON/OFF   Switch rain detection
- *         ENABLE/  Enable or
- *         DISABLE  disable rain detection
- *                  if ommitted returns current values
+ * 		   cmd
+ *           AUTO     Enable rain hardware inputs
+ *           ON       Raining
+ *           OFF      No raining
+ *           ENABLE   Enable rain detection (disables AUTO)
+ *           DISABLE  disable rain detection (disables AUTO)
+ *                    if cmd is ommitted, return current values
  */
 	char *arg;
 	bool cmd = false;
 
 	arg = SCmd.next();
 	if (arg == NULL) {
+		debEnable.update();
+		debInput.update();
+
+		Serial.print(F("Rain sensor mode: "));
+		Serial.println(bitRead(eepromRain, RAIN_BIT_AUTO)!=0?F("AUTO"):F("Software"));
+
+		Serial.print(F("Sensor software mode:  "));
+		Serial.println(bitRead(eepromRain, RAIN_BIT_ENABLE)!=0?F("Enabled"):F("Disabled"));
+		Serial.print(F("Sensor software value: "));
+		Serial.println(softRainInput?F("Raining"):F("Dry"));
+
+		Serial.print(F("Sensor hardware mode:  "));
+		Serial.println((debEnable.read() == RAIN_ENABLE_AKTIV)?F("Enabled"):F("Disabled"));
+		Serial.print(F("Sensor hardware value: "));
+		Serial.println((debInput.read()  == RAIN_INPUT_AKTIV)?F("Raining"):F("Dry"));
+
 	}
 	else {
 		if ( strnicmp(arg, "ON",2)==0 ) {
+			softRainInput = true;
 			cmd = true;
 		}
-		else if ( strnicmp(arg, "OF",3)==0 ) {
+		else if ( strnicmp(arg, "OF",2)==0 ) {
+			softRainInput = false;
 			cmd = true;
 		}
 		else if ( strnicmp(arg, "EN",2)==0 ) {
+			bitSet(eepromRain, RAIN_BIT_ENABLE);
+			bitClear(eepromRain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
 		else if ( strnicmp(arg, "DI",2)==0 ) {
+			bitClear(eepromRain, RAIN_BIT_ENABLE);
+			bitClear(eepromRain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
-		if( cmd ) {
+		else if ( strnicmp(arg, "AU",2)==0 ) {
+			bitSet(eepromRain, RAIN_BIT_AUTO);
+			cmd = true;
+		}
+		if ( cmd ) {
+			// Write new value into EEPROM
+			eepromWriteByte(EEPROM_ADDR_RAIN, eepromRain);
+			// Write new EEPROM checksum
+			eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
 			cmdOK();
 		}
 		else {
@@ -292,6 +361,7 @@ void cmdRainSensor()
 		}
 	}
 }
+
 
 
 void cmdLed()
@@ -317,7 +387,7 @@ void cmdLed()
 	else if ( argInterval != NULL && argFlash != NULL ) {
 		Interval=(WORD)atoi(argInterval);
 		Flash=(WORD)atoi(argFlash);
-		if( Interval<Flash ) {
+		if ( Interval<Flash ) {
 			cmdError(F("Wrong arguments, flash must be greater than interval"));
 		}
 		else {
@@ -352,5 +422,5 @@ void cmdError(String err)
 // This gets set as the default handler, and gets called when no other command matches.
 void unrecognized()
 {
-	Serial.println(F("What?"));
+	Serial.println(F("Command not found, try HELP"));
 }

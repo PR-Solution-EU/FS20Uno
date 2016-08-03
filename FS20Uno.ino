@@ -91,22 +91,22 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.08"
+#define VERSION "2.10"
 #include "REVISION.h"
-#define DATAVERSION 105
+#define DATAVERSION 106
 
 
 // define next macro to enable debug output pins
 #undef DEBUG_PINS
 // define next macros to output debug prints
-#define DEBUG_OUTPUT
+#undef DEBUG_OUTPUT
 #undef DEBUG_OUTPUT_SETUP
 #undef DEBUG_OUTPUT_WATCHDOG
 #undef DEBUG_OUTPUT_EEPROM
 #undef DEBUG_OUTPUT_SM8STATUS
 #undef DEBUG_OUTPUT_WALLBUTTON
 #undef DEBUG_OUTPUT_SM8OUTPUT
-#define DEBUG_OUTPUT_MOTOR
+#undef DEBUG_OUTPUT_MOTOR
 #undef DEBUG_OUTPUT_RAIN
 #undef DEBUG_OUTPUT_LIVE
 
@@ -184,11 +184,6 @@ volatile char debWallButton[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 // abs(Werte) <> 0 haben folgende Bedeutung:
 //   1: Motor sofort schalten
 //  >1: Motor Delay in (abs(Wert) - 1) * 10 ms
-#define MOTOR_OPEN			1
-#define MOTOR_DELAYED_OPEN	(MOTOR_SWITCHOVER/TIMER_MS)
-#define MOTOR_CLOSE			-1
-#define MOTOR_DELAYED_CLOSE	(-MOTOR_SWITCHOVER/TIMER_MS)
-#define MOTOR_OFF			0
 volatile MOTOR_CTRL    MotorCtrl[MAX_MOTORS]    = {MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF};
 volatile MOTOR_TIMEOUT MotorTimeout[MAX_MOTORS] = {0, 0, 0, 0, 0, 0, 0, 0};
 
@@ -203,14 +198,24 @@ DWORD 		eepromMaxRuntime[MAX_MOTORS];
 WORD 		eepromBlinkInterval;
 WORD 		eepromBlinkLen;
 
+// Speichert die beiden RAIN-Bits
+#define RAIN_BIT_AUTO	0
+#define RAIN_BIT_ENABLE	1
+volatile byte eepromRain;				
 
-StreamEx mySerial = Serial; // StreamEx object
+// Software Regendetection (wird nicht in EEPROM gespeichert)
+volatile bool softRainInput = false;	
 
 
 // Rain Sensor inputs and vars
 Bounce debEnable = Bounce();
 Bounce debInput = Bounce();
-bool RainDetect = false;
+volatile bool RainDetect = false;
+
+
+// StreamEx object
+StreamEx mySerial = Serial;
+
 
 
 /*	====================================================================
@@ -227,7 +232,12 @@ void setup()
 
 	printProgramInfo();
 
+#ifdef DEBUG_OUTPUT
+	Serial.println(F("Debug output enabled"));
+#endif
+
 #ifdef DEBUG_PINS
+	Serial.println(F("Debug pins enabled"));
 	pinMode(DBG_INT, OUTPUT); 		// debugging
 	pinMode(DBG_MPC, OUTPUT); 		// debugging
 	pinMode(DBG_TIMER, OUTPUT);		// debugging
@@ -387,6 +397,10 @@ void setupEEPROMVars()
 			eepromWriteLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*i),
 				bitRead(MTYPE_BITMASK,i)!=0?MOTOR_WINDOW_MAXRUNTIME:MOTOR_JALOUSIE_MAXRUNTIME);
 		}
+		bitSet(eepromRain, RAIN_BIT_AUTO);
+		bitClear(eepromRain, RAIN_BIT_ENABLE);
+		eepromWriteByte(EEPROM_ADDR_RAIN, eepromRain);
+		
 		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
 	}
 #ifdef DEBUG_OUTPUT_EEPROM
@@ -405,6 +419,8 @@ void setupEEPROMVars()
 	for(i=0; i<MAX_MOTORS; i++) {
 		eepromMaxRuntime[i]	= eepromReadLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*i));
 	}
+	eepromRain = eepromReadByte(EEPROM_ADDR_RAIN);
+
 #ifdef DEBUG_OUTPUT_EEPROM
 	printUptime();
 	Serial.println(F("EEPROM values:"));
@@ -416,6 +432,7 @@ void setupEEPROMVars()
 		mySerial.printf("%s%ld", i?",":"", eepromMaxRuntime[i]);
 	}
 	mySerial.printf("\n");
+	mySerial.printf("  eepromRain:          0x%02x\n", eepromRain);
 #endif
 }
 
@@ -629,7 +646,7 @@ void printUptime(void)
 	seconds = (uint8_t)(t / 1000L);
 	t -= (uint32_t)seconds * 1000L;
 
-	if( days ) {
+	if ( days ) {
 		mySerial.printf("%d day%s, %02d:%02d:%02d.%03ld ", days, days==1?"":"s", hours, minutes, seconds, t);
 	}
 	else {
@@ -651,7 +668,7 @@ bool setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 {
 	MOTOR_CTRL currentMotorCtrl = MotorCtrl[motorNum];
 
-	if( motorNum < MAX_MOTORS ) {
+	if ( motorNum < MAX_MOTORS ) {
 		// Neue Richtung: Öffnen
 		if ( newDirection >= MOTOR_OPEN ) {
 			// Motor läuft auf Schliessen
@@ -699,6 +716,24 @@ bool setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 	return false;
 }
 
+/*	====================================================================
+	Function:	 getMotorDirection
+	Return:
+	Arguments:
+	Description: Motor Laufrichtung zurückgeben
+				 MOTOR_OPEN, MOTOR_CLOSE oder MOTOR_OFF
+	====================================================================
+*/
+char getMotorDirection(byte motorNum)
+{
+	if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
+		return MOTOR_OPEN;
+	}
+	else if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
+		return MOTOR_CLOSE;
+	}
+	return MOTOR_OFF;
+}
 
 
 /*	====================================================================
@@ -1081,7 +1116,7 @@ void ctrlMotorRelais(void)
 	if ( millis() > (preMotorTimer + RELAIS_OPERATE_TIME) ) {
 		// Aktuelle Motorsteuerungsbits holen
 		outMotorRelais = preMotorRelais[preMotorCount];
-		if( preMotorCount>0 ) {
+		if ( preMotorCount>0 ) {
 #ifdef DEBUG_OUTPUT_MOTOR
 			printUptime();Serial.print(F("D   A preMotorCount="));Serial.println(preMotorCount);
 #endif
@@ -1152,20 +1187,38 @@ void ctrlRainSensor(void)
 {
 	bool RainInput;
 	bool RainEnable;
+	bool tmpRainEnable;
 	static bool prevRainInput = false;
 	static bool prevRainEnable = false;
-
 
 	// Debouncing inputs
 	debEnable.update();
 	debInput.update();
 
+	// Wenn Regensensor EIN/AUS-Schalter betätigt wird
+	// aktivieren Automatik wieder
+	tmpRainEnable = (debEnable.read() == RAIN_ENABLE_AKTIV);
+
+	if ( tmpRainEnable != prevRainEnable ) {
+		bitSet(eepromRain, RAIN_BIT_AUTO);
+		// Write new value into EEPROM
+		eepromWriteByte(EEPROM_ADDR_RAIN, eepromRain);
+		// Write new EEPROM checksum
+		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+	}
+
 	// Get the updated value :
-	RainEnable = debEnable.read() == RAIN_ENABLE_AKTIV;
-	RainInput  = debInput.read() == RAIN_INPUT_AKTIV;
+	if ( bitRead(eepromRain, RAIN_BIT_AUTO)!=0 ) {
+		RainEnable = tmpRainEnable;
+	}
+	else {
+		RainEnable = (bitRead(eepromRain, RAIN_BIT_ENABLE)!=0);
+	}
+	RainInput  = (debInput.read()  == RAIN_INPUT_AKTIV) || softRainInput;
 
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable) {
 #ifdef DEBUG_OUTPUT_RAIN
+		Serial.print(F("RainDetect: ")); Serial.println(bitRead(eepromRain, RAIN_BIT_AUTO)!=0?F("Auto"):F("Software"));
 		Serial.print(F("RainEnable: ")); Serial.println(RainEnable);
 		Serial.print(F("RainInput:  ")); Serial.println(RainInput);
 #endif
@@ -1183,11 +1236,12 @@ void ctrlRainSensor(void)
 
 				for (i = 0; i < MAX_MOTORS; i++) {
 					if ( bitRead(eepromMTypeBitmask, i) ) {
+						if ( MotorCtrl[i] > MOTOR_CLOSE ) {
 #ifdef DEBUG_OUTPUT_RAIN
-						Serial.print(F("Close window "));
-						Serial.println(i);
+							Serial.print(F("Close window "));Serial.println(i);
 #endif
-						setMotorDirection(i, MOTOR_CLOSE);
+							setMotorDirection(i, MOTOR_CLOSE);
+						}
 					}
 				}
 				RainDetect = true;
@@ -1264,7 +1318,7 @@ void blinkLED(void)
 	if ( millis() > (ledTimer + ledDelay) )
 	{
 		ledTimer = millis();
-		if( !ledStatus ) {
+		if ( !ledStatus ) {
 			digitalWrite(ONBOARD_LED, RainDetect?LOW:HIGH);
 			ledDelay = eepromBlinkLen;
 			ledStatus = true;

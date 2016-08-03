@@ -22,6 +22,19 @@
 #define RAIN_ENABLE			5			// Input Signal für Regensensor aktiv
 #define RAIN_ENABLE_AKTIV	0
 
+// Motor Steuerungskommandos:
+//   0: Motor AUS
+//  >0: Motor Öffnen
+//  <0: Motor Schliessen
+// abs(Werte) <> 0 haben folgende Bedeutung:
+//   1: Motor sofort schalten
+//  >1: Motor Delay in (abs(Wert) - 1) * 10 ms
+#define MOTOR_OPEN			1
+#define MOTOR_DELAYED_OPEN	(MOTOR_SWITCHOVER/TIMER_MS)
+#define MOTOR_CLOSE			-1
+#define MOTOR_DELAYED_CLOSE	(-MOTOR_SWITCHOVER/TIMER_MS)
+#define MOTOR_OFF			0
+
 
 // Serial
 #define SERIAL_BAUDRATE		115200
@@ -79,7 +92,8 @@ typedef DWORD TIMER;
 #define EEPROM_ADDR_LED_BLINK_LEN		(4+EEPROM_ADDR_LED_BLINK_INTERVAL)
 #define EEPROM_ADDR_MTYPE_BITMASK		(4+EEPROM_ADDR_LED_BLINK_LEN)
 #define EEPROM_ADDR_MOTOR_MAXRUNTIME	(4+EEPROM_ADDR_MTYPE_BITMASK)
-#define EEPROM_ADDR_FREE				((4*MAX_MOTORS)+EEPROM_ADDR_MOTOR_MAXRUNTIME)
+#define EEPROM_ADDR_RAIN				((4*MAX_MOTORS)+EEPROM_ADDR_MOTOR_MAXRUNTIME)
+#define EEPROM_ADDR_FREE				(1+EEPROM_ADDR_RAIN)
 
 // TODO: MASK and BITS are not correct for all MAX_MOTORS values
 #if MAX_MOTORS<=4

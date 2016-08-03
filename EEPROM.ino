@@ -19,7 +19,7 @@ unsigned long eepromCalcCRC(void)
 	unsigned long crc = ~0L;
 
 	for (unsigned int index = 0 ; index < EEPROM.length()  ; ++index) {
-		if( index<EEPROM_ADDR_CRC32 || index>=(EEPROM_ADDR_CRC32+4)) {
+		if ( index<EEPROM_ADDR_CRC32 || index>=(EEPROM_ADDR_CRC32+4)) {
 			crc = crc_table[(crc ^ EEPROM[index]) & 0x0f] ^ (crc >> 4);
 			crc = crc_table[(crc ^ (EEPROM[index] >> 4)) & 0x0f] ^ (crc >> 4);
 			crc = ~crc;
@@ -81,4 +81,97 @@ void eepromWriteLong(int address, unsigned long data)
 		EEPROM.update(address+i, (byte)(data & 0xff));
 		data >>= 8;
 	}
+}
+
+/*	====================================================================
+	Function:	 eepromReadWord
+	Return:		 EEPROM Datum
+	Arguments:   EEPROM Adresse
+	Description: Liest 2 Byte als Zahl aus dem EEPROM
+	====================================================================
+*/
+unsigned int eepromReadWord(int address)
+{
+	unsigned int data = 0;
+
+	for (byte i=0 ; i<2; ++i) {
+		data <<= 8;
+		data &= 0xff00;
+		data |= EEPROM[address+i];
+	}
+#ifdef DEBUG_OUTPUT_EEPROM
+	printUptime();
+	Serial.print(F("eepromReadWord(0x"));
+	Serial.print(address,HEX);
+	Serial.print(F(") returns 0x"));
+	Serial.println(data,HEX);
+#endif
+	return data;
+}
+
+
+/*	====================================================================
+	Function:	 eepromWriteWord
+	Return:		 
+	Arguments:   EEPROM Adresse, EEPROM Datum
+	Description: Schreibt 2 Byte als Zahl in das EEPROM
+	====================================================================
+*/
+void eepromWriteWord(int address, unsigned int data)
+{
+#ifdef DEBUG_OUTPUT_EEPROM
+	printUptime();
+	Serial.print(F("eepromWriteWord(0x"));
+	Serial.print(address,HEX);
+	Serial.print(F(",0x"));
+	Serial.print(data,HEX);
+	Serial.println(F(")"));
+#endif
+	for (char i=1 ; i>=0; --i) {
+		EEPROM.update(address+i, (byte)(data & 0xff));
+		data >>= 8;
+	}
+}
+
+/*	====================================================================
+	Function:	 eepromReadByte
+	Return:		 EEPROM Datum
+	Arguments:   EEPROM Adresse
+	Description: Liest 1 Byte als Zahl aus dem EEPROM
+	====================================================================
+*/
+byte eepromReadByte(int address)
+{
+	byte data = 0;
+
+	data = EEPROM[address];
+#ifdef DEBUG_OUTPUT_EEPROM
+	printUptime();
+	Serial.print(F("eepromReadByte(0x"));
+	Serial.print(address,HEX);
+	Serial.print(F(") returns 0x"));
+	Serial.println(data,HEX);
+#endif
+	return data;
+}
+
+
+/*	====================================================================
+	Function:	 eepromWriteByte
+	Return:		 
+	Arguments:   EEPROM Adresse, EEPROM Datum
+	Description: Schreibt 1 Byte als Zahl in das EEPROM
+	====================================================================
+*/
+void eepromWriteByte(int address, byte data)
+{
+#ifdef DEBUG_OUTPUT_EEPROM
+	printUptime();
+	Serial.print(F("eepromWriteByte(0x"));
+	Serial.print(address,HEX);
+	Serial.print(F(",0x"));
+	Serial.print(data,HEX);
+	Serial.println(F(")"));
+#endif
+	EEPROM.update(address, data);
 }
