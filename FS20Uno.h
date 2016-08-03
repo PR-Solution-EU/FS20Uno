@@ -36,10 +36,8 @@
  * Standardwerte
  * ========================================================================== */
 // Relais Ansprechzeit in ms (Datenblatt 5 ms)
-#define OPERATE_TIME				20
-
 // Relais Rückfallzeit in ms (Datenblatt 4 ms))
-#define RELEASE_TIME				20
+#define RELAIS_OPERATE_TIME			15
 
 // Motor Umschaltdelay in ms
 #define MOTOR_SWITCHOVER			250
@@ -83,16 +81,26 @@ typedef DWORD TIMER;
 #define EEPROM_ADDR_MOTOR_MAXRUNTIME	(4+EEPROM_ADDR_MTYPE_BITMASK)
 #define EEPROM_ADDR_FREE				((4*MAX_MOTORS)+EEPROM_ADDR_MOTOR_MAXRUNTIME)
 
+// TODO: MASK and BITS are not correct for all MAX_MOTORS values
 #if MAX_MOTORS<=4
-	#define IOBITS_ZERO	0x00
+	#define IOBITS_ZERO		0x00
+	#define IOBITS_MASK		0xFF
+	#define IOBITS_LOWMASK	0x0F
+	#define IOBITS_HIGHMASK	0xF0
 	typedef byte MOTORBITS;
 	typedef byte IOBITS;
 #elif MAX_MOTORS<=8
-	#define IOBITS_ZERO	0x0000
+	#define IOBITS_ZERO		0x0000
+	#define IOBITS_MASK		0xFFFF
+	#define IOBITS_LOWMASK	0x00FF
+	#define IOBITS_HIGHMASK	0xFF00
 	typedef byte MOTORBITS;
 	typedef unsigned int IOBITS;
 #elif MAX_MOTORS<=16
-	#define IOBITS_ZERO	0x00000000
+	#define IOBITS_ZERO		0x00000000
+	#define IOBITS_MASK		0xFFFFFFFF
+	#define IOBITS_LOWMASK	0x0000FFFF
+	#define IOBITS_HIGHMASK	0xFFFF0000
 	typedef unsigned int MOTORBITS;
 	typedef unsigned long IOBITS;
 #else

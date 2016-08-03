@@ -18,6 +18,12 @@
  *         m    motor number 1..8
  *         cmd  WINDOW, JALOUSIE
  *              if ommitted returns current value
+ * RAINSENSOR [ENABLE|DISABLE|ON/OFF]
+ *       Set/Get Rain sensor
+ *         ON/OFF   Switch rain detection
+ *         ENABLE/  Enable or
+ *         DISABLE  disable rain detection
+ *                  if ommitted returns current values
  * LED [period flash]
  *       Set/Get LED blink interval/flash time
  *         interval blink interval in ms
@@ -37,6 +43,7 @@ void setupSerialCommand(void)
 	SCmd.addCommand("MOTOR",cmdMotor);
 	SCmd.addCommand("MOTORTIME",cmdRuntime);
 	SCmd.addCommand("MOTORTYPE",cmdType);
+	SCmd.addCommand("RAINSENSOR",cmdRainSensor);
 	SCmd.addCommand("LED",cmdLed);
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
 }
@@ -202,6 +209,7 @@ void cmdType()
  */
 	int motor;
 	char *arg;
+	bool cmd = false;
 
 	arg = SCmd.next();
 	if (arg == NULL) {
@@ -217,18 +225,23 @@ void cmdType()
 			if (arg != NULL) {
 				if      ( strnicmp(arg, "WIN",3)==0 ) {
 					bitSet(eepromMTypeBitmask, motor);
-					cmdOK();
+					cmd = true;
 				}
 				else if ( strnicmp(arg, "JAL",3)==0 ) {
 					bitClear(eepromMTypeBitmask, motor);
+					cmd = true;
+				}
+				if ( cmd ) {
+					// Write new value into EEPROM
+					eepromWriteLong(EEPROM_ADDR_MTYPE_BITMASK, (DWORD)eepromMTypeBitmask);
+
+					// Write new EEPROM checksum
+					eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
 					cmdOK();
 				}
-				// Write new value into EEPROM
-				eepromWriteLong(EEPROM_ADDR_MTYPE_BITMASK, (DWORD)eepromMTypeBitmask);
-
-				// Write new EEPROM checksum
-				eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
-				cmdOK();
+				else {
+					cmdError(F("Wrong parameter"));
+				}
 			}
 			if (arg == NULL || stricmp(arg, "STATUS")==0 ) {
 				if ( bitRead(eepromMTypeBitmask, motor)!=0 ) {
@@ -241,6 +254,45 @@ void cmdType()
 		}
 	}
 }
+
+void cmdRainSensor()
+{
+/*
+ * RAINSENSOR [ENABLE|DISABLE|ON/OFF]
+ *       Set/Get Rain sensor
+ *         ON/OFF   Switch rain detection
+ *         ENABLE/  Enable or
+ *         DISABLE  disable rain detection
+ *                  if ommitted returns current values
+ */
+	char *arg;
+	bool cmd = false;
+
+	arg = SCmd.next();
+	if (arg == NULL) {
+	}
+	else {
+		if ( strnicmp(arg, "ON",2)==0 ) {
+			cmd = true;
+		}
+		else if ( strnicmp(arg, "OF",3)==0 ) {
+			cmd = true;
+		}
+		else if ( strnicmp(arg, "EN",2)==0 ) {
+			cmd = true;
+		}
+		else if ( strnicmp(arg, "DI",2)==0 ) {
+			cmd = true;
+		}
+		if( cmd ) {
+			cmdOK();
+		}
+		else {
+			cmdError(F("Wrong parameter"));
+		}
+	}
+}
+
 
 void cmdLed()
 {

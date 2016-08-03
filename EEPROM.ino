@@ -18,7 +18,7 @@ unsigned long eepromCalcCRC(void)
 	};
 	unsigned long crc = ~0L;
 
-	for (int index = 0 ; index < EEPROM.length()  ; ++index) {
+	for (unsigned int index = 0 ; index < EEPROM.length()  ; ++index) {
 		if( index<EEPROM_ADDR_CRC32 || index>=(EEPROM_ADDR_CRC32+4)) {
 			crc = crc_table[(crc ^ EEPROM[index]) & 0x0f] ^ (crc >> 4);
 			crc = crc_table[(crc ^ (EEPROM[index] >> 4)) & 0x0f] ^ (crc >> 4);
