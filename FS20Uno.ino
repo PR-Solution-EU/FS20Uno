@@ -2,21 +2,21 @@
 	File:    FS20Uno.ino
 	Author:  Norbert Richter <mail@norbert-richter.info>
 	Project: Dachflächenfenster/-Jalousie Steuerung
-		mit 2x FS20 SM8
+		     mit 2x FS20 SM8
 	Desc:    Die Steuerung besteht aus
 			- einem Arduino Uno
-			- drei Porterweterungen MCP23017
+			- vier Porterweiterungen MCP23017
 			- zwei ELV FS20 SM8
-		Der Uno über 16 Relais ingesamt acht Motoren
-		- Ein Relais für Motor Ein/Aus
-			- Ein Relais für die Drehrichtung.
+		    - Der Uno steuert über 16 Relais ingesamt acht Motoren
+		      - 8 Relais für Motor Ein/Aus
+			  - 8 Relais für die Drehrichtung.
 
-	Funktionsweise der Steuerung:
+Funktionsweise der Steuerung:
 	Zwei FS20 SM8 dienen als FS20 Empfänger für Dachflächenfenstersteuerung (DFF)
 	Mit Hilfer zweier FS20-SM8 stehen stehen 16 FS20 Kanäle zur Verfügung.
 	Jeweils zwei steuern einen Motor:
-	- ein Kanal steuert Linkslauf
-	- ein Kanal steuert Rechtslauf
+	- ein Kanal steuert Linkslauf (z. B. Öffnen)
+	- ein Kanal steuert Rechtslauf (z. B. Schliessen)
 
 	Damit lassen sich insgesamt 4 DF-Fenster mit jeweils zwei 24V Motoren ansteuern:
 	- ein Motor zum Öffnen/Schliessen des Fensters
@@ -27,11 +27,15 @@
 	- Öffnen
 	- Schließen
 
+	Für jeden Motor wird bestimmt:
+	- Fenster oder Jalousie (wichtig für Regensensor)
+	- Max. Motorlaufzeit
+
 	Da wir in den Ablauf des FS20 SM8 nur bedingt eingreifen können, werden die
 	FS20 SM8 nur als 'Geber' eingesetzt. Die Motorsteuerung erfolgt komplett
 	über dieses Steuerungsprogramm.
 
-	Verdrahtung:
+Verdrahtung:
 	MPC1
 	Port A (Output): Relais Motor 1-8 EIN/AUS
 	Port B (Output): Relais Motor 1-8 Drehrichtung
@@ -61,7 +65,8 @@
 	Nur die jweils steigende Flanke eines Ausgangs steuert die Richtung.
 	War bereits die entgegengesetzte Richtung aktiv, wird die Richtung
 	umgeschaltet.
-	- Motorschutz:
+
+Motorschutz:
 	Das Einschalten der Motorspannung erfolgt erst, nachdem das Richtungsrelais
 	auch wirklich umgeschalten hat (OPERATE_TIME).
 	Ebenso wird bei laufendem Motor und Richtungsumkehr der Motor zuerst abge-
@@ -69,13 +74,28 @@
 	schaltet (MOTOR_SWITCHOVER).
 	- Die fallende Flanke des SM8 Ausgangs schaltet die jeweilige Drehrichtung ab
 
-
+Regensensor:
+    Der Regensensor wird an den Eingang RAIN_INPUT angeschlossen und ist Low-Aktiv
+    (siehe auch RAIN_INPUT_AKTIV).
+    Meldet der Sensor "Regen", werden alle Motoren vom Typ "Fenster" geschlossen.
+    
+    Der Regensensor läßt sich mit Hilfe eines zweiten Eingangs RAIN_ENABLE 
+    aktivieren (Low-Aktiv, siehe RAIN_ENABLE_AKTIV) bzw. deaktivieren.
+    Nur bei aktivem Regensensor wird dieser ausgewertet.
+    
+    Die beiden Eingänge lassen sich über Ctrl-Commands (RAINSENSOR) übersteuern:
+    - Software Regensensor
+    - Software Regensensor Modus
+    Der "Software Regensensor Modus" steuert auch die Erkennung des Regensensor-
+    Eingangs.
+    Ist "Software Regensensor Modus" AUS, wird weder eine Software-
+    Regenmeldung noch die des Regensensor-Eingangs berücksichtigt.
+    Man kann mit Hilfe des Ctrl-Commands RAINSENSOR die Automatik wieder
+    aktivieren. Auch das Umschalten des Eingangs RAIN_ENABLE schaltet die
+    Automatik wieder ein.
 	 ========================================================================== */
 /* TODO
- *  Cmd:
- * 		Cmd für Regensensor
- *     Cmds ohne Motornummer: Ausgabe des Gesamtstatus
- *     Cmd für SM8 Status
+ * Eingangsänderung RAIN_ENABLE sollte Automatik wieder einschalten
 */
 
 #include <Arduino.h>
@@ -1249,6 +1269,7 @@ void ctrlRainSensor(void)
 	bool RainInput;
 	bool RainEnable;
 	bool tmpRainEnable;
+	static bool prevtmpRainEnable = false;
 	static bool prevRainInput = false;
 	static bool prevRainEnable = false;
 
@@ -1260,22 +1281,26 @@ void ctrlRainSensor(void)
 	// aktivieren Automatik wieder
 	tmpRainEnable = (debEnable.read() == RAIN_ENABLE_AKTIV);
 
-	if ( tmpRainEnable != prevRainEnable ) {
-		bitSet(eepromRain, RAIN_BIT_AUTO);
+	if ( tmpRainEnable != prevtmpRainEnable ) {
+		//TODO: Eingangsänderung RAIN_ENABLE sollte Automatik wieder einschalten
+
+		//bitSet(eepromRain, RAIN_BIT_AUTO);
 		// Write new value into EEPROM
-		eepromWriteByte(EEPROM_ADDR_RAIN, eepromRain);
+		//eepromWriteByte(EEPROM_ADDR_RAIN, eepromRain);
 		// Write new EEPROM checksum
-		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		//eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		prevtmpRainEnable = tmpRainEnable;
 	}
 
 	// Get the updated value :
 	if ( bitRead(eepromRain, RAIN_BIT_AUTO)!=0 ) {
 		RainEnable = tmpRainEnable;
+		RainInput  = (debInput.read()  == RAIN_INPUT_AKTIV);
 	}
 	else {
 		RainEnable = (bitRead(eepromRain, RAIN_BIT_ENABLE)!=0);
+		RainInput  = softRainInput;
 	}
-	RainInput  = (debInput.read()  == RAIN_INPUT_AKTIV) || softRainInput;
 
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable) {
 #ifdef DEBUG_OUTPUT_RAIN
@@ -1326,7 +1351,7 @@ void ctrlRainSensor(void)
 			RainDetect = false;
 		}
 		prevRainEnable = RainEnable;
-		prevRainInput = RainInput;
+		prevRainInput  = RainInput;
 	}
 }
 
