@@ -3,6 +3,8 @@
  * 	     List all commands
  * INFO
  *       Get info about system
+ * UPTIME
+ *       Tell how long the system has been running
  * MOTOR m [cmd]
  *       Set/Get motor control
  *         m    motor number 1..8
@@ -27,6 +29,10 @@
  *           ENABLE   Enable rain detection (disables AUTO)
  *           DISABLE  disable rain detection (disables AUTO)
  *                    if cmd is ommitted, return current values
+ * STATUS [ON|OFF]
+ *       Set/Get Status sending
+ *           ON       Send status messages
+ *           OFF      Do not send status messages
  * LED [period flash]
  *       Set/Get LED blink interval/flash time
  *         interval blink interval in ms
@@ -43,11 +49,13 @@ void setupSerialCommand(void)
 	SCmd.addCommand("?",cmdHelp);
 	SCmd.addCommand("HELP",cmdHelp);
 	SCmd.addCommand("INFO",cmdInfo);
+	SCmd.addCommand("UPTIME",cmdUptime);
 	SCmd.addCommand("MOTOR",cmdMotor);
 	SCmd.addCommand("MOTORTIME",cmdRuntime);
 	SCmd.addCommand("MOTORTYPE",cmdType);
 	SCmd.addCommand("RAINSENSOR",cmdRainSensor);
 	SCmd.addCommand("RAIN",cmdRainSensor);
+	SCmd.addCommand("STATUS",cmdStatus);
 	SCmd.addCommand("LED",cmdLed);
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
 }
@@ -59,51 +67,58 @@ void processSerialCommand(void)
 
 
 void cmdHelp()
-{
-	Serial.println(F("= Command Help =\n"
-		             "\n"
-	                 "  ?\n"
-	                 "  HELP\n"
-	                 "  	     List all commands\n"
-	                 "  INFO\n"
-	                 "        Get info about system\n"
-	                 "  MOTOR m [cmd]\n"
-	                 "        Set/Get motor control\n"
-	                 "          m    motor number 1..8\n"
-	                 "          cmd  OPEN, CLOSE, OFF, STATUS\n"
-	                 "               if ommitted returns current value\n"
-	                 "  MOTORTIME x [sec]\n"
-	                 "        Set/Get motor runtime\n"
-	                 "          m    motor number 1..8\n"
-	                 "          sec  max run-time in sec\n"
-	                 "               if ommitted returns current value\n"
-	                 "  MOTORTYPE x [cmd]\n"
-	                 "        Set/Get motor type control\n"
-	                 "          m    motor number 1..8\n"
-	                 "          cmd  WINDOW, JALOUSIE\n"
-	                 "               if ommitted returns current value\n"
-	                 "  RAIN [cmd]\n"
-	                 "  RAINSENSOR [cmd]\n"
-	                 "        Set/Get Rain sensor\n"
-	                 "          cmd\n"
-	                 "            AUTO     Enable rain hardware inputs\n"
-	                 "            ON       Raining\n"
-	                 "            OFF      No raining\n"
-	                 "            ENABLE   Enable rain detection (disables AUTO)\n"
-	                 "            DISABLE  disable rain detection (disables AUTO)\n"
-	                 "                     if cmd is ommitted, return current values\n"
-	                 "  LED [period flash]\n"
-	                 "        Set/Get LED blink interval/flash time\n"
-	                 "          interval blink interval in ms\n"
-	                 "          flash    flash time in ms\n"
-	                 "                   if ommitted returns current values\n"));
+{	
+	Serial.println(F(
+"FS20Uno command help:\n"
+"  ?\n"
+"  HELP      List all commands\n"
+"  INFO      Get info about system\n\n"
+"  UPTIME    Tell how long the system has been running\n"
+"  MOTOR m [cmd]\n"
+"            Set/Get motor control\n"
+"              m    motor number 1..8\n"
+"              cmd  OPEN, CLOSE, OFF, STATUS\n"
+"                   if ommitted returns current value\n"
+"  MOTORTIME x [sec]\n"
+"            Set/Get motor runtime\n"
+"              m    motor number 1..8\n"
+"              sec  max run-time in sec\n"
+"                   if ommitted returns current value\n"
+"  MOTORTYPE x [cmd]\n"
+"            Set/Get motor type control\n"
+"              m    motor number 1..8\n"
+"              cmd  WINDOW, JALOUSIE\n"
+"                   if ommitted returns current value\n"
+"  RAIN [cmd]\n"
+"  RAINSENSOR [cmd]\n"
+"            Set/Get Rain sensor\n"
+"              cmd\n"
+"                AUTO     Enable rain hardware inputs\n"
+"                ON       Raining\n"
+"                OFF      No raining\n"
+"                ENABLE   Enable rain detection (disables AUTO)\n"
+"                DISABLE  disable rain detection (disables AUTO)\n"
+"                If cmd is ommitted, return current values\n"
+" STATUS [ON|OFF]\n"
+"            Set/Get Status sending\n"
+"                ON       Send status messages\n"
+"                OFF      Do not send status messages\n"
+"                If cmd is ommitted, return current values\n"
+"  LED [period flash]\n"
+"            Set/Get LED blink interval/flash time\n"
+"              interval blink interval in ms\n"
+"              flash    flash time in ms\n"
+"              If ommitted returns current values\n"
+));
 }
 
 void cmdInfo()
 {
-	Serial.println();
-	printProgramInfo();
-	Serial.print(F("Uptime: "));
+	printProgramInfo(false);
+}
+
+void cmdUptime()
+{
 	printUptime();
 	Serial.println();
 }
@@ -363,6 +378,42 @@ void cmdRainSensor()
 }
 
 
+void cmdStatus()
+{
+/*
+ * STATUS [ON|OFF]
+ *       Set/Get Status sending
+ *           ON       Send status messages
+ *           OFF      Do not send status messages
+ */
+	char *arg;
+	bool cmd = false;
+
+	arg = SCmd.next();
+	if (arg == NULL) {
+		Serial.println(eepromSendStatus?F("ON"):F("OFF"));
+	}
+	else {
+		if ( strnicmp(arg, "ON",2)==0 ) {
+			eepromSendStatus = true;
+			cmd = true;
+		}
+		else if ( strnicmp(arg, "OF",2)==0 ) {
+			eepromSendStatus = false;
+			cmd = true;
+		}
+		if ( cmd ) {
+			// Write new value into EEPROM
+			eepromWriteByte(EEPROM_ADDR_SENDSTATUS, eepromRain);
+			// Write new EEPROM checksum
+			eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+			cmdOK();
+		}
+		else {
+			cmdError(F("Wrong parameter"));
+		}
+	}
+}
 
 void cmdLed()
 {
