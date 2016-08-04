@@ -1,10 +1,11 @@
-/*	====================================================================
-	Function:	 expanderWriteWord
-	Return:		 
-	Arguments:   
-	Description: write a word to the expander
-	====================================================================
-*/
+/* ===================================================================
+ * Function:	expanderWriteWord
+ * Return:		
+ * Arguments:   address - expander hardware address
+ *              reg     - expander register address
+ *              data    - word to write
+ * Description: write a word to the expander
+ * ===================================================================*/
 void expanderWriteWord(const byte address, const byte reg, const unsigned int data ) 
 {
 	Wire.beginTransmission((const byte)(0x20|address));
@@ -14,13 +15,14 @@ void expanderWriteWord(const byte address, const byte reg, const unsigned int da
 	Wire.endTransmission();
 }
 
-/*	====================================================================
-	Function:	 expanderWriteBoth
-	Return:		 
-	Arguments:   
-	Description: write a byte to both ports of the expander
-	====================================================================
-*/
+/* ===================================================================
+ * Function:	expanderWriteBoth
+ * Return:		 
+ * Arguments:   address - expander hardware address
+ *              reg     - expander register address
+ *              data    - byte to write
+ * Description: write the same byte to both (A & B) reg of the expander
+ * ===================================================================*/
 void expanderWriteBoth(const byte address, const byte reg, const byte data ) 
 {
 	Wire.beginTransmission((const byte)(0x20|address));
@@ -30,13 +32,14 @@ void expanderWriteBoth(const byte address, const byte reg, const byte data )
 	Wire.endTransmission();
 }
 
-/*	====================================================================
-	Function:	 expanderWrite
-	Return:		 
-	Arguments:   
-	Description: write a byte to the expander
-	====================================================================
-*/
+/* ===================================================================
+ * Function:	expanderWrite
+ * Return:		 
+ * Arguments:   address - expander hardware address
+ *              reg     - expander register address
+ *              data    - byte to write
+ * Description: write a byte to the expander
+ * ===================================================================*/
 void expanderWrite(const byte address, const byte reg, const byte data ) 
 {
 	Wire.beginTransmission ((const byte)(0x20|address));
@@ -45,13 +48,13 @@ void expanderWrite(const byte address, const byte reg, const byte data )
 	Wire.endTransmission();
 }
 
-/*	====================================================================
-	Function:	 expanderRead
-	Return:		 
-	Arguments:   
-	Description: read a byte from the expander
-	====================================================================
-*/
+/* ===================================================================
+ * Function:	expanderRead
+ * Return:		the byte read
+ * Arguments:   address - expander hardware address
+ *              reg     - expander register address
+ * Description: read a byte from the expander
+ * ===================================================================*/
 byte expanderRead(const byte address, const byte reg) 
 {
 	Wire.beginTransmission((const byte)(0x20|address));
@@ -61,13 +64,13 @@ byte expanderRead(const byte address, const byte reg)
 	return Wire.read();
 }
 
-/*	====================================================================
-	Function:	  expanderReadWord
-	Return:		 
-	Arguments:   
-	Description: read a word from the expander
-	====================================================================
-*/
+/* ===================================================================
+ * Function:	expanderReadWord
+ * Return:		the word read
+ * Arguments:   address - expander hardware address
+ *              reg     - expander register address
+ * Description: read a word from the expander
+ * ===================================================================*/
 unsigned int expanderReadWord(const byte address, const byte reg)
 {
 	return expanderRead(address, reg) | (expanderRead(address, reg+1)<<8);

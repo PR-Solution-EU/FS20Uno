@@ -69,46 +69,46 @@ void processSerialCommand(void)
 void cmdHelp()
 {	
 	Serial.println(F(
-"FS20Uno command help:\n"
-"  ?\n"
-"  HELP      List all commands\n"
-"  INFO      Get info about system\n\n"
-"  UPTIME    Tell how long the system has been running\n"
-"  MOTOR m [cmd]\n"
-"            Set/Get motor control\n"
-"              m    motor number 1..8\n"
-"              cmd  OPEN, CLOSE, OFF, STATUS\n"
-"                   if ommitted returns current value\n"
-"  MOTORTIME x [sec]\n"
-"            Set/Get motor runtime\n"
-"              m    motor number 1..8\n"
-"              sec  max run-time in sec\n"
-"                   if ommitted returns current value\n"
-"  MOTORTYPE x [cmd]\n"
-"            Set/Get motor type control\n"
-"              m    motor number 1..8\n"
-"              cmd  WINDOW, JALOUSIE\n"
-"                   if ommitted returns current value\n"
-"  RAIN [cmd]\n"
-"  RAINSENSOR [cmd]\n"
-"            Set/Get Rain sensor\n"
-"              cmd\n"
-"                AUTO     Enable rain hardware inputs\n"
-"                ON       Raining\n"
-"                OFF      No raining\n"
-"                ENABLE   Enable rain detection (disables AUTO)\n"
-"                DISABLE  disable rain detection (disables AUTO)\n"
-"                If cmd is ommitted, return current values\n"
-" STATUS [ON|OFF]\n"
-"            Set/Get Status sending\n"
-"                ON       Send status messages\n"
-"                OFF      Do not send status messages\n"
-"                If cmd is ommitted, return current values\n"
-"  LED [period flash]\n"
-"            Set/Get LED blink interval/flash time\n"
-"              interval blink interval in ms\n"
-"              flash    flash time in ms\n"
-"              If ommitted returns current values\n"
+"FS20Uno command help:\r\n"
+"  ?\r\n"
+"  HELP      List all commands\r\n"
+"  INFO      Get info about system\r\n\r\n"
+"  UPTIME    Tell how long the system has been running\r\n"
+"  MOTOR m [cmd]\r\n"
+"            Set/Get motor control\r\n"
+"              m    motor number 1..8\r\n"
+"              cmd  OPEN, CLOSE, OFF, STATUS\r\n"
+"                   if ommitted returns current value\r\n"
+"  MOTORTIME x [sec]\r\n"
+"            Set/Get motor runtime\r\n"
+"              m    motor number 1..8\r\n"
+"              sec  max run-time in sec\r\n"
+"                   if ommitted returns current value\r\n"
+"  MOTORTYPE x [cmd]\r\n"
+"            Set/Get motor type control\r\n"
+"              m    motor number 1..8\r\n"
+"              cmd  WINDOW, JALOUSIE\r\n"
+"                   if ommitted returns current value\r\n"
+"  RAIN [cmd]\r\n"
+"  RAINSENSOR [cmd]\r\n"
+"            Set/Get Rain sensor\r\n"
+"              cmd\r\n"
+"                AUTO     Enable rain hardware inputs\r\n"
+"                ON       Raining\r\n"
+"                OFF      No raining\r\n"
+"                ENABLE   Enable rain detection (disables AUTO)\r\n"
+"                DISABLE  disable rain detection (disables AUTO)\r\n"
+"                If cmd is ommitted, return current values\r\n"
+" STATUS [ON|OFF]\r\n"
+"            Set/Get Status sending\r\n"
+"                ON       Send status messages\r\n"
+"                OFF      Do not send status messages\r\n"
+"                If cmd is ommitted, return current values\r\n"
+"  LED [period flash]\r\n"
+"            Set/Get LED blink interval/flash time\r\n"
+"              interval blink interval in ms\r\n"
+"              flash    flash time in ms\r\n"
+"              If ommitted returns current values\r\n"
 ));
 }
 
@@ -155,20 +155,23 @@ void cmdMotor()
 		else {
 			arg = SCmd.next();
 			if (arg != NULL) {
-				if      ( stricmp(arg, "OPEN")==0 ) {
+				if      ( strnicmp(arg, "OP",2)==0 ) {
 					setMotorDirection(motor, MOTOR_OPEN);
 					cmdOK();
 				}
-				else if ( stricmp(arg, "CLOSE")==0 ) {
+				else if ( strnicmp(arg, "CL",2)==0 ) {
 					setMotorDirection(motor, MOTOR_CLOSE);
 					cmdOK();
 				}
-				else if ( stricmp(arg, "OFF")==0 ) {
+				else if ( strnicmp(arg, "OF",2)==0 ) {
 					setMotorDirection(motor, MOTOR_OFF);
 					cmdOK();
 				}
+				else {
+					cmdError(F("Wrong parameter"));
+				}
 			}
-			if (arg == NULL || stricmp(arg, "STATUS")==0 ) {
+			if (arg == NULL || strnicmp(arg, "STAT",4)==0 ) {
 				if ( bitRead(valMotorRelais, motor)!=0 ) {
 					if ( bitRead(valMotorRelais, motor+8)!=0 ) {
 						Serial.println(F("OPENING"));
@@ -225,7 +228,7 @@ void cmdRuntime()
 				// Set new runtime value
 				runtime = atof(arg);
 				if ( runtime<5.0 || runtime>300.0) {
-					cmdError(F("Runtime value out of range"));
+					cmdError(F("Runtime out of range"));
 				}
 				else {
 					eepromMaxRuntime[motor] = (DWORD)(runtime*1000.0);
