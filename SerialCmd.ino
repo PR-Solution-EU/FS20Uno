@@ -1,47 +1,7 @@
-/* Kommandos der seriellen Schnittstelle
- * HELP
- * 	     List all commands
- * INFO
- *       Get info about system
- * UPTIME
- *       Tell how long the system has been running
- * MOTOR m [cmd]
- *       Set/Get motor control
- *         m    motor number 1..8
- *         cmd  OPEN, CLOSE, OFF, STATUS
- *              if ommitted returns current value
- * MOTORTIME x [sec]
- *       Set/Get motor runtime
- *         m    motor number 1..8
- *         sec  max run-time in sec
- *              if ommitted returns current value
- * MOTORTYPE x [cmd]
- *       Set/Get motor type control
- *         m    motor number 1..8
- *         cmd  WINDOW, JALOUSIE
- *              if ommitted returns current value
- * RAINSENSOR [cmd]
- *       Set/Get Rain sensor
- * 		   cmd
- *           AUTO     Enable rain hardware inputs
- *           ON       Raining
- *           OFF      No raining
- *           ENABLE   Enable rain detection (disables AUTO)
- *           DISABLE  disable rain detection (disables AUTO)
- *                    if cmd is ommitted, return current values
- * STATUS [ON|OFF]
- *       Set/Get Status sending
- *           ON       Send status messages
- *           OFF      Do not send status messages
- * LED [period flash]
- *       Set/Get LED blink interval/flash time
- *         interval blink interval in ms
- *         flash    flash time in ms
- *                  if ommitted returns current values
- */
-
+/* ===================================================================
+ * Command Interface Functions
+ * ===================================================================*/
 SerialCommand SCmd;   		// SerialCommand object
-
 
 void setupSerialCommand(void)
 {
@@ -417,7 +377,7 @@ void cmdStatus()
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintf(eepromSendStatus?F("ON"):F("OFF"));
+		SerialPrintf(eepromSendStatus?F("ON\r\n"):F("OFF\r\n"));
 	}
 	else {
 		if ( strnicmp(arg, "ON",2)==0 ) {
@@ -430,7 +390,7 @@ void cmdStatus()
 		}
 		if ( cmd ) {
 			// Write new value into EEPROM
-			eepromWriteByte(EEPROM_ADDR_SENDSTATUS, eepromRain);
+			eepromWriteByte(EEPROM_ADDR_SENDSTATUS, eepromSendStatus);
 			// Write new EEPROM checksum
 			eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
 			cmdOK();
@@ -458,8 +418,8 @@ void cmdLed()
 	argInterval = SCmd.next();
 	argFlash = SCmd.next();
 	if (argInterval == NULL) {
-		SerialPrintf(F("Interval %d\r\n"), eepromBlinkInterval);
-		SerialPrintf(F("Flash %d\r\n"), eepromBlinkLen);
+		SerialPrintf(F("Interval %d ms\r\n"), eepromBlinkInterval);
+		SerialPrintf(F("Flash %d ms\r\n"), eepromBlinkLen);
 	}
 	else if ( argInterval != NULL && argFlash != NULL ) {
 		Interval=(WORD)atoi(argInterval);

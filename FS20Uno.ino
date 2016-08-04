@@ -152,9 +152,9 @@
 
 /* ===================================================================
 /* TODO
+ * SM8 direkte Drehrichtungsumschaltung funktoniert nicht
  * Regensensor "Regen" nur bei Flanke Inaktiv->Aktiv auslösen
  * Eingangsänderung RAIN_ENABLE sollte Automatik wieder einschalten
- * SM8 Steuerung nicht korrekt (schaltet willkürlich)
  * ===================================================================*/
 
 #include <Arduino.h>
@@ -171,7 +171,7 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.12"
+#define VERSION "2.13"
 #include "REVISION.h"
 #define DATAVERSION 106
 
@@ -1042,6 +1042,7 @@ void ctrlMotorRelais(void)
 
 	if ( millis() > (preMotorTimer + RELAIS_OPERATE_TIME) ) {
 		// Aktuelle Motorsteuerungsbits holen
+		bool doSM8andTimeout = true;
 		outMotorRelais = preMotorRelais[preMotorCount];
 		
 		if ( preMotorCount>0 ) {
@@ -1053,6 +1054,7 @@ void ctrlMotorRelais(void)
 			SerialTimePrintf(F("D   b)preMotorCount=%d\r\n"), preMotorCount);
 			#endif
 			preMotorTimer = millis();
+			doSM8andTimeout = false;
 		}
 
 		if ( tmpOutMotorRelais != outMotorRelais ) {
@@ -1061,35 +1063,42 @@ void ctrlMotorRelais(void)
 			#endif
 			expanderWriteWord(MPC_MOTORRELAIS, GPIOA, outMotorRelais);
 
-			for (i = 0; i < MAX_MOTORS; i++) {
-				// Motor Timeout setzen
-					// - falls Motor gerade aktiviert wurde
-				if (    ( !bitRead(tmpOutMotorRelais, i) && bitRead(outMotorRelais, i) )
-					// - oder bereits läuft und die Laufrichtung geändert wurde
-					 || ( bitRead(outMotorRelais, i) && 
-					      bitRead(tmpOutMotorRelais, i+MAX_MOTORS)!=bitRead(outMotorRelais, i+MAX_MOTORS) ) ) {
-					#ifdef DEBUG_OUTPUT_MOTOR
-					SerialTimePrintf(F("    Set motor %d timeout to %d.%-d s\r\n"), i+1, eepromMaxRuntime[i] / 1000, eepromMaxRuntime[i] % 1000);
-					#endif
-					MotorTimeout[i] = eepromMaxRuntime[i] / TIMER_MS;
-				}
+			if( doSM8andTimeout ) {
+				for (i = 0; i < MAX_MOTORS; i++) {
+					// Motor Timeout setzen
+						// - falls Motor gerade aktiviert wurde
+					if (    ( !bitRead(tmpOutMotorRelais, i) && bitRead(outMotorRelais, i) )
+						// - oder bereits läuft und die Laufrichtung geändert wurde
+						 || ( bitRead(outMotorRelais, i) && 
+							  bitRead(tmpOutMotorRelais, i+MAX_MOTORS)!=bitRead(outMotorRelais, i+MAX_MOTORS) ) ) {
+						#ifdef DEBUG_OUTPUT_MOTOR
+						SerialTimePrintf(F("    Set motor %d timeout to %d.%-d s\r\n"), i+1, eepromMaxRuntime[i] / 1000, eepromMaxRuntime[i] % 1000);
+						#endif
+						MotorTimeout[i] = eepromMaxRuntime[i] / TIMER_MS;
+					}
+					// SM8 Ausgang für "Öffnen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Schliessen"
+					if (    bitRead(curSM8Status, i)
+						 && (   bitRead(outMotorRelais, i)==0
+							 || (bitRead(outMotorRelais, i)!=0 && bitRead(outMotorRelais, i+MAX_MOTORS)==0) ) ) {
+						// SM8 Taste für "Öffnen" zurücksetzen
+						#ifdef DEBUG_OUTPUT_MOTOR
+						SerialTimePrintf(F("SM8 Taste %d (für \"Öffnen\") zurücksetzen\r\n"), i);
+						#endif
+						bitSet(SM8StatusIgnore, i);
+						bitClear(valSM8Button, i);
+					}
 
-				// SM8 Ausgang für "Öffnen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Schliessen"
-				if ( bitRead(curSM8Status, i)
-					 && (    bitRead(outMotorRelais, i) == 0
-						 || (bitRead(outMotorRelais, i) != 0 && bitRead(outMotorRelais, i + MAX_MOTORS) == 0) ) ) {
-					// SM8 Taste für "Öffnen" zurücksetzen
-					bitClear(valSM8Button, i);
-					bitSet(SM8StatusIgnore, i);
-				}
-
-				// SM8 Ausgang für "Schliessen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Öffnen"
-				if ( bitRead(curSM8Status, i+MAX_MOTORS)
-					 && (bitRead(outMotorRelais, i) == 0
-						 || (bitRead(outMotorRelais, i) != 0 && bitRead(outMotorRelais, i + MAX_MOTORS) != 0) ) ) {
-					// SM8 Taste für "Schliessen" zurücksetzen
-					bitClear(valSM8Button, i+MAX_MOTORS);
-					bitSet(SM8StatusIgnore, i+MAX_MOTORS);
+					// SM8 Ausgang für "Schliessen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Öffnen"
+					if (    bitRead(curSM8Status, i+MAX_MOTORS)
+						 && (   bitRead(outMotorRelais, i)==0
+							 || (bitRead(outMotorRelais, i)!=0 && bitRead(outMotorRelais, i + MAX_MOTORS)!=0) ) ) {
+						// SM8 Taste für "Schliessen" zurücksetzen
+						#ifdef DEBUG_OUTPUT_MOTOR
+						SerialTimePrintf(F("SM8 Taste %d (für \"Schliessen\") zurücksetzen\r\n"), i+MAX_MOTORS);
+						#endif
+						bitSet(SM8StatusIgnore, i+MAX_MOTORS);
+						bitClear(valSM8Button, i+MAX_MOTORS);
+					}
 				}
 			}
 			tmpOutMotorRelais = outMotorRelais;
