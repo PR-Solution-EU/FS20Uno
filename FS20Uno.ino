@@ -114,23 +114,29 @@
  * Regensensor
  * ----------------------------
  * Regensensoreingänge:
- * Regensensoreingänge werden nur im Automatikmodus
- * (s.u. Control-Kommando "RAINSENSOR") abgefragt. Die Verwendung von
- * "RAINSENSOR" Kommandos schaltet Abfrage der Hardware-Eingänge ab.
- * Durch Verwendung des Control-Kommandos RAINSENSOR AUTO läßt sich
- * diese Automatik wieder einschalten.
  * 
- * Ein Regensensor kann am Eingang RAIN_INPUT angeschlossen werden.
- * Die Pegelaktivität kann mit Hilfe der Konstanten RAIN_INPUT_AKTIV 
- * festgelegt werden.
- * Ob der Regensensoreingang beachtet wird, läßt sich mit Hilfe eines
- * zweiten Steuereingangs RAIN_ENABLE (Pegelaktivität über die 
- * Konstante RAIN_ENABLE_AKTIV einstellbar) festlegen. Nur wenn
- * RAIN_ENABLE aktiv ist, wird der Regensensoreingang RAIN_INPUT
- * abgefragt.
- * Meldet der Regensensor RAIN_INPUT regen (Flanke Inaktiv->Aktiv)
- * Werden alle Motoren vom Typ "Fenster" (siehe Motorensteuerung)
- * geschlossen.
+ * Ein Regensensor kann am Eingang "RAIN_INPUT" angeschlossen werden 
+ * (Regensensor-Steuereingang). Die Pegelaktivität kann mit Hilfe
+ * der Konstanten "RAIN_INPUT_AKTIV" festgelegt werden.
+ * 
+ * Die Abfrage des Regensensor-Steuereingangs läßt sich mit Hilfe
+ * eines zweiten Steuereingangs "RAIN_ENABLE" (Pegelaktivität über
+ * die Konstante "RAIN_ENABLE_AKTIV" einstellbar) festlegen. Nur wenn
+ * der Steuereingang "RAIN_ENABLE" aktiv oder das Control-Kommando
+ * "RAINSENSOR ENABLE" gegeben wurde, wird der Regensensor-
+ * Steuereingang auch abgefragt, ansonsten ignoriert.
+ * 
+ * Der Regensensor-Steuereingang wird nur im Automatikmodus (s.u.
+ * Control-Kommando "RAINSENSOR") abgefragt.
+ * Die Verwendung der "RAINSENSOR" Kommandos (mit Ausnahme von
+ * "RAINSENSOR AUTO") schaltet Abfrage des Regensensor-Steuereingangs
+ * erstmal ab. Der Regensensor-Steuereingang wird entweder durch das
+ * Control-Kommando "RAINSENSOR AUTO" oder durch Änderung des
+ * Steuereingangs "RAIN_ENABLE" wieder aktiviert.
+ * 
+ * Bei aktivier Regenmeldung (Steuereingang RAIN_INPUT bzw. Control-
+ * Kommando RAINSENSOR ON), werden alle Motoren vom Typ "Fenster"
+ * (siehe Motorensteuerung) geschlossen.
  *
  * Control-Kommando "RAINSENSOR"
  * Die beiden Eingänge lassen sich über Control-Kommandos "RAINSENSOR"
@@ -152,8 +158,6 @@
 
 /* ===================================================================
  * TODO
- * Regensensor "Regen" nur bei Flanke Inaktiv->Aktiv auslösen
- * Eingangsänderung RAIN_ENABLE sollte Automatik wieder einschalten
  * ===================================================================*/
 
 #include <Arduino.h>
@@ -176,21 +180,19 @@
 
 
 // define next macros to output debug prints
-#define DEBUG_OUTPUT
+#undef DEBUG_OUTPUT
 #undef DEBUG_PINS				// enable debug output pins
 #undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
 #undef DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
-#define DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
+#undef DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
 #undef DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
 #undef DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
-#define DEBUG_OUTPUT_MOTOR		// enable motor control related output
+#undef DEBUG_OUTPUT_MOTOR		// enable motor control related output
 #undef DEBUG_OUTPUT_RAIN		// enable rain sensor related output
 #undef DEBUG_OUTPUT_ALIVE		// enable program alive signal output
 
 #ifndef DEBUG_OUTPUT
-	// enable next line to enable watchdog timer
-	#define WATCHDOG_ENABLED
 	#undef DEBUG_PINS
 	#undef DEBUG_OUTPUT_SETUP
 	#undef DEBUG_OUTPUT_WATCHDOG
@@ -201,6 +203,8 @@
 	#undef DEBUG_OUTPUT_MOTOR
 	#undef DEBUG_OUTPUT_RAIN
 	#undef DEBUG_OUTPUT_ALIVE
+
+	#define WATCHDOG_ENABLED
 #endif
 #ifdef DEBUG_PINS
 	#define DBG_INT 			12			// Debug PIN = D12
@@ -278,17 +282,17 @@ WORD 		eepromBlinkLen;
 #define RAIN_BIT_ENABLE	1
 volatile byte eepromRain;
 
-// Software Regendetection (wird nicht in EEPROM gespeichert)
-volatile bool softRainInput = false;
-
 // Sende autom. Statusänderung
 volatile bool eepromSendStatus = true;
 
 
+// Software Regendetection (wird nicht in EEPROM gespeichert)
+volatile bool softRainInput = false;
+
 // Rain Sensor inputs and vars
 Bounce debEnable = Bounce();
 Bounce debInput = Bounce();
-volatile bool RainDetect = false;
+volatile bool isRaining = false;
 
 
 
@@ -389,8 +393,10 @@ void setup()
 	setupEEPROMVars();
 
 	#ifdef WATCHDOG_ENABLED
+	#ifndef DEBUG_OUTPUT_WATCHDOG
+	Watchdog.enable(4000);
+	#else
 	int countdownMS = Watchdog.enable(4000);
-	#ifdef DEBUG_OUTPUT_WATCHDOG
 	SerialTimePrintf(F("Enabled the watchdog with max countdown of %d ms\r\n"), countdownMS);
 	#endif
 	#endif
@@ -1106,43 +1112,42 @@ void ctrlRainSensor(void)
 {
 	bool RainInput;
 	bool RainEnable;
-	bool tmpRainEnable;
-	static bool prevtmpRainEnable = false;
+	bool sensRainInput;
+	bool sensRainEnable;
 	static bool prevRainInput = false;
 	static bool prevRainEnable = false;
+	static bool prevRainEnableInput = false;
 
-	// Debouncing inputs
+	// Eingänge entprellen
 	debEnable.update();
 	debInput.update();
 
-	// Wenn Regensensor EIN/AUS-Schalter betätigt wird
-	// aktivieren Automatik wieder
-	tmpRainEnable = (debEnable.read() == RAIN_ENABLE_AKTIV);
+	// Entprellte Eingangssignale lesen
+	sensRainEnable = (debEnable.read() == RAIN_ENABLE_AKTIV);
+	sensRainInput  = (debInput.read()  == RAIN_INPUT_AKTIV);
 
-	if ( tmpRainEnable != prevtmpRainEnable ) {
-		//TODO: Eingangsänderung RAIN_ENABLE sollte Automatik wieder einschalten
-
-		//bitSet(eepromRain, RAIN_BIT_AUTO);
-		// Write new value into EEPROM
-		//eepromWriteByte(EEPROM_ADDR_RAIN, eepromRain);
-		// Write new EEPROM checksum
-		//eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
-		prevtmpRainEnable = tmpRainEnable;
+	if( sensRainEnable != prevRainEnableInput ) {
+		// AUTO Modus wieder aktivieren, wenn Enable-Eingang sich
+		// geändert hat
+		bitSet(eepromRain, RAIN_BIT_AUTO);
+		prevRainEnableInput = sensRainEnable;
 	}
 
-	// Get the updated value :
-	if ( bitRead(eepromRain, RAIN_BIT_AUTO)!=0 ) {
-		RainEnable = tmpRainEnable;
-		RainInput  = (debInput.read()  == RAIN_INPUT_AKTIV);
+	// Regensignale abhängig vom Modus lesen
+	if ( bitRead(eepromRain, RAIN_BIT_AUTO) ) {
+		// AUTO Modus aktiv
+		RainEnable = sensRainEnable;
+		RainInput  = sensRainInput;
 	}
 	else {
-		RainEnable = (bitRead(eepromRain, RAIN_BIT_ENABLE)!=0);
+		// Modus manuell
+		RainEnable = bitRead(eepromRain, RAIN_BIT_ENABLE);
 		RainInput  = softRainInput;
 	}
 
-	if ( prevRainInput != RainInput || prevRainEnable != RainEnable) {
+	if ( prevRainInput != RainInput || prevRainEnable != RainEnable ) {
 		#ifdef DEBUG_OUTPUT_RAIN
-		SerialTimePrintf(F("RainDetect: %s\r\n"), bitRead(eepromRain, RAIN_BIT_AUTO)!=0?"Auto":"Software");
+		SerialTimePrintf(F("RainMode:   %s\r\n"), bitRead(eepromRain, RAIN_BIT_AUTO)!=0?"Auto":"Software");
 		SerialTimePrintf(F("RainEnable: %d\r\n"), RainEnable);
 		SerialTimePrintf(F("RainInput:  %d\r\n"), RainInput);
 		#endif
@@ -1166,23 +1171,32 @@ void ctrlRainSensor(void)
 						}
 					}
 				}
-				RainDetect = true;
+				isRaining = true;
+				#ifdef DEBUG_OUTPUT_RAIN
+				SerialTimePrintf(F("Now it's raining\r\n"));
+				#endif
 				digitalWrite(ONBOARD_LED, HIGH);
 			}
 			else {
 				#ifdef DEBUG_OUTPUT_RAIN
-				SerialTimePrintf(F("Rain inactive, do nothing"));
+				SerialTimePrintf(F("Rain inactive, do nothing\r\n"));
+				#endif
+				isRaining = false;
+				#ifdef DEBUG_OUTPUT_RAIN
+				SerialTimePrintf(F("Now it's not raining\r\n"));
 				#endif
 				digitalWrite(ONBOARD_LED, LOW);
-				RainDetect = false;
 			}
 		}
 		else {
 			#ifdef DEBUG_OUTPUT_RAIN
-			SerialTimePrintf(F("Rain inputs changed, sensor disabled"));
+			SerialTimePrintf(F("Rain inputs changed, sensor disabled\r\n"));
 			#endif
+			#ifdef DEBUG_OUTPUT_RAIN
+			SerialTimePrintf(F("Now it's not raining\r\n"));
+			#endif
+			isRaining = false;
 			digitalWrite(ONBOARD_LED, LOW);
-			RainDetect = false;
 		}
 		prevRainEnable = RainEnable;
 		prevRainInput  = RainInput;
@@ -1237,12 +1251,12 @@ void blinkLED(void)
 	{
 		ledTimer = millis();
 		if ( !ledStatus ) {
-			digitalWrite(ONBOARD_LED, RainDetect?LOW:HIGH);
+			digitalWrite(ONBOARD_LED, isRaining?LOW:HIGH);
 			ledDelay = eepromBlinkLen;
 			ledStatus = true;
 		}
 		else {
-			digitalWrite(ONBOARD_LED, RainDetect?HIGH:LOW);
+			digitalWrite(ONBOARD_LED, isRaining?HIGH:LOW);
 			ledDelay = eepromBlinkInterval;
 			ledStatus = false;
 		}

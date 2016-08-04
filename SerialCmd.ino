@@ -308,32 +308,46 @@ void cmdRainSensor()
 		debEnable.update();
 		debInput.update();
 
-		SerialPrintf(F("Rain sensor mode: "));
-		SerialPrintf(bitRead(eepromRain, RAIN_BIT_AUTO)!=0?F("AUTO"):F("Software"));
+		SerialPrintf(F("Rain sensor mode:         "));
+		SerialPrintf(bitRead(eepromRain, RAIN_BIT_AUTO)!=0?F("AUTO"):F("Manual"));
 		SerialPrintf(F("\r\n"));
 
-		SerialPrintf(F("Sensor software mode:  "));
+		SerialPrintf(F("Rainsensor enable status: "));
 		SerialPrintf(bitRead(eepromRain, RAIN_BIT_ENABLE)!=0?F("Enabled"):F("Disabled"));
+		if( bitRead(eepromRain, RAIN_BIT_AUTO)!=0 ) {
+			SerialPrintf(F(" - ignored"));
+		}
 		SerialPrintf(F("\r\n"));
-		SerialPrintf(F("Sensor software value: "));
+		SerialPrintf(F("Rainsensor status:        "));
 		SerialPrintf(softRainInput?F("Raining"):F("Dry"));
+		if( bitRead(eepromRain, RAIN_BIT_AUTO)!=0 ) {
+			SerialPrintf(F(" - ignored"));
+		}
 		SerialPrintf(F("\r\n"));
 
-		SerialPrintf(F("Sensor hardware mode:  "));
+		SerialPrintf(F("Rainsensor enable input:  "));
 		SerialPrintf((debEnable.read() == RAIN_ENABLE_AKTIV)?F("Enabled"):F("Disabled"));
+		if( bitRead(eepromRain, RAIN_BIT_AUTO)==0 && 
+		   (debEnable.read() == RAIN_ENABLE_AKTIV)!=bitRead(eepromRain, RAIN_BIT_ENABLE) ) {
+			SerialPrintf(F(" - ignored"));
+		}
 		SerialPrintf(F("\r\n"));
-		SerialPrintf(F("Sensor hardware value: "));
+		SerialPrintf(F("Rainsensor input:         "));
 		SerialPrintf((debInput.read()  == RAIN_INPUT_AKTIV)?F("Raining"):F("Dry"));
+		if( bitRead(eepromRain, RAIN_BIT_AUTO)==0 ) {
+			SerialPrintf(F(" - ignored"));
+		}
 		SerialPrintf(F("\r\n"));
-
 	}
 	else {
 		if ( strnicmp(arg, "ON",2)==0 ) {
 			softRainInput = true;
+			bitClear(eepromRain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
 		else if ( strnicmp(arg, "OF",2)==0 ) {
 			softRainInput = false;
+			bitClear(eepromRain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
 		else if ( strnicmp(arg, "EN",2)==0 ) {
