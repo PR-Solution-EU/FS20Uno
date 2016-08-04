@@ -160,7 +160,7 @@
 #include <Arduino.h>
 #include <EEPROM.h>				// https://www.arduino.cc/en/Reference/EEPROM
 #include <Wire.h>				// https://www.arduino.cc/en/Reference/Wire
-#include <PrintEx.h>			// https://github.com/Chris--A/PrintEx#printex-library-for-arduino-
+// #include <PrintEx.h>			// https://github.com/Chris--A/PrintEx#printex-library-for-arduino-
 #include <MsTimer2.h>			// http://playground.arduino.cc/Main/MsTimer2
 #include <Bounce2.h>			// https://github.com/thomasfredericks/Bounce2
 #include <Adafruit_SleepyDog.h> // https://github.com/adafruit/Adafruit_SleepyDog
@@ -176,23 +176,23 @@
 #define DATAVERSION 106
 
 
-// define next macro to enable debug output pins
-#undef DEBUG_PINS
 // define next macros to output debug prints
 #define DEBUG_OUTPUT
-#undef DEBUG_OUTPUT_SETUP
-#undef DEBUG_OUTPUT_WATCHDOG
-#undef DEBUG_OUTPUT_EEPROM
-#undef DEBUG_OUTPUT_SM8STATUS
-#undef DEBUG_OUTPUT_WALLBUTTON
-#undef DEBUG_OUTPUT_SM8OUTPUT
-#define DEBUG_OUTPUT_MOTOR
-#undef DEBUG_OUTPUT_RAIN
-#undef DEBUG_OUTPUT_LIVE
+#undef DEBUG_PINS				// enable debug output pins
+#undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
+#undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
+#undef DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
+#undef DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
+#undef DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
+#undef DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
+#define DEBUG_OUTPUT_MOTOR		// enable motor control related output
+#undef DEBUG_OUTPUT_RAIN		// enable rain sensor related output
+#undef DEBUG_OUTPUT_ALIVE		// enable program alive signal output
 
 #ifndef DEBUG_OUTPUT
 	// enable next line to enable watchdog timer
 	#define WATCHDOG_ENABLED
+	#undef DEBUG_PINS
 	#undef DEBUG_OUTPUT_SETUP
 	#undef DEBUG_OUTPUT_WATCHDOG
 	#undef DEBUG_OUTPUT_EEPROM
@@ -201,16 +201,14 @@
 	#undef DEBUG_OUTPUT_SM8OUTPUT
 	#undef DEBUG_OUTPUT_MOTOR
 	#undef DEBUG_OUTPUT_RAIN
-	#undef DEBUG_OUTPUT_LIVE
+	#undef DEBUG_OUTPUT_ALIVE
 #endif
-
 #ifdef DEBUG_PINS
 	#define DBG_INT 			12			// Debug PIN = D12
 	#define DBG_MPC 			11			// Debug PIN = D11
 	#define DBG_TIMER	 		10			// Debug PIN = D10
 	#define DBG_TIMERLEN 		9			// Debug PIN = D9
 #endif
-
 
 // loop() timer vars
 TIMER ledTimer = 0;
@@ -294,10 +292,6 @@ Bounce debInput = Bounce();
 volatile bool RainDetect = false;
 
 
-// StreamEx object
-StreamEx mySerial = Serial;
-
-
 
 /* ===================================================================
  * Function:    setup
@@ -313,11 +307,11 @@ void setup()
 	printProgramInfo(true);
 
 	#ifdef DEBUG_OUTPUT
-	Serial.println(F("Debug output enabled"));
+	SerialTimePrintf(F("Debug output enabled\r\n"));
 	#endif
 
 	#ifdef DEBUG_PINS
-	Serial.println(F("Debug pins enabled"));
+	SerialTimePrintf(F("Debug pins enabled\r\n"));
 	pinMode(DBG_INT, OUTPUT); 		// debugging
 	pinMode(DBG_MPC, OUTPUT); 		// debugging
 	pinMode(DBG_TIMER, OUTPUT);		// debugging
@@ -396,19 +390,14 @@ void setup()
 	#ifdef WATCHDOG_ENABLED
 	int countdownMS = Watchdog.enable(4000);
 	#ifdef DEBUG_OUTPUT_WATCHDOG
-	printUptime();
-	Serial.print(F("Enabled the watchdog with max countdown of "));
-	Serial.print(countdownMS, DEC);
-	Serial.println(F(" milliseconds!"));
-	Serial.println();
+	SerialTimePrintf(F("Enabled the watchdog with max countdown of %d ms\r\n"), countdownMS);
 	#endif
 	#endif
 
 	setupSerialCommand();
 
 #ifdef DEBUG_OUTPUT_SETUP
-	printUptime();
-	Serial.println(F("Setup done, starting main loop()"));
+	SerialTimePrintf(F("Setup done, starting main loop()\r\n"));
 #endif
 
 	// indicate setup was done
@@ -593,78 +582,6 @@ void handleMPCInt()
 
 
 /* ===================================================================
- * Function:    printProgramInfo
- * Return:
- * Arguments:	copyright - print copyright info too if true
- * Description: Print program info
- * ===================================================================*/
-void printProgramInfo(bool copyright)
-{
-	char strBuffer[100];
-
-	sprintf_P(strBuffer, PSTR("%s v%s (build %s)\r\n"), PROGRAM, VERSION, REVISION);
-	Serial.print(strBuffer);
-	sprintf_P(strBuffer, PSTR("compiled on %s %s (GnuC%s %s)\r\n"), __DATE__, __TIME__, __GNUG__?"++ ":" ", __VERSION__);
-	Serial.print(strBuffer);
-	if( copyright ) {
-		Serial.print(F("(c) 2016 by PR-Solution (http://p-r-solution.de)\r\n"));
-		Serial.print(F("Norbert Richter <norbert-richter@p-r-solution.de>\r\n"));
-	}
-}
-
-//#ifdef DEBUG_OUTPUT
-/* ===================================================================
- * Function:    printUptime
- * Return:
- * Arguments:
- * Description: Print uptime
- * ===================================================================*/
-void printUptime(void)
-{
-	char strBuffer[60];
-	uint32_t t;
-	uint16_t days;
-	uint8_t hours, minutes, seconds;
-
-	t = millis();
-	/* div_t div(int number, int denom) */
-	days = (uint16_t)(t / (24L * 60L * 60L * 1000L));
-	t -= (uint32_t)days * (24L * 60L * 60L * 1000L);
-	hours = (uint8_t)(t / (60L * 60L * 1000L));
-	t -= (uint32_t)hours * (60L * 60L * 1000L);
-	minutes = (uint8_t)(t / (60L * 1000L));
-	t -= (uint32_t)minutes * (60L * 1000L);
-	seconds = (uint8_t)(t / 1000L);
-	t -= (uint32_t)seconds * 1000L;
-
-	if ( days ) {
-		sprintf_P(strBuffer, PSTR("%d day%s, %02d:%02d:%02d.%03ld "), days, days==1?"":"s", hours, minutes, seconds, t);
-		Serial.print(strBuffer);
-	}
-	else {
-		sprintf_P(strBuffer, PSTR("%02d:%02d:%02d.%03ld "), hours, minutes, seconds, t);
-		Serial.print(strBuffer);
-	}
-}
-//#endif
-
-
-/* ===================================================================
- * Function:    sendStatus
- * Return:
- * Arguments:	str - Statusmeldung, die ausgegeben werden soll
- * Description: Statusmeldungen via RS232 senden, falls
- *              Statusmeldungen 'enabled'
- * ===================================================================*/
-void sendStatus(char *str)
-{
-	if( eepromSendStatus ) {
-		Serial.println(str);
-	}
-}
-
-
-/* ===================================================================
  * Function:    setMotorDirection
  * Return:
  * Arguments:
@@ -682,22 +599,19 @@ bool setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor auf Öffnen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_DELAYED_OPEN;
-				sprintf_P(strBuffer, PSTR("01 M%i OPENING DELAYED"), motorNum);
-				sendStatus(strBuffer);
+				sendStatus(F("01 M%i OPENING DELAYED"), motorNum);
 			}
 			// Motor läuft auf Öffnen
 			else if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sprintf_P(strBuffer, PSTR("01 M%i OFF"), motorNum);
-				sendStatus(strBuffer);
+				sendStatus(F("01 M%i OFF"), motorNum);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf öffnen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN;
-				sprintf_P(strBuffer, PSTR("01 M%i OPENING"), motorNum);
-				sendStatus(strBuffer);
+				sendStatus(F("01 M%i OPENING"), motorNum);
 			}
 		}
 		// Neue Richtung: Schliessen
@@ -706,30 +620,26 @@ bool setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor auf Schliessen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_DELAYED_CLOSE;
-				sprintf_P(strBuffer, PSTR("01 M%i CLOSING DELAYED"), motorNum);
-				sendStatus(strBuffer);
+				sendStatus(F("01 M%i CLOSING DELAYED"), motorNum);
 			}
 			// Motor läuft auf Schliessen
 			else if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sprintf_P(strBuffer, PSTR("01 M%i OFF"), motorNum);
-				sendStatus(strBuffer);
+				sendStatus(F("01 M%i OFF"), motorNum);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf Schliessen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE;
-				sprintf_P(strBuffer, PSTR("01 M%i CLOSING"), motorNum);
-				sendStatus(strBuffer);
+				sendStatus(F("01 M%i CLOSING"), motorNum);
 			}
 		}
 		// Neue Richtung: AUS
 		else {
 			// Motor AUS
 			MotorCtrl[motorNum] = MOTOR_OFF;
-			sprintf_P(strBuffer, PSTR("01 M%i OFF"), motorNum);
-			sendStatus(strBuffer);
+			sendStatus(F("01 M%i OFF"), motorNum);
 		}
 		return (currentMotorCtrl != MotorCtrl[motorNum]);
 	}
@@ -778,8 +688,7 @@ void ctrlSM8Status(void)
 
 	if ( (tmpSM8Status != curSM8Status) ) {
 		#ifdef DEBUG_OUTPUT_SM8STATUS
-		printUptime();
-		Serial.println(F("SM8 Input Status changed"));
+		SerialTimePrintf(F("SM8 Input Status changed\r\n"));
 		#endif
 		/* Lese SM8 Ausgänge
 			 die unteren 8-bits sind "Öffnen" Befehle
@@ -808,26 +717,23 @@ void ctrlSM8Status(void)
 			SM8StatusChange  =  prevSM8Status ^ SM8Status;
 
 			#ifdef DEBUG_OUTPUT_SM8STATUS
-			Serial.println();
-			printUptime();
-			Serial.print(F("---------------------------------------- ")); Serial.println((float)millis() / 1000.0, 3);
-			mySerial.printf("prevSM8Status:   0x%04x\r\n", prevSM8Status);
-			mySerial.printf("SM8Status:       0x%04x\r\n", SM8Status);
-			mySerial.printf("SM8StatusSlope:  0x%04x\r\n", SM8StatusSlope);
-			mySerial.printf("SM8StatusChange: 0x%04x\r\n", SM8StatusChange);
-			mySerial.printf("SM8StatusIgnore: 0x%04x\r\n", SM8StatusIgnore);
+			SerialTimePrintf(F("----------------------------------------\r\n"));
+			SerialTimePrintf(F("prevSM8Status:   0x%04x\r\n"), prevSM8Status);
+			SerialTimePrintf(F("SM8Status:       0x%04x\r\n"), SM8Status);
+			SerialTimePrintf(F("SM8StatusSlope:  0x%04x\r\n"), SM8StatusSlope);
+			SerialTimePrintf(F("SM8StatusChange: 0x%04x\r\n"), SM8StatusChange);
+			SerialTimePrintf(F("SM8StatusIgnore: 0x%04x\r\n"), SM8StatusIgnore);
 			#endif
 			// Eventuell Änderungen einzelner Bits ignorieren
 			SM8StatusChange &= ~SM8StatusIgnore;
 			SM8StatusIgnore = 0;
 			#ifdef DEBUG_OUTPUT_SM8STATUS
-			mySerial.printf("SM8StatusChange: 0x%04x\r\n", SM8StatusChange);
+			SerialTimePrintf(F("SM8StatusChange: 0x%04x\r\n"), SM8StatusChange);
 			#endif
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(SM8StatusChange, i) ) {
-					sprintf_P(strBuffer, PSTR("02 FS20 OUTPUT %2d %s"), i, bitRead(curSM8Status,i)?"ON":"OFF");
-					sendStatus(strBuffer);
+					sendStatus(F("02 FS20 OUTPUT %2d %s"), i, bitRead(curSM8Status,i)?"ON":"OFF");
 				}
 			}
 			for (i = 0; i < MAX_MOTORS; i++) {
@@ -882,19 +788,18 @@ void ctrlSM8Status(void)
 		if ( changeMotor ) {
 			byte i;
 
-			Serial.println();
-			printUptime();
-			Serial.print(F("---------------------------------------- ")); Serial.println((float)millis() / 1000.0, 3);
-			Serial.println(F("   M1   M2   M3   M4   M5   M6   M7   M8"));
+			SerialTimePrintf(F("----------------------------------------\r\n"));
+			SerialTimePrintf(F("   M1   M2   M3   M4   M5   M6   M7   M8\r\n"));
+			SerialTimePrintf(F(""));
 			for (i = 0; i < MAX_MOTORS; i++) {
 				if (MotorCtrl[i] == 0) {
-					Serial.print(F("  off"));
+					SerialPrintf(F("  off"));
 				}
 				else {
-					mySerial.printf("%5d", MotorCtrl[i]);
+					SerialPrintf(F("%5d"), MotorCtrl[i]);
 				}
 			}
-			Serial.println();
+			SerialPrintf(F("\r\n"));
 		}
 		#endif
 
@@ -948,8 +853,7 @@ void ctrlWallButton(void)
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(WallButtonChange, i) ) {
-					sprintf_P(strBuffer, PSTR("04 KEY %2d %s"), i, bitRead(curWallButton,i)?"ON":"OFF");
-					sendStatus(strBuffer);
+					sendStatus(F("04 KEY %2d %s"), i, bitRead(curWallButton,i)?"ON":"OFF");
 				}
 			}
 			for (i = 0; i < MAX_MOTORS; i++) {
@@ -974,14 +878,12 @@ void ctrlWallButton(void)
 			}
 
 			#ifdef DEBUG_OUTPUT_WALLBUTTON
-			Serial.println();
-			printUptime();
-			Serial.print(F("---------------------------------------- ")); Serial.println((float)millis() / 1000.0, 3);
-			mySerial.printf("prevWallButton:   0x%04x\r\n", prevWallButton);
-			mySerial.printf("WallButton:       0x%04x\r\n", WallButton);
-			mySerial.printf("WallButtonSlope:  0x%04x\r\n", WallButtonSlope);
-			mySerial.printf("WallButtonChange: 0x%04x\r\n", WallButtonChange);
-			mySerial.printf("WallButtonLocked: 0x%04x\r\n", WallButtonLocked);
+			SerialTimePrintf(F("----------------------------------------\r\n"));
+			SerialTimePrintf(F("prevWallButton:   0x%04x\r\n"), prevWallButton);
+			SerialTimePrintf(F("WallButton:       0x%04x\r\n"), WallButton);
+			SerialTimePrintf(F("WallButtonSlope:  0x%04x\r\n"), WallButtonSlope);
+			SerialTimePrintf(F("WallButtonChange: 0x%04x\r\n"), WallButtonChange);
+			SerialTimePrintf(F("WallButtonLocked: 0x%04x\r\n"), WallButtonLocked);
 			#endif
 
 			prevWallButton = curWallButton;
@@ -991,19 +893,18 @@ void ctrlWallButton(void)
 		if ( changeMotor ) {
 			byte i;
 
-			Serial.println();
-			printUptime();
-			Serial.print(F("---------------------------------------- ")); Serial.println((float)millis() / 1000.0, 3);
-			Serial.println(F("   M1   M2   M3   M4   M5   M6   M7   M8"));
+			SerialTimePrintf(F("----------------------------------------\r\n"));
+			SerialTimePrintf(F("   M1   M2   M3   M4   M5   M6   M7   M8\r\n"));
+			SerialTimePrintf(F(""));
 			for (i = 0; i < MAX_MOTORS; i++) {
 				if (MotorCtrl[i] == 0) {
-					Serial.print(F("  off"));
+					SerialPrintf(F("  off"));
 				}
 				else {
-					mySerial.printf("%5d", MotorCtrl[i]);
+					SerialPrintf(F("%5d"), MotorCtrl[i]);
 				}
 			}
-			Serial.println();
+			SerialPrintf(F("\r\n"));
 		}
 		#endif
 
@@ -1025,26 +926,19 @@ void ctrlSM8Button(void)
 
 	if ( tmpSM8Button != valSM8Button ) {
 		#ifdef DEBUG_OUTPUT_SM8OUTPUT
-		printUptime();
-		Serial.println(F("SM8 output changed"));
+		SerialTimePrintf(F("SM8 output changed\r\n"));
 		#endif
 		expanderWriteWord(MPC_SM8BUTTON,   GPIOA, valSM8Button);
 
 		for (i = 0; i < IOBITS_CNT; i++) {
 			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) ) {
-				sprintf_P(strBuffer, PSTR("03 FS20 INPUT  %2d %s"), i, bitRead(valSM8Button,i)?"OFF":"ON");
-				sendStatus(strBuffer);
+				sendStatus(F("03 FS20 INPUT  %2d %s"), i, bitRead(valSM8Button,i)?"OFF":"ON");
 			}
 
 			// SM8 Taste Timeout setzen, falls Tastenausgang gerade aktiviert wurde
 			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) && (bitRead(valSM8Button, i) == 0) ) {
 				#ifdef DEBUG_OUTPUT_SM8OUTPUT
-				printUptime();
-				Serial.print(F("Set SM8 key "));
-				Serial.print(i + 1);
-				Serial.print(F(" timeout to "));
-				Serial.print(FS20_SM8_IN_RESPONSE / TIMER_MS);
-				Serial.println(F(" ms"));
+				SerialTimePrintf(F("Set SM8 key %d timeout to %d ms\r\n"), i+1, FS20_SM8_IN_RESPONSE/TIMER_MS);
 				#endif
 				SM8Timeout[i] = FS20_SM8_IN_RESPONSE / TIMER_MS;
 			}
@@ -1073,13 +967,12 @@ void ctrlMotorRelais(void)
 
 	if ( (tmpMotorRelais != valMotorRelais) && (preMotorCount == 0) ) {
 		#ifdef DEBUG_OUTPUT_MOTOR
-		printUptime();Serial.println(F("Motor output change test"));
-		printUptime();Serial.print(  F("  tmpMotorRelais: 0x"));Serial.println(tmpMotorRelais, HEX);
-		printUptime();Serial.print(  F("  valMotorRelais: 0x"));Serial.println(valMotorRelais, HEX);
+		SerialTimePrintf(F("Motor output change test\r\n"));
+		SerialTimePrintf(F("  tmpMotorRelais: 0x%04X\r\n"), tmpMotorRelais);
+		SerialTimePrintf(F("  valMotorRelais: 0x%04X\r\n"), valMotorRelais);
 		#endif
 		/* Relais-Schaltzeiten beachten:
-		 * Drehrichtungsrelais nicht bei laufendem Motor umschalten
-		 */
+		 * Drehrichtungsrelais nicht bei laufendem Motor umschalten */
 		MOTORBITS valMotorStat01;
 		MOTORBITS valMotorStat11;
 		MOTORBITS valMotorDirChange;
@@ -1097,9 +990,9 @@ void ctrlMotorRelais(void)
 		valMotorDirChange = ((tmpMotorRelais>>MAX_MOTORS) & IOBITS_LOWMASK) ^ ((valMotorRelais>>MAX_MOTORS) & IOBITS_LOWMASK);
 
 		#ifdef DEBUG_OUTPUT_MOTOR
-		printUptime();Serial.print(F("    valMotorStat01:   0x"));Serial.println(valMotorStat01, HEX);
-		printUptime();Serial.print(F("    valMotorStat11:   0x"));Serial.println(valMotorStat11, HEX);
-		printUptime();Serial.print(F("    valMotorDirChange 0x"));Serial.println(valMotorDirChange, HEX);
+		SerialTimePrintf(F("    valMotorStat01:   0x%02X\r\n"), valMotorStat01);
+		SerialTimePrintf(F("    valMotorStat11:   0x%02X\r\n"), valMotorStat11);
+		SerialTimePrintf(F("    valMotorDirChange 0x%02X\r\n"), valMotorDirChange);
 		#endif
 
 		if ( valMotorStat11 ) {
@@ -1118,8 +1011,8 @@ void ctrlMotorRelais(void)
 			preMotorRelais[1] |= valMotorRelais & (~(IOBITS)valMotorStat11 | IOBITS_HIGHMASK);
 			preMotorCount = 2;
 			#ifdef DEBUG_OUTPUT_MOTOR
-			printUptime();Serial.print(F("A     preMotorRelais[2] "));Serial.println(preMotorRelais[2], HEX);
-			printUptime();Serial.print(F("A     preMotorRelais[1] "));Serial.println(preMotorRelais[1], HEX);
+			SerialTimePrintf(F("A     preMotorRelais[2] 0x%04X\r\n"), preMotorRelais[2]);
+			SerialTimePrintf(F("A     preMotorRelais[1] 0x%04X\r\n"), preMotorRelais[1]);
 			#endif
 		}
 		else if ( valMotorStat01 ) {
@@ -1132,12 +1025,12 @@ void ctrlMotorRelais(void)
 			preMotorRelais[1] |= valMotorRelais & (~(IOBITS)valMotorStat01 | IOBITS_HIGHMASK);
 			preMotorCount = 1;
 			#ifdef DEBUG_OUTPUT_MOTOR
-			printUptime();Serial.print(F("B     preMotorRelais[1] "));Serial.println(preMotorRelais[1], HEX);
+			SerialTimePrintf(F("B     preMotorRelais[1] 0x%04X\r\n"), preMotorRelais[1]);
 			#endif
 		}
 		else {
 			#ifdef DEBUG_OUTPUT_MOTOR
-			printUptime();Serial.print(F("C     preMotorCount="));Serial.println(preMotorCount);
+			SerialTimePrintf(F("C     preMotorCount=%d\r\n"), preMotorCount);
 			#endif
 		}
 		// Nächste Ausgabe ohne Delay
@@ -1149,20 +1042,21 @@ void ctrlMotorRelais(void)
 	if ( millis() > (preMotorTimer + RELAIS_OPERATE_TIME) ) {
 		// Aktuelle Motorsteuerungsbits holen
 		outMotorRelais = preMotorRelais[preMotorCount];
+		
 		if ( preMotorCount>0 ) {
 			#ifdef DEBUG_OUTPUT_MOTOR
-			printUptime();Serial.print(F("D   A preMotorCount="));Serial.println(preMotorCount);
+			SerialTimePrintf(F("D   a)preMotorCount=%d\r\n"), preMotorCount);
 			#endif
 			preMotorCount--;
 			#ifdef DEBUG_OUTPUT_MOTOR
-			printUptime();Serial.print(F("D   B preMotorCount="));Serial.println(preMotorCount);
+			SerialTimePrintf(F("D   b)preMotorCount=%d\r\n"), preMotorCount);
 			#endif
 			preMotorTimer = millis();
 		}
 
 		if ( tmpOutMotorRelais != outMotorRelais ) {
 			#ifdef DEBUG_OUTPUT_MOTOR
-			printUptime();Serial.print(F("D   Output outMotorRelais 0x")); Serial.println(outMotorRelais, HEX);
+			SerialTimePrintf(F("D   Output outMotorRelais 0x%04X\r\n"), outMotorRelais);
 			#endif
 			expanderWriteWord(MPC_MOTORRELAIS, GPIOA, outMotorRelais);
 
@@ -1172,12 +1066,7 @@ void ctrlMotorRelais(void)
 				if (    (bitRead(tmpOutMotorRelais, i  ) == 0 && bitRead(outMotorRelais, i  ) != 0)
 					 || (bitRead(tmpOutMotorRelais, i + MAX_MOTORS) != bitRead(outMotorRelais, i + MAX_MOTORS) ) ) {
 					#ifdef DEBUG_OUTPUT_MOTOR
-					printUptime();
-					Serial.print(F("Set motor "));
-					Serial.print(i + 1);
-					Serial.print(F(" timeout to "));
-					Serial.print(eepromMaxRuntime[i] / 1000);
-					Serial.println(F(" sec."));
+					SerialTimePrintf(F("    Set motor %d timeout to %.1f s\r\n"), i+1, (double)eepromMaxRuntime[i]/1000.0);
 					#endif
 					MotorTimeout[i] = eepromMaxRuntime[i] / TIMER_MS;
 				}
@@ -1204,7 +1093,7 @@ void ctrlMotorRelais(void)
 	}
 	#ifdef DEBUG_OUTPUT_MOTOR
 	else {
-			printUptime();Serial.println(F("Z   Timer waiting"));
+		SerialTimePrintf(F("Z   Timer waiting\r\n"));
 	}
 	#endif
 }
@@ -1255,19 +1144,17 @@ void ctrlRainSensor(void)
 
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable) {
 		#ifdef DEBUG_OUTPUT_RAIN
-		Serial.print(F("RainDetect: ")); Serial.println(bitRead(eepromRain, RAIN_BIT_AUTO)!=0?F("Auto"):F("Software"));
-		Serial.print(F("RainEnable: ")); Serial.println(RainEnable);
-		Serial.print(F("RainInput:  ")); Serial.println(RainInput);
+		SerialTimePrintf(F("RainDetect: %s\r\n"), bitRead(eepromRain, RAIN_BIT_AUTO)!=0?"Auto":"Software");
+		SerialTimePrintf(F("RainEnable: %d\r\n"), RainEnable);
+		SerialTimePrintf(F("RainInput:  %d\r\n"), RainInput);
 		#endif
 		if ( RainEnable ) {
 			#ifdef DEBUG_OUTPUT_RAIN
-			printUptime();
-			Serial.println(F("Rain inputs changed, sensor enabled"));
+			SerialTimePrintf(F("Rain inputs changed, sensor enabled\r\n"));
 			#endif
 			if ( RainInput ) {
 				#ifdef DEBUG_OUTPUT_RAIN
-				printUptime();
-				Serial.println(F("Rain active, close all windows"));
+				SerialTimePrintf(F("Rain active, close all windows\r\n"));
 				#endif
 				byte i;
 
@@ -1275,7 +1162,7 @@ void ctrlRainSensor(void)
 					if ( bitRead(eepromMTypeBitmask, i) ) {
 						if ( getMotorDirection(i)!=MOTOR_CLOSE ) {
 							#ifdef DEBUG_OUTPUT_RAIN
-							Serial.print(F("Close window "));Serial.println(i);
+							SerialTimePrintf(F("Close window %d\r\n"), i);
 							#endif
 							setMotorDirection(i, MOTOR_CLOSE);
 						}
@@ -1286,8 +1173,7 @@ void ctrlRainSensor(void)
 			}
 			else {
 				#ifdef DEBUG_OUTPUT_RAIN
-				printUptime();
-				Serial.println(F("Rain inactive, do nothing"));
+				SerialTimePrintf(F("Rain inactive, do nothing"));
 				#endif
 				digitalWrite(ONBOARD_LED, LOW);
 				RainDetect = false;
@@ -1295,8 +1181,7 @@ void ctrlRainSensor(void)
 		}
 		else {
 			#ifdef DEBUG_OUTPUT_RAIN
-			printUptime();
-			Serial.println(F("Rain inputs changed, sensor disabled"));
+			SerialTimePrintf(F("Rain inputs changed, sensor disabled"));
 			#endif
 			digitalWrite(ONBOARD_LED, LOW);
 			RainDetect = false;
@@ -1315,9 +1200,9 @@ void ctrlRainSensor(void)
  * ===================================================================*/
 void beAlive(void)
 {
-	#ifdef DEBUG_OUTPUT_LIVE
+	#ifdef DEBUG_OUTPUT_ALIVE
 	static char liveToogle = 0;
-	static byte liveDots = 0;
+	static byte liveDots = 80;
 	#endif
 
 	// Live timer und watchdog handling
@@ -1327,13 +1212,13 @@ void beAlive(void)
 		#ifdef WATCHDOG_ENABLED
 		Watchdog.reset();
 		#endif
-		#ifdef DEBUG_OUTPUT_LIVE
+		#ifdef DEBUG_OUTPUT_ALIVE
 		if ((liveToogle--) < 1) {
-			Serial.print(F("."));
+			SerialPrintf(F("."));
 			liveToogle = 3;
 			liveDots++;
 			if ( liveDots > 76 ) {
-				Serial.println();
+				SerialPrintf(F("\r\n"));
 				liveDots = 0;
 			}
 		}
