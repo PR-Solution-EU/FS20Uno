@@ -64,9 +64,9 @@
  * - Motortyp: "Fenster" (WINDOW) oder "Jalousie" (JALOUSIE)
  * - Motorlaufzeit: Maximale Laufzeit des Motors
  * Diese Eigenschaften lassen sich mit Hilfe der Standardwerte
- * MTYPE_BITMASK, MOTOR_WINDOW_MAXRUNTIME und MOTOR_JALOUSIE_MAXRUNTIME
- * vordefinieren, als auch später mit Hilfe der Control-Kommandos
- * "MOTORTYPE" und "MOTORTIME" verändern.
+ * MTYPE_BITMASK, MOTOR_WINDOW_MAXRUNTIME und 
+ * MOTOR_JALOUSIE_MAXRUNTIME vordefinieren, als auch später mit Hilfe
+ * der Control-Kommandos "MOTORTYPE" und "MOTORTIME" verändern.
  * Motoren vom Typ Fenster werden bei aktivem Regensensoreingang
  * automatisch geschlossen.
  * Jeder Motor wird nach Ablauf seiner Motorlaufzeit abgeschaltet.
@@ -143,16 +143,15 @@
  *                                        DISABLE=Abfrage inaktiv
  * - RAINSENSOR AUTO
  *     Da bei Verwendung eines der o.a. Befehle der Automatikmodus
- *     (d.h. die Abfrage der Regensensor-Hardwareeingänge) abgeschaltet
- *     wird, kann hiermit die Abfrage der Regensensor-Hardwareeingänge
- *     wieder aktiviert werden. Die eingestellten Simulationswerte
- *     haben, solange sie nicht wieder verwendet werden,
- *     keine Bedeutung mehr
+ *     (d.h. die Abfrage der Regensensor-Hardwareeingänge)
+ *     abgeschaltet wird, kann hiermit die Abfrage der Regensensor-
+ *     Hardwareeingänge wieder aktiviert werden. Die eingestellten
+ *     Simulationswerte haben, solange sie nicht wieder verwendet
+ *     werden, keine Bedeutung mehr.
  * ===================================================================*/
 
 /* ===================================================================
-/* TODO
- * SM8 direkte Drehrichtungsumschaltung funktoniert nicht
+ * TODO
  * Regensensor "Regen" nur bei Flanke Inaktiv->Aktiv auslösen
  * Eingangsänderung RAIN_ENABLE sollte Automatik wieder einschalten
  * ===================================================================*/
@@ -171,7 +170,7 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.13"
+#define VERSION "2.14"
 #include "REVISION.h"
 #define DATAVERSION 106
 
@@ -338,7 +337,7 @@ void setup()
 	digitalWrite(DBG_INT, LOW);  	// debugging
 	digitalWrite(DBG_MPC, LOW);		// debugging
 	digitalWrite(DBG_TIMER, LOW);	// debugging
-	digitalWrite(DBG_TIMERLEN, LOW);	// debugging
+	digitalWrite(DBG_TIMERLEN, LOW);// debugging
 	#endif
 
 	Wire.begin();
@@ -349,10 +348,10 @@ void setup()
 	expanderWriteBoth(MPC_WALLBUTTON,  IOCON, 0b01100100);	// mirror interrupts, sequential mode, INT Open-drain output
 
 	// enable pull-up on switches
-	expanderWriteBoth(MPC_MOTORRELAIS, GPPUA, 0xFF);  		// pull-up resistor A/B
-	expanderWriteBoth(MPC_SM8BUTTON,   GPPUA, 0xFF);  		// pull-up resistor A/B
-	expanderWriteBoth(MPC_SM8STATUS,   GPPUA, 0xFF);  		// pull-up resistor A/B
-	expanderWriteBoth(MPC_WALLBUTTON,  GPPUA, 0xFF);  		// pull-up resistor A/B
+	expanderWriteBoth(MPC_MOTORRELAIS, GPPU, 0xFF);  	// pull-up resistor A/B
+	expanderWriteBoth(MPC_SM8BUTTON,   GPPU, 0xFF);  	// pull-up resistor A/B
+	expanderWriteBoth(MPC_SM8STATUS,   GPPU, 0xFF);  	// pull-up resistor A/B
+	expanderWriteBoth(MPC_WALLBUTTON,  GPPU, 0xFF);  	// pull-up resistor A/B
 
 	// port data
 	expanderWriteWord(MPC_MOTORRELAIS, GPIOA, valMotorRelais);
@@ -361,18 +360,18 @@ void setup()
 	expanderWriteWord(MPC_WALLBUTTON,  GPIOA, ~IOBITS_ZERO);
 
 	// port direction
-	expanderWriteBoth(MPC_MOTORRELAIS, IODIRA, 0x00);		// OUTPUT
-	expanderWriteBoth(MPC_SM8BUTTON,   IODIRA, 0x00);		// OUTPUT
-	expanderWriteBoth(MPC_SM8STATUS,   IODIRA, 0xFF);		// INPUT
-	expanderWriteBoth(MPC_WALLBUTTON,  IODIRA, 0xFF);		// INPUT
+	expanderWriteBoth(MPC_MOTORRELAIS, IODIR, 0x00);	// OUTPUT
+	expanderWriteBoth(MPC_SM8BUTTON,   IODIR, 0x00);	// OUTPUT
+	expanderWriteBoth(MPC_SM8STATUS,   IODIR, 0xFF);	// INPUT
+	expanderWriteBoth(MPC_WALLBUTTON,  IODIR, 0xFF);	// INPUT
 
 	// invert polarity
-	expanderWriteBoth(MPC_SM8STATUS,   IOPOLA, 0xFF);		// invert polarity of signal
-	expanderWriteBoth(MPC_WALLBUTTON,  IOPOLA, 0xFF);		// invert polarity of signal
+	expanderWriteBoth(MPC_SM8STATUS,   IOPOL, 0xFF);	// invert polarity of signal
+	expanderWriteBoth(MPC_WALLBUTTON,  IOPOL, 0xFF);	// invert polarity of signal
 
 	// enable interrupts on input MPC
-	expanderWriteBoth(MPC_SM8STATUS,   GPINTENA, 0xFF); 	// enable interrupts
-	expanderWriteBoth(MPC_WALLBUTTON,  GPINTENA, 0xFF); 	// enable interrupts
+	expanderWriteBoth(MPC_SM8STATUS,   GPINTEN, 0xFF);	// enable interrupts
+	expanderWriteBoth(MPC_WALLBUTTON,  GPINTEN, 0xFF);	// enable interrupts
 
 	// read from interrupt capture ports to clear them
 	expanderRead(MPC_SM8STATUS,  INTCAPA);
@@ -380,9 +379,11 @@ void setup()
 	expanderRead(MPC_WALLBUTTON, INTCAPA);
 	expanderRead(MPC_WALLBUTTON, INTCAPB);
 
-	// pin 19 of MCP23017 is plugged into D2 of the Arduino which is interrupt 0
-	pinMode(ISR_INPUT, INPUT);					// make sure input
-	digitalWrite(ISR_INPUT, HIGH);				// enable pull-up as we have made the interrupt pins open drain
+	// pin 19 of MCP23017 is plugged into D2 of the Arduino
+	// which is interrupt 0
+	pinMode(ISR_INPUT, INPUT_PULLUP);// make int input
+	digitalWrite(ISR_INPUT, HIGH);	// enable pull-up as we have made
+									// the interrupt pins open drain
 
 	// Read EEPROM program variables
 	setupEEPROMVars();
@@ -587,11 +588,8 @@ void handleMPCInt()
  * Arguments:
  * Description: Motor in neue Laufrichtung (oder AUS) schalten
  * ===================================================================*/
-bool setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
+void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 {
-	MOTOR_CTRL currentMotorCtrl = MotorCtrl[motorNum];
-	char strBuffer[80];
-
 	if ( motorNum < MAX_MOTORS ) {
 		// Neue Richtung: Öffnen
 		if ( newDirection >= MOTOR_OPEN ) {
@@ -641,10 +639,7 @@ bool setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			MotorCtrl[motorNum] = MOTOR_OFF;
 			sendStatus(F("01 M%i OFF"), motorNum);
 		}
-		return (currentMotorCtrl != MotorCtrl[motorNum]);
 	}
-
-	return false;
 }
 
 /* ===================================================================
@@ -666,12 +661,45 @@ char getMotorDirection(byte motorNum)
 }
 
 
+
 /* ===================================================================
  * Function:    ctrlSM8Status
  * Return:
  * Arguments:
  * Description: Kontrolle der Eingangssignale der SM8
  * ===================================================================*/
+#ifdef DEBUG_OUTPUT_MOTOR
+void debugPrintMotorStatus()
+{
+	static MOTOR_CTRL prevMotorCtrl[MAX_MOTORS] = {MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF};
+	bool motorChanged;
+	byte i;
+
+	motorChanged = false;
+	for (i = 0; i < MAX_MOTORS && !motorChanged; i++) {
+		motorChanged = prevMotorCtrl[i]!=MotorCtrl[i];
+	}
+	
+	if ( motorChanged ) {
+		byte i;
+
+		SerialTimePrintf(F("----------------------------------------\r\n"));
+		SerialTimePrintf(F("   M1   M2   M3   M4   M5   M6   M7   M8\r\n"));
+		SerialTimePrintf(F(""));
+		for (i = 0; i < MAX_MOTORS; i++) {
+			if (MotorCtrl[i] == 0) {
+				SerialPrintf(F("  off"));
+			}
+			else {
+				SerialPrintf(F("%5d"), MotorCtrl[i]);
+			}
+			prevMotorCtrl[i] = MotorCtrl[i];
+		}
+		SerialPrintf(F("\r\n"));
+	}
+}
+#endif
+
 void ctrlSM8Status(void)
 {
 	static IOBITS tmpSM8Status   = IOBITS_ZERO;
@@ -679,12 +707,6 @@ void ctrlSM8Status(void)
 	/* FS20 SM8 Output */
 	static IOBITS SM8Status;
 	static IOBITS prevSM8Status = IOBITS_ZERO;
-	bool changeMotor;
-	char strBuffer[80];
-
-	#ifdef DEBUG_OUTPUT_MOTOR
-	changeMotor = false;
-	#endif
 
 	if ( (tmpSM8Status != curSM8Status) ) {
 		#ifdef DEBUG_OUTPUT_SM8STATUS
@@ -741,7 +763,7 @@ void ctrlSM8Status(void)
 				if ( bitRead(SM8StatusChange, i) != 0 && bitRead(SM8StatusChange, i + MAX_MOTORS) == 0 ) {
 					if ( bitRead(SM8StatusSlope, i) != 0 ) {
 						// Flanke von 0 nach 1: Motor Ein
-						changeMotor = setMotorDirection(i, MOTOR_OPEN);
+						setMotorDirection(i, MOTOR_OPEN);
 						// Taste für Schliessen aktiv?
 						if ( bitRead(SM8Status, i + MAX_MOTORS) != 0 ) {
 							// Taste für Schliessen zurücksetzen
@@ -751,14 +773,14 @@ void ctrlSM8Status(void)
 					}
 					else {
 						// Flanke von 0 nach 1: Motor Aus
-						changeMotor = setMotorDirection(i, MOTOR_OFF);
+						setMotorDirection(i, MOTOR_OFF);
 					}
 				}
 				// Motor Schliessen
 				else if ( bitRead(SM8StatusChange, i) == 0 && bitRead(SM8StatusChange, i + MAX_MOTORS) != 0 ) {
 					if ( bitRead(SM8StatusSlope, i + MAX_MOTORS) != 0 ) {
 						// Flanke von 0 nach 1: Motor Ein
-						changeMotor = setMotorDirection(i, MOTOR_CLOSE);
+						setMotorDirection(i, MOTOR_CLOSE);
 						// Taste für Öffnen aktiv?
 						if ( bitRead(SM8Status, i) != 0 ) {
 							// Taste für Öffnen zurücksetzen
@@ -768,7 +790,7 @@ void ctrlSM8Status(void)
 					}
 					else {
 						// Flanke von 0 nach 1: Motor Aus
-						changeMotor = setMotorDirection(i, MOTOR_OFF);;
+						setMotorDirection(i, MOTOR_OFF);;
 					}
 				}
 				// Ungültig: Änderungen beider Eingänge zur gleichen Zeit
@@ -785,22 +807,7 @@ void ctrlSM8Status(void)
 		}
 
 		#ifdef DEBUG_OUTPUT_MOTOR
-		if ( changeMotor ) {
-			byte i;
-
-			SerialTimePrintf(F("----------------------------------------\r\n"));
-			SerialTimePrintf(F("   M1   M2   M3   M4   M5   M6   M7   M8\r\n"));
-			SerialTimePrintf(F(""));
-			for (i = 0; i < MAX_MOTORS; i++) {
-				if (MotorCtrl[i] == 0) {
-					SerialPrintf(F("  off"));
-				}
-				else {
-					SerialPrintf(F("%5d"), MotorCtrl[i]);
-				}
-			}
-			SerialPrintf(F("\r\n"));
-		}
+		debugPrintMotorStatus();
 		#endif
 
 		tmpSM8Status  = curSM8Status;
@@ -821,12 +828,6 @@ void ctrlWallButton(void)
 	static IOBITS WallButton;
 	static IOBITS prevWallButton = IOBITS_ZERO;
 	static IOBITS WallButtonLocked = IOBITS_ZERO;
-	bool changeMotor;
-	char strBuffer[80];
-
-	#ifdef DEBUG_OUTPUT_MOTOR
-	changeMotor = false;
-	#endif
 
 	if ( (tmpWallButton != curWallButton) ) {
 		/* Lese Wandtaster
@@ -859,14 +860,14 @@ void ctrlWallButton(void)
 			for (i = 0; i < MAX_MOTORS; i++) {
 				// Flankenänderung von 0 auf 1 schaltet Motor ein/aus
 				if ( bitRead(WallButtonChange, i) != 0 && bitRead(WallButtonSlope, i) != 0 ) {
-					changeMotor = setMotorDirection(i, MOTOR_OPEN);
+					setMotorDirection(i, MOTOR_OPEN);
 				}
 				else if ( bitRead(WallButtonChange, i + MAX_MOTORS) != 0 && bitRead(WallButtonSlope, i + MAX_MOTORS) != 0 ) {
-					changeMotor = setMotorDirection(i, MOTOR_CLOSE);
+					setMotorDirection(i, MOTOR_CLOSE);
 				}
 				// Pegel Öffnen und Schliessen = 1:
 				if ( bitRead(WallButton, i) != 0 && bitRead(WallButton, i + MAX_MOTORS) != 0 ) {
-					changeMotor = setMotorDirection(i, MOTOR_OFF);
+					setMotorDirection(i, MOTOR_OFF);
 					bitSet(WallButtonLocked, i);
 					bitSet(WallButtonLocked, i + MAX_MOTORS);
 				}
@@ -890,22 +891,7 @@ void ctrlWallButton(void)
 		}
 
 		#ifdef DEBUG_OUTPUT_MOTOR
-		if ( changeMotor ) {
-			byte i;
-
-			SerialTimePrintf(F("----------------------------------------\r\n"));
-			SerialTimePrintf(F("   M1   M2   M3   M4   M5   M6   M7   M8\r\n"));
-			SerialTimePrintf(F(""));
-			for (i = 0; i < MAX_MOTORS; i++) {
-				if (MotorCtrl[i] == 0) {
-					SerialPrintf(F("  off"));
-				}
-				else {
-					SerialPrintf(F("%5d"), MotorCtrl[i]);
-				}
-			}
-			SerialPrintf(F("\r\n"));
-		}
+		debugPrintMotorStatus();
 		#endif
 
 		tmpWallButton = curWallButton;
@@ -920,8 +906,7 @@ void ctrlWallButton(void)
  * ===================================================================*/
 void ctrlSM8Button(void)
 {
-	static IOBITS tmpSM8Button   = ~IOBITS_ZERO;
-	char strBuffer[80];
+	static IOBITS tmpSM8Button = ~IOBITS_ZERO;
 	byte i;
 
 	if ( tmpSM8Button != valSM8Button ) {
@@ -1283,10 +1268,11 @@ void loop()
 	ctrlSM8Status();
 	/* Wandtaster haben Vorrang vor SM8 Ausgänge, daher Auslesen nach SM8 */
 	ctrlWallButton();
-	// Kontrolle der SM8 Tastensteuerung
-	ctrlSM8Button();
 	// Kontrolle der Motor Ausgangssignale
 	ctrlMotorRelais();
+	// Kontrolle der SM8 Tastensteuerung
+	ctrlSM8Button();
+
 	// Regensensor abfragen
 	ctrlRainSensor();
 
