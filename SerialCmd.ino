@@ -168,11 +168,15 @@ void cmdMotor()
 			arg = SCmd.next();
 			if (arg != NULL) {
 				if      ( strnicmp(arg, "OP",2)==0 ) {
-					setMotorDirection(motor, MOTOR_OPEN);
+					if( getMotorDirection(motor)!=MOTOR_OPEN ) {
+						setMotorDirection(motor, MOTOR_OPEN);
+					}
 					cmdOK();
 				}
 				else if ( strnicmp(arg, "CL",2)==0 ) {
-					setMotorDirection(motor, MOTOR_CLOSE);
+					if( getMotorDirection(motor)!=MOTOR_CLOSE ) {
+						setMotorDirection(motor, MOTOR_CLOSE);
+					}
 					cmdOK();
 				}
 				else if ( strnicmp(arg, "OF",2)==0 ) {
@@ -180,7 +184,7 @@ void cmdMotor()
 					cmdOK();
 				}
 				else {
-					cmdError(F("Wrong parameter"));
+					cmdError(F("Wrong parameter (use 'open', 'close' or 'off')"));
 				}
 			}
 			if (arg == NULL || strnicmp(arg, "STAT",4)==0 ) {
@@ -241,7 +245,7 @@ void cmdRuntime()
 				// Set new runtime value
 				runtime = atof(arg);
 				if ( runtime<5.0 || runtime>300.0) {
-					cmdError(F("Runtime out of range"));
+					cmdError(F("Runtime out of range (min=5, max=300)"));
 				}
 				else {
 					eepromMaxRuntime[motor] = (DWORD)(runtime*1000.0);
@@ -307,7 +311,7 @@ void cmdType()
 					cmdOK();
 				}
 				else {
-					cmdError(F("Wrong parameter"));
+					cmdError(F("Wrong parameter (use 'window' or 'jalousie'"));
 				}
 			}
 			if (arg == NULL || stricmp(arg, "STATUS")==0 ) {
@@ -394,7 +398,7 @@ void cmdRainSensor()
 			cmdOK();
 		}
 		else {
-			cmdError(F("Wrong parameter"));
+			cmdError(F("Wrong parameter (use 'enable', 'disable', 'auto', 'on' or 'off'"));
 		}
 	}
 }
@@ -432,7 +436,7 @@ void cmdStatus()
 			cmdOK();
 		}
 		else {
-			cmdError(F("Wrong parameter"));
+			cmdError(F("Wrong parameter (use 'on' or 'off'"));
 		}
 	}
 }
@@ -460,8 +464,8 @@ void cmdLed()
 	else if ( argInterval != NULL && argFlash != NULL ) {
 		Interval=(WORD)atoi(argInterval);
 		Flash=(WORD)atoi(argFlash);
-		if ( Interval<Flash ) {
-			cmdError(F("Wrong arguments, flash must be greater than interval"));
+		if ( Interval<=Flash ) {
+			cmdError(F("Wrong arguments, flash time must be greater than interval time"));
 		}
 		else {
 			eepromBlinkInterval = Interval;
@@ -477,7 +481,7 @@ void cmdLed()
 		}
 	}
 	else {
-		cmdError(F("To less arguments"));
+		cmdError(F("Need two arguments"));
 	}
 }
 
