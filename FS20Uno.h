@@ -37,10 +37,10 @@
 
 
 // Serial
-#define SERIAL_BAUDRATE		115200
+#define SERIAL_BAUDRATE				115200
 
 // Anzahl der Motoren
-#define MAX_MOTORS				8
+#define MAX_MOTORS					8
 
 // Timer2 Intervall in ms
 #define TIMER_MS					10
@@ -50,7 +50,7 @@
  * ===================================================================*/
 // Relais Ansprechzeit in ms (Datenblatt 5 ms)
 // Relais Rückfallzeit in ms (Datenblatt 4 ms))
-#define RELAIS_OPERATE_TIME			15
+#define RELAIS_OPERATE_TIME			20
 
 // Motor Umschaltdelay in ms
 #define MOTOR_SWITCHOVER			250

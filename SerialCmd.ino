@@ -110,14 +110,10 @@ void cmdMotor()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			SerialPrintf(F("%-2d "), motor+1);
+			SerialPrintf(F("M%02d "), motor+1);
+			SerialPrintf(getMotorDirection(motor)==MOTOR_OFF?F("OFF"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OPENING"):F("CLOSING"));
+			SerialPrintf(F("\r\n"));
 		}
-		SerialPrintf(F("\r\n"));
-		for(motor=0; motor<MAX_MOTORS; motor++) {
-			SerialPrintf(getMotorDirection(motor)==MOTOR_OFF?F("--"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OP"):F("CL"));
-			SerialPrintf(F(" "));
-		}
-		SerialPrintf(F("\r\n"));
 	}
 	else {
 		motor=atoi(arg)-1;
@@ -150,17 +146,8 @@ void cmdMotor()
 				}
 			}
 			if (arg == NULL || strnicmp(arg, "STAT",4)==0 ) {
-				if ( bitRead(valMotorRelais, motor)!=0 ) {
-					if ( bitRead(valMotorRelais, motor+8)!=0 ) {
-						SerialPrintf(F("OPENING"));
-					}
-					else {
-						SerialPrintf(F("CLOSING"));
-					}
-				}
-				else {
-					SerialPrintf(F("OFF"));
-				}
+				SerialPrintf(F("M%02d "), motor+1);
+				SerialPrintf(getMotorDirection(motor)==MOTOR_OFF?F("OFF"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OPENING"):F("CLOSING"));
 				SerialPrintf(F("\r\n"));
 			}
 		}
@@ -183,13 +170,8 @@ void cmdRuntime()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			SerialPrintf(F("%-7d"), motor+1);
+			SerialPrintf(F("M%02d TIME %4d.%-3d\r\n"), motor+1, eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
 		}
-		SerialPrintf(F("\r\n"));
-		for(motor=0; motor<MAX_MOTORS; motor++) {
-			SerialPrintf(F("%-6.1f "), (double)eepromMaxRuntime[motor]/1000.0);
-		}
-		SerialPrintf(F("\r\n"));
 	}
 	else {
 		motor=atoi(arg)-1;
@@ -201,7 +183,7 @@ void cmdRuntime()
 
 			if (arg == NULL) {
 				// Status
-				SerialPrintf(F("%.3f s"), (double)eepromMaxRuntime[motor]/1000.0);
+				SerialPrintf(F("M%02d TIME %4d.%-3d\r\n"), motor+1, eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
 			}
 			else {
 				// Set new runtime value
@@ -215,7 +197,7 @@ void cmdRuntime()
 					eepromWriteLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*motor), eepromMaxRuntime[motor]);
 					// Write new EEPROM checksum
 					eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
-					SerialPrintf(F("%.3f s"), (double)eepromMaxRuntime[motor]/1000.0);
+					SerialPrintf(F("%d.%-d s"), eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
 					cmdOK();
 				}
 			}
@@ -239,14 +221,10 @@ void cmdType()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			SerialPrintf(F("%-2d "), motor+1);
+			SerialPrintf(F("M%02d TYPE "), motor+1);
+			SerialPrintf(bitRead(eepromMTypeBitmask, motor)?F("WINDOW"):F("JALOUSIE"));
+			SerialPrintf(F("\r\n"));
 		}
-		SerialPrintf(F("\r\n"));
-		for(motor=0; motor<MAX_MOTORS; motor++) {
-			SerialPrintf(bitRead(eepromMTypeBitmask, motor)?F("WI"):F("JA"));
-			SerialPrintf(F(" "));
-		}
-		SerialPrintf(F("\r\n"));
 	}
 	else {
 		motor=atoi(arg)-1;
@@ -277,12 +255,8 @@ void cmdType()
 				}
 			}
 			if (arg == NULL || stricmp(arg, "STATUS")==0 ) {
-				if ( bitRead(eepromMTypeBitmask, motor)!=0 ) {
-					SerialPrintf(F("WINDOW"));
-				}
-				else {
-					SerialPrintf(F("JALOUSIE"));
-				}
+				SerialPrintf(F("M%02d TYPE "), motor+1);
+				SerialPrintf(bitRead(eepromMTypeBitmask, motor)?F("WINDOW"):F("JALOUSIE"));
 				SerialPrintf(F("\r\n"));
 			}
 		}
@@ -475,5 +449,5 @@ void cmdError(String err)
 // This gets set as the default handler, and gets called when no other command matches.
 void unrecognized()
 {
-	SerialPrintf(F("Command not found, try HELP"));
+	SerialPrintf(F("Unknown command, try HELP\r\n"));
 }

@@ -606,19 +606,19 @@ void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor auf Öffnen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN_DELAYED;
-				sendStatus(F("01 M%i OPENING DELAYED"), motorNum);
+				sendStatus(F("01 M%i OPENING DELAYED"), motorNum+1);
 			}
 			// Motor läuft auf Öffnen
 			else if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sendStatus(F("01 M%i OFF"), motorNum);
+				sendStatus(F("01 M%i OFF"), motorNum+1);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf öffnen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN;
-				sendStatus(F("01 M%i OPENING"), motorNum);
+				sendStatus(F("01 M%i OPENING"), motorNum+1);
 			}
 		}
 		// Neue Richtung: Schliessen
@@ -627,26 +627,26 @@ void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor auf Schliessen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE_DELAYED;
-				sendStatus(F("01 M%i CLOSING DELAYED"), motorNum);
+				sendStatus(F("01 M%i CLOSING DELAYED"), motorNum+1);
 			}
 			// Motor läuft auf Schliessen
 			else if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sendStatus(F("01 M%i OFF"), motorNum);
+				sendStatus(F("01 M%i OFF"), motorNum+1);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf Schliessen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE;
-				sendStatus(F("01 M%i CLOSING"), motorNum);
+				sendStatus(F("01 M%i CLOSING"), motorNum+1);
 			}
 		}
 		// Neue Richtung: AUS
 		else {
 			// Motor AUS
 			MotorCtrl[motorNum] = MOTOR_OFF;
-			sendStatus(F("01 M%i OFF"), motorNum);
+			sendStatus(F("01 M%i OFF"), motorNum+1);
 		}
 	}
 }
@@ -773,7 +773,7 @@ void ctrlSM8Status(void)
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(SM8StatusChange, i) ) {
-					sendStatus(F("02 FS20 OUTPUT %2d %s"), i, bitRead(curSM8Status,i)?"ON":"OFF");
+					sendStatus(F("02 FS20 OUTPUT %2d %s"), i+1, bitRead(curSM8Status,i)?"ON":"OFF");
 				}
 			}
 			for (i = 0; i < MAX_MOTORS; i++) {
@@ -899,7 +899,7 @@ void ctrlWallButton(void)
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(WallButtonChange, i) ) {
-					sendStatus(F("04 KEY %2d %s"), i, bitRead(curWallButton,i)?"ON":"OFF");
+					sendStatus(F("04 KEY %2d %s"), i+1, bitRead(curWallButton,i)?"ON":"OFF");
 				}
 			}
 			for (i = 0; i < MAX_MOTORS; i++) {
@@ -963,7 +963,7 @@ void ctrlSM8Button(void)
 
 		for (i = 0; i < IOBITS_CNT; i++) {
 			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) ) {
-				sendStatus(F("03 FS20 KEY  %2d %s"), i, bitRead(valSM8Button,i)?"OFF":"ON");
+				sendStatus(F("03 FS20 KEY  %2d %s"), i+1, bitRead(valSM8Button,i)?"OFF":"ON");
 			}
 
 			// SM8 Taste Timeout setzen, falls Tastenausgang gerade aktiviert wurde
