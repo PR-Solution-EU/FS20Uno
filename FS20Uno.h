@@ -13,8 +13,8 @@
 #define MPC_SM8STATUS		MPC3
 #define MPC_WALLBUTTON		MPC4
 
-#define ISR_INPUT 			2	// ISR Input from MPC = D2
-#define ONBOARD_LED 		LED_BUILTIN	// LED = D13
+#define MPC_INT_INPUT 		3	// MPC Interrupteingang
+#define STATUS_LED 			LED_BUILTIN	// LED
 
 #define RAIN_INPUT 			4	// Input Signal für Regensensor
 #define RAIN_INPUT_AKTIV	0
@@ -30,9 +30,9 @@
 //   1: Motor sofort schalten
 //  >1: Motor Delay in (abs(Wert) - 1) * 10 ms
 #define MOTOR_OPEN			1
-#define MOTOR_DELAYED_OPEN	(MOTOR_SWITCHOVER/TIMER_MS)
+#define MOTOR_OPEN_DELAYED	(MOTOR_SWITCHOVER/TIMER_MS)
 #define MOTOR_CLOSE			-1
-#define MOTOR_DELAYED_CLOSE	(-MOTOR_SWITCHOVER/TIMER_MS)
+#define MOTOR_CLOSE_DELAYED	(-MOTOR_SWITCHOVER/TIMER_MS)
 #define MOTOR_OFF			0
 
 

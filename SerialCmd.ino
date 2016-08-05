@@ -114,7 +114,7 @@ void cmdMotor()
 		}
 		SerialPrintf(F("\r\n"));
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			SerialPrintf(getMotorDirection(motor)==MOTOR_OFF?F("--"):(getMotorDirection(motor)==MOTOR_OPEN)?F("OP"):F("CL"));
+			SerialPrintf(getMotorDirection(motor)==MOTOR_OFF?F("--"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OP"):F("CL"));
 			SerialPrintf(F(" "));
 		}
 		SerialPrintf(F("\r\n"));
@@ -128,19 +128,21 @@ void cmdMotor()
 			arg = SCmd.next();
 			if (arg != NULL) {
 				if      ( strnicmp(arg, "OP",2)==0 ) {
-					if( getMotorDirection(motor)!=MOTOR_OPEN ) {
+					if( getMotorDirection(motor)<MOTOR_OPEN ) {
 						setMotorDirection(motor, MOTOR_OPEN);
 					}
 					cmdOK();
 				}
 				else if ( strnicmp(arg, "CL",2)==0 ) {
-					if( getMotorDirection(motor)!=MOTOR_CLOSE ) {
+					if( getMotorDirection(motor)>MOTOR_CLOSE ) {
 						setMotorDirection(motor, MOTOR_CLOSE);
 					}
 					cmdOK();
 				}
 				else if ( strnicmp(arg, "OF",2)==0 ) {
-					setMotorDirection(motor, MOTOR_OFF);
+					if( getMotorDirection(motor)!=MOTOR_OFF ) {
+						setMotorDirection(motor, MOTOR_OFF);
+					}
 					cmdOK();
 				}
 				else {
