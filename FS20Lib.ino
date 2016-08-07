@@ -38,7 +38,7 @@ int stricmp(const char * str1, const char *str2)
  *              and positive value if str1>str2.
  * Arguments:	str1, str2 - strings to comparre
  * Description: compares at most n characters of str2 to str1,
- *              lexicographically, by ignoring case. 
+ *              lexicographically, by ignoring case.
  * ===================================================================*/
 int strnicmp(const char *str1, const char *str2, size_t Count)
 {
@@ -81,7 +81,7 @@ void printProgramInfo(bool copyright)
 
 /* ===================================================================
  * Function:    SerialPrintf
- * Return:      
+ * Return:
  * Arguments:	printf arguments
  * Description: Serial output message
  * ===================================================================*/
@@ -104,7 +104,7 @@ void SerialPrintf(const __FlashStringHelper *fmt, ... )
 
 /* ===================================================================
  * Function:    SerialTimePrintf
- * Return:      
+ * Return:
  * Arguments:	printf arguments
  * Description: Serial output message with timestamp
  * ===================================================================*/

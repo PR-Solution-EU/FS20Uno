@@ -53,7 +53,7 @@
  *   Port A (Input) : Wandtaster             ("Auf" Funktion)
  *   Port B (Input) : Wandtaster             ("Zu" Funktion)
  *
- * Zwei Digitaleingänge des Uno werden für Regensensoraktivitäten 
+ * Zwei Digitaleingänge des Uno werden für Regensensoraktivitäten
  * verwendet.
  *
  * Motorsteuerung:
@@ -64,13 +64,13 @@
  * - Motortyp: "Fenster" (WINDOW) oder "Jalousie" (JALOUSIE)
  * - Motorlaufzeit: Maximale Laufzeit des Motors
  * Diese Eigenschaften lassen sich mit Hilfe der Standardwerte
- * MTYPE_BITMASK, MOTOR_WINDOW_MAXRUNTIME und 
+ * MTYPE_BITMASK, MOTOR_WINDOW_MAXRUNTIME und
  * MOTOR_JALOUSIE_MAXRUNTIME vordefinieren, als auch später mit Hilfe
  * der Control-Kommandos "MOTORTYPE" und "MOTORTIME" verändern.
  * Motoren vom Typ Fenster werden bei aktivem Regensensoreingang
  * automatisch geschlossen.
  * Jeder Motor wird nach Ablauf seiner Motorlaufzeit abgeschaltet.
- *   
+ *
  * Motorschutz:
  * - Das Einschalten der Motorspannung erfolgt erst, nachdem das
  *   Richtungsrelais umgeschalten hat (OPERATE_TIME).
@@ -86,7 +86,7 @@
  * Die Wandtaster haben folgende Funktion:
  * - Taste Auf: "Auf" einschalten,
  *              nochmaliger Druck schaltet Motor ab.
- * - Taste Zu : "Zu" einschalten, 
+ * - Taste Zu : "Zu" einschalten,
  *              nochmaliger Druck schaltet Motor ab.
  * - Beide Tasten: Schaltet Motor ab.
  * Wandtaster haben Vorrang vor SM8 Steuerungseingängen. Eventuell
@@ -114,18 +114,18 @@
  * Regensensor
  * ----------------------------
  * Regensensoreingänge:
- * 
- * Ein Regensensor kann am Eingang "RAIN_INPUT" angeschlossen werden 
+ *
+ * Ein Regensensor kann am Eingang "RAIN_INPUT" angeschlossen werden
  * (Regensensor-Steuereingang). Die Pegelaktivität kann mit Hilfe
  * der Konstanten "RAIN_INPUT_AKTIV" festgelegt werden.
- * 
+ *
  * Die Abfrage des Regensensor-Steuereingangs läßt sich mit Hilfe
  * eines zweiten Steuereingangs "RAIN_ENABLE" (Pegelaktivität über
  * die Konstante "RAIN_ENABLE_AKTIV" einstellbar) festlegen. Nur wenn
  * der Steuereingang "RAIN_ENABLE" aktiv oder das Control-Kommando
  * "RAINSENSOR ENABLE" gegeben wurde, wird der Regensensor-
  * Steuereingang auch abgefragt, ansonsten ignoriert.
- * 
+ *
  * Der Regensensor-Steuereingang wird nur im Automatikmodus (s.u.
  * Control-Kommando "RAINSENSOR") abgefragt.
  * Die Verwendung der "RAINSENSOR" Kommandos (mit Ausnahme von
@@ -133,7 +133,7 @@
  * erstmal ab. Der Regensensor-Steuereingang wird entweder durch das
  * Control-Kommando "RAINSENSOR AUTO" oder durch Änderung des
  * Steuereingangs "RAIN_ENABLE" wieder aktiviert.
- * 
+ *
  * Bei aktivier Regenmeldung (Steuereingang RAIN_INPUT bzw. Control-
  * Kommando RAINSENSOR ON), werden alle Motoren vom Typ "Fenster"
  * (siehe Motorensteuerung) geschlossen.
@@ -169,19 +169,19 @@
 #include <Adafruit_SleepyDog.h> // https://github.com/adafruit/Adafruit_SleepyDog
 #include <SerialCommand.h>		// https://github.com/scogswell/ArduinoSerialCommand
 //#include <PrintEx.h>			// https://github.com/Chris--A/PrintEx#printex-library-for-arduino-
- 
+
 // Eigene includes
 #include "FS20Uno.h"
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.17"
+#define VERSION "2.18"
 #include "REVISION.h"
 #define DATAVERSION 106
 
 
 // define next macros to output debug prints
-#define DEBUG_OUTPUT
+#undef DEBUG_OUTPUT
 #undef DEBUG_PINS				// enable debug output pins
 #undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
@@ -464,7 +464,7 @@ void setup()
 	// clear again interrupt flag register by reading flag register
 	expanderReadWord(MPC_SM8STATUS, INFTF);
 	expanderReadWord(MPC_WALLBUTTON, INFTF);
-	
+
 	extISREnabled = true;
 	timerISREnabled = true;
 
@@ -489,7 +489,7 @@ void setup()
  * ===================================================================*/
 void extISR()
 {
-	if( extISREnabled ) 
+	if( extISREnabled )
 	{
 		#ifdef DEBUG_PINS
 		digitalWrite(DBG_INT, !digitalRead(DBG_INT));  			// debugging
@@ -507,7 +507,7 @@ void extISR()
  * ===================================================================*/
 void timerISR()
 {
-	if( timerISREnabled ) 
+	if( timerISREnabled )
 	{
 		byte i;
 
@@ -749,7 +749,7 @@ void debugPrintMotorStatus(bool from)
 	for (i = 0; i < MAX_MOTORS && !motorChanged; i++) {
 		motorChanged = prevMotorCtrl[i]!=MotorCtrl[i];
 	}
-	
+
 	if ( motorChanged ) {
 		byte i;
 
@@ -1083,7 +1083,7 @@ void ctrlMotorRelais(void)
 
 		/* Tabelle (M=Motorbit, D=Directionbit, S=Schritte)
 		 * Ist Soll Schritte
-		 * MD  MD   MD          S MC MD 
+		 * MD  MD   MD          S MC MD
 		 * 00  00   -        -  0 00 00
 		 * 00  01   01       -  1 00 01
 		 * 00  10   10       -  1 01 00
@@ -1100,7 +1100,7 @@ void ctrlMotorRelais(void)
 		 * 11  01   01       -  1 10 11
 		 * 11  10   01 00 10 x  3 11 00
 		 * 11  11   -        -  0 11 11
-		 * 
+		 *
 		 */
 		// Jeden Motor einzeln testen
 		for(i=0; i<MAX_MOTORS; i++) {
@@ -1202,7 +1202,7 @@ void ctrlMotorRelais(void)
 		bool doSM8andTimeout = true;
 
 		outMotorRelais = preMotorRelais[preMotorCount];
-		
+
 		if ( preMotorCount>0 ) {
 			#ifdef DEBUG_OUTPUT_MOTOR_DETAILS
 			SerialTimePrintf(F("ctrlMotorRelais - D   a)preMotorCount=%d\r\n"), preMotorCount);
@@ -1227,7 +1227,7 @@ void ctrlMotorRelais(void)
 						// - falls Motor gerade aktiviert wurde
 					if (    ( !bitRead(tmpOutMotorRelais, i) && bitRead(outMotorRelais, i) )
 						// - oder bereits läuft und die Laufrichtung geändert wurde
-						 || ( bitRead(outMotorRelais, i) && 
+						 || ( bitRead(outMotorRelais, i) &&
 							  bitRead(tmpOutMotorRelais, i+MAX_MOTORS)!=bitRead(outMotorRelais, i+MAX_MOTORS) ) ) {
 						#ifdef DEBUG_OUTPUT_MOTOR
 						SerialTimePrintf(F("ctrlMotorRelais -     Set motor %d timeout to %d.%-d s\r\n"), i+1, eepromMaxRuntime[i] / 1000, eepromMaxRuntime[i] % 1000);

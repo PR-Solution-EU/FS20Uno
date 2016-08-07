@@ -11,8 +11,8 @@ void setupSerialCommand(void)
 	SCmd.addCommand("INFO",cmdInfo);
 	SCmd.addCommand("UPTIME",cmdUptime);
 	SCmd.addCommand("FS20",cmdFS20);
-	SCmd.addCommand("WALL",cmdWallButton);
 	SCmd.addCommand("BUTTON",cmdWallButton);
+	SCmd.addCommand("PUSHBUTTON",cmdWallButton);
 	SCmd.addCommand("WALLBUTTON",cmdWallButton);
 	SCmd.addCommand("MOTOR",cmdMotor);
 	SCmd.addCommand("MOTORTIME",cmdRuntime);
@@ -32,46 +32,48 @@ void processSerialCommand(void)
 
 
 void cmdHelp()
-{	
+{
 	Serial.print(F(
 "FS20Uno Command Help\r\n"
 "----------------------------------------------------------------------\r\n"
 "    ?\r\n"
-"    help\r\n"
+"    HELP\r\n"
 "        List all commands\r\n"
 "\r\n"
-"    info\r\n"
+"    INFO\r\n"
 "        Get info about system\r\n"
 "\r\n"
-"    uptime\r\n"
+"    UPTIME\r\n"
 "        Tell how long the system has been running\r\n"
 "\r\n"
-"    fs20 [<ch> [<cmd> [ON|OFF]]]\r\n"
+"    FS20 [<ch> [<cmd> [ON|OFF]]]\r\n"
 "         Set/Get FS20 control\r\n"
 "         <ch>     FS20 channel number [1..c]\r\n"
-"         ON|OFF   set key <ch> to value\r\n"
+"         ON       switch channel <ch> ON\r\n"
+"         OFF      switch channel <ch> OFF\r\n"
+"         PRG      switch channel <ch> into programming mode\r\n"
 "\r\n"
-"    button | wall | wallbutton [<b> [ON|OFF]]\r\n"
+"    BUTTON | PUSHBUTTON | WALLBUTTON [<b> [ON|OFF]]\r\n"
 "         Set/Get FS20 control\r\n"
 "         <b>      Wall button number [1..m]\r\n"
 "         ON|OFF   set new value\r\n"
 "\r\n"
-"    motor [<m> [<cmd>]]\r\n"
+"    MOTOR [<m> [<cmd>]]\r\n"
 "         Set/Get motor control\r\n"
 "         <m>      Motor number [1..m]\r\n"
 "         <cmd>    can be OPEN, CLOSE, OFF, STATUS\r\n"
 "\r\n"
-"    motortime [<m> [<sec>]\r\n"
+"    MOTORTIME [<m> [<sec>]\r\n"
 "         Set/Get motor runtime\r\n"
 "         <m>      Motor number [1..m]\r\n"
 "         <sec>    Maximum runtime for this motor (in sec)\r\n"
 "\r\n"
-"    motortype [<m> [<cmd>]\r\n"
+"    MOTORTYPE [<m> [<cmd>]\r\n"
 "         Set/Get motor type\r\n"
 "         <m>      Motor number [1..m]\r\n"
 "         <cmd>    can be WINDOW or JALOUSIE\r\n"
 "\r\n"
-"    rain | rainsensor [<cmd>]\r\n"
+"    RAIN | RAINSENSOR [<cmd>]\r\n"
 "         Set/Get Rain sensor function\r\n"
 "         <cmd>    can be\r\n"
 "                  ENABLE   Enable rain detection (disables AUTO)\r\n"
@@ -80,17 +82,17 @@ void cmdHelp()
 "                  ON       Raining\r\n"
 "                  OFF      No raining\r\n"
 "\r\n"
-"    status [on|off]\r\n"
+"    STATUS [ON|OFF]\r\n"
 "         Set/Get FS20Uno status message\r\n"
-"         on        Status messages enabled\r\n"
-"         off       Status messages disabled\r\n"
+"         ON        Status messages enabled\r\n"
+"         OFF       Status messages disabled\r\n"
 "\r\n"
-"    led [<int> <flash>]\r\n"
+"    LED [<int> <flash>]\r\n"
 "         Set/Get LED alive blinking parameter\r\n"
 "         int       LED blinkinterval in ms\r\n"
 "         flash     LED flash duration in ms\r\n"
 "\r\n"
-"    factoryreset\r\n"
+"    FACTORYRESET\r\n"
 "         Reset all values to factory defaults\r\n"
 "\r\n"
 "Set values: Use the command with parameters to set a value\r\n"
@@ -111,12 +113,12 @@ void cmdUptime()
 
 void cmdFS20()
 {
-//~ "    fs20 [<ch> [<cmd> [ON|OFF|PRG]]]\r\n"
+//~ "    fs20 [<ch> [<cmd> [ON|OFF]]]\r\n"
 //~ "         Set/Get FS20 control\r\n"
-//~ "         <ch>         FS20 channel number [1..c]\r\n"
-//~ "         ON|OFF|PRG   set FS20 channel <ch> mode\r\n"
-// valSM8Button -> Tastensteuerung
-// curSM8Status -> FS20 Ausgänge
+//~ "         <ch>     FS20 channel number [1..c]\r\n"
+//~ "         ON       switch channel <ch> ON\r\n"
+//~ "         OFF      switch channel <ch> OFF\r\n"
+//~ "         PRG      switch channel <ch> into programming mode\r\n"
 	int channel;
 	char *arg;
 
@@ -154,7 +156,7 @@ void cmdFS20()
 				else if ( strnicmp(arg, "PRG",3)==0 ) {
 					bitSet(SM8StatusIgnore, channel);
 					bitClear(valSM8Button, channel);
-					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);						
+					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
 					SerialPrintf(F("Setting channel %d into program mode, please wait:  "), channel);
 					for(byte d=0; d<(FS20_SM8_IN_PROGRAMMODE/1000); d++) {
 						SerialPrintf(F("\b%1d"), (FS20_SM8_IN_PROGRAMMODE/1000)-d);
@@ -162,11 +164,11 @@ void cmdFS20()
 					}
 					bitSet(SM8StatusIgnore, channel);
 					bitClear(valSM8Button, channel);
-					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);						
+					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
 					SerialPrintf(F("\r\nChannel %d now in programming mode\r\n"), channel);
 				}
 				else {
-					cmdError(F("Wrong parameter (use 'on' or 'off')"));
+					cmdError(F("Wrong parameter (use 'ON', 'OFF' or 'PRG')"));
 				}
 			}
 			else {
@@ -181,9 +183,50 @@ void cmdFS20()
 void cmdWallButton()
 {
 //~ "    button | wall | wallbutton [<b> [ON|OFF]]\r\n"
-//~ "         Set/Get FS20 control\r\n"
+//~ "         Set/Get wall pushbuttons\r\n"
 //~ "         <b>      Wall button number [1..m]\r\n"
 //~ "         ON|OFF   set new value\r\n"
+	int button;
+	char *arg;
+
+	arg = SCmd.next();
+	if (arg == NULL) {
+		for(button=0; button<IOBITS_CNT; button++) {
+			SerialPrintf(F("PB%02d "), button+1);
+			SerialPrintf(bitRead(curWallButton, button)?F("ON"):F("OFF"));
+			SerialPrintf(F("\r\n"));
+		}
+	}
+	else {
+		// Button number entered
+		button=atoi(arg)-1;
+		if ( button<0 || button>=IOBITS_CNT ) {
+			cmdError(F("Pushbutton number out of range"));
+		}
+		else {
+			// Button number ok
+			arg = SCmd.next();
+			if (arg != NULL) {
+				// ON|OFF entered?
+				if      ( strnicmp(arg, "ON",2)==0 ) {
+					bitSet(curWallButton, button);
+					cmdOK();
+				}
+				else if ( strnicmp(arg, "OF",2)==0 ) {
+					bitClear(curWallButton, button);
+					cmdOK();
+				}
+				else {
+					cmdError(F("Wrong parameter (use 'ON' or 'OFF')"));
+				}
+			}
+			else {
+				SerialPrintf(F("PB%02d "), button+1);
+				SerialPrintf(bitRead(curWallButton, button)?F("ON"):F("OFF"));
+				SerialPrintf(F("\r\n"));
+			}
+		}
+	}
 }
 
 void cmdMotor()
@@ -230,7 +273,7 @@ void cmdMotor()
 					cmdOK();
 				}
 				else {
-					cmdError(F("Wrong parameter (use 'open', 'close' or 'off')"));
+					cmdError(F("Wrong parameter (use 'OPEN', 'CLOSE' or 'OFF')"));
 				}
 			}
 			if (arg == NULL || strnicmp(arg, "STAT",4)==0 ) {
@@ -333,7 +376,7 @@ void cmdType()
 					cmdOK();
 				}
 				else {
-					cmdError(F("Wrong parameter (use 'window' or 'jalousie'"));
+					cmdError(F("Wrong parameter (use 'WINDOW' or 'JALOUSIE'"));
 				}
 			}
 			if (arg == NULL || stricmp(arg, "STATUS")==0 ) {
@@ -382,7 +425,7 @@ void cmdRainSensor()
 
 		SerialPrintf(F("Rainsensor enable input:  "));
 		SerialPrintf((debEnable.read() == RAIN_ENABLE_AKTIV)?F("Enabled"):F("Disabled"));
-		if( bitRead(eepromRain, RAIN_BIT_AUTO)==0 && 
+		if( bitRead(eepromRain, RAIN_BIT_AUTO)==0 &&
 		   (debEnable.read() == RAIN_ENABLE_AKTIV)!=bitRead(eepromRain, RAIN_BIT_ENABLE) ) {
 			SerialPrintf(F(" - ignored"));
 		}
@@ -427,7 +470,7 @@ void cmdRainSensor()
 			cmdOK();
 		}
 		else {
-			cmdError(F("Wrong parameter (use 'enable', 'disable', 'auto', 'on' or 'off'"));
+			cmdError(F("Wrong parameter (use 'ENABLE', 'DISABLE', 'AUTO', 'ON' or 'OFF'"));
 		}
 	}
 }
@@ -463,7 +506,7 @@ void cmdStatus()
 			cmdOK();
 		}
 		else {
-			cmdError(F("Wrong parameter (use 'on' or 'off'"));
+			cmdError(F("Wrong parameter (use 'ON' or 'OFF'"));
 		}
 	}
 }

@@ -1,12 +1,12 @@
 /* ===================================================================
  * Function:	expanderWriteWord
- * Return:		
+ * Return:
  * Arguments:   address - expander hardware address
  *              reg     - expander register address
  *              data    - word to write
  * Description: write a word to the expander
  * ===================================================================*/
-void expanderWriteWord(const byte address, const byte reg, const unsigned int data ) 
+void expanderWriteWord(const byte address, const byte reg, const unsigned int data )
 {
 	Wire.beginTransmission((const byte)(0x20|address));
 	Wire.write(reg);
@@ -17,13 +17,13 @@ void expanderWriteWord(const byte address, const byte reg, const unsigned int da
 
 /* ===================================================================
  * Function:	expanderWriteBoth
- * Return:		 
+ * Return:
  * Arguments:   address - expander hardware address
  *              reg     - expander register address
  *              data    - byte to write
  * Description: write the same byte to both (A & B) reg of the expander
  * ===================================================================*/
-void expanderWriteBoth(const byte address, const byte reg, const byte data ) 
+void expanderWriteBoth(const byte address, const byte reg, const byte data )
 {
 	Wire.beginTransmission((const byte)(0x20|address));
 	Wire.write(reg);
@@ -34,13 +34,13 @@ void expanderWriteBoth(const byte address, const byte reg, const byte data )
 
 /* ===================================================================
  * Function:	expanderWrite
- * Return:		 
+ * Return:
  * Arguments:   address - expander hardware address
  *              reg     - expander register address
  *              data    - byte to write
  * Description: write a byte to the expander
  * ===================================================================*/
-void expanderWrite(const byte address, const byte reg, const byte data ) 
+void expanderWrite(const byte address, const byte reg, const byte data )
 {
 	Wire.beginTransmission ((const byte)(0x20|address));
 	Wire.write(reg);
@@ -55,7 +55,7 @@ void expanderWrite(const byte address, const byte reg, const byte data )
  *              reg     - expander register address
  * Description: read a byte from the expander
  * ===================================================================*/
-byte expanderRead(const byte address, const byte reg) 
+byte expanderRead(const byte address, const byte reg)
 {
 	Wire.beginTransmission((const byte)(0x20|address));
 	Wire.write(reg);
