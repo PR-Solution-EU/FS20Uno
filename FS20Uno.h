@@ -65,6 +65,8 @@
 
 // SM8 IN Schaltzeit in ms
 #define FS20_SM8_IN_RESPONSE		150
+// SM8 IN Schaltzeit für Programmiermodus in ms
+#define FS20_SM8_IN_PROGRAMMODE		6000
 
 // Tasten Entprellzeit in ms
 #define DEBOUNCE_TIME				20

@@ -175,21 +175,21 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.16"
+#define VERSION "2.17"
 #include "REVISION.h"
 #define DATAVERSION 106
 
 
 // define next macros to output debug prints
-#undef DEBUG_OUTPUT
+#define DEBUG_OUTPUT
 #undef DEBUG_PINS				// enable debug output pins
 #undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
 #undef DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
 #define DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
-#undef DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
+#define DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
 #define DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
-#define DEBUG_OUTPUT_MOTOR		// enable motor control related output
+#undef DEBUG_OUTPUT_MOTOR		// enable motor control related output
 #undef DEBUG_OUTPUT_MOTOR_DETAILS// enable motor control details output
 #undef DEBUG_OUTPUT_RAIN		// enable rain sensor related output
 #undef DEBUG_OUTPUT_ALIVE		// enable program alive signal output
@@ -298,6 +298,10 @@ Bounce debInput = Bounce();
 volatile bool isRaining = false;
 
 
+// Interrup soft enable flags
+volatile bool extISREnabled = false;
+volatile bool timerISREnabled = false;
+
 
 /* ===================================================================
  * Function:    setup
@@ -361,10 +365,10 @@ void setup()
 	expanderWriteBoth(MPC_WALLBUTTON,  GPPU, 0xFF);  	// pull-up resistor A/B
 
 	// port data
-	expanderWriteWord(MPC_MOTORRELAIS, GPIOA, valMotorRelais);
-	expanderWriteWord(MPC_SM8BUTTON,   GPIOA, valSM8Button);
-	expanderWriteWord(MPC_SM8STATUS,   GPIOA, ~IOBITS_ZERO);
-	expanderWriteWord(MPC_WALLBUTTON,  GPIOA, ~IOBITS_ZERO);
+	expanderWriteWord(MPC_MOTORRELAIS, GPIO, valMotorRelais);
+	expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
+	expanderWriteWord(MPC_SM8STATUS,   GPIO, ~IOBITS_ZERO);
+	expanderWriteWord(MPC_WALLBUTTON,  GPIO, ~IOBITS_ZERO);
 
 	// port direction
 	expanderWriteBoth(MPC_MOTORRELAIS, IODIR, 0x00);	// OUTPUT
@@ -406,12 +410,9 @@ void setup()
 
 	setupSerialCommand();
 
-#ifdef DEBUG_OUTPUT_SETUP
-	SerialTimePrintf(F("setup - Setup done, starting main loop()\r\n"));
-#endif
-
-	// indicate setup was done
-	digitalWrite(STATUS_LED, LOW);
+	noInterrupts();
+	extISREnabled = false;
+	timerISREnabled = false;
 
 	// External interrupt
 	attachInterrupt(digitalPinToInterrupt(MPC_INT_INPUT), extISR, FALLING);
@@ -420,6 +421,59 @@ void setup()
 	MsTimer2::set(TIMER_MS, timerISR);
 	MsTimer2::start();
 
+	interrupts();
+
+	// Read current value from input MPC
+	curSM8Status = expanderReadWord(MPC_SM8STATUS, GPIO);
+#ifdef DEBUG_OUTPUT_SETUP
+	SerialTimePrintf(F("setup - expanderReadWord(MPC_SM8STATUS, GPIO)=%08X\r\n"), curSM8Status);
+#endif
+	curWallButton = expanderReadWord(MPC_WALLBUTTON, GPIO);
+#ifdef DEBUG_OUTPUT_SETUP
+	SerialTimePrintf(F("setup - expanderReadWord(MPC_WALLBUTTON, GPIO)=%08X\r\n"), curWallButton);
+#endif
+
+	for(byte channel=0; channel<IOBITS_CNT; channel++) {
+#ifdef DEBUG_OUTPUT_SETUP
+		SerialTimePrintf(F("setup - curSM8Status bit %d is %d\r\n"), channel, bitRead(curSM8Status, channel));
+#endif
+		if( bitRead(curSM8Status, channel) ) {
+#ifdef DEBUG_OUTPUT_SETUP
+			SerialTimePrintf(F("setup - Reset FS20 key %d\r\n"), channel);
+#endif
+			bitClear(valSM8Button, channel);
+			expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
+		}
+	}
+	expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
+	delay(FS20_SM8_IN_RESPONSE);
+
+	for(byte channel=0; channel<IOBITS_CNT; channel++) {
+		if( bitRead(curSM8Status, channel) ) {
+			bitSet(valSM8Button, channel);
+		}
+	}
+	expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
+
+	// Clear interrupt flag register by reading data
+	curSM8Status = expanderReadWord(MPC_SM8STATUS, GPIO);
+	curWallButton = expanderReadWord(MPC_WALLBUTTON, GPIO);
+	// clear interrupt capture register by reading
+	expanderReadWord(MPC_SM8STATUS, INTCAP);
+	expanderReadWord(MPC_WALLBUTTON, INTCAP);
+	// clear again interrupt flag register by reading flag register
+	expanderReadWord(MPC_SM8STATUS, INFTF);
+	expanderReadWord(MPC_WALLBUTTON, INFTF);
+	
+	extISREnabled = true;
+	timerISREnabled = true;
+
+	// indicate setup was done
+	digitalWrite(STATUS_LED, LOW);
+
+#ifdef DEBUG_OUTPUT_SETUP
+	SerialTimePrintf(F("setup - Setup done, starting main loop()\r\n"));
+#endif
 }
 
 
@@ -435,10 +489,13 @@ void setup()
  * ===================================================================*/
 void extISR()
 {
-	#ifdef DEBUG_PINS
-	digitalWrite(DBG_INT, !digitalRead(DBG_INT));  			// debugging
-	#endif
-	isrTrigger = true;
+	if( extISREnabled ) 
+	{
+		#ifdef DEBUG_PINS
+		digitalWrite(DBG_INT, !digitalRead(DBG_INT));  			// debugging
+		#endif
+		isrTrigger = true;
+	}
 }
 
 /* ===================================================================
@@ -450,89 +507,91 @@ void extISR()
  * ===================================================================*/
 void timerISR()
 {
-	byte i;
+	if( timerISREnabled ) 
+	{
+		byte i;
 
-	#ifdef DEBUG_PINS
-	digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	// debugging
-	#endif
+		#ifdef DEBUG_PINS
+		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	// debugging
+		#endif
 
-	#ifdef DEBUG_PINS
-	digitalWrite(DBG_TIMERLEN, HIGH);	// debugging
-	#endif
+		#ifdef DEBUG_PINS
+		digitalWrite(DBG_TIMERLEN, HIGH);	// debugging
+		#endif
 
-	for (i = 0; i < IOBITS_CNT; i++) {
-		// Tastenentprellung für SM8 Ausgänge
-		if ( debSM8Status[i] > 0 ) {
-			debSM8Status[i]--;
-		}
-		else if ( bitRead(curSM8Status, i) != bitRead(irqSM8Status, i) ) {
-			bitWrite(curSM8Status, i, bitRead(irqSM8Status, i));
-		}
-
-		// Tastenentprellung für Wandtaster
-		if ( debWallButton[i] > 0 ) {
-			debWallButton[i]--;
-		}
-		else if ( bitRead(curWallButton, i) != bitRead(irqWallButton, i) ) {
-			bitWrite(curWallButton, i, bitRead(irqWallButton, i));
-		}
-
-		// SM8 Tastersteuerung Timeout
-		if ( SM8Timeout[i] > 0 ) {
-			if ( --SM8Timeout[i] == 0 ) {
-				// SM8 Taster Timeout abgelaufen, Tasterausgang abschalten
-				bitSet(valSM8Button, i);
+		for (i = 0; i < IOBITS_CNT; i++) {
+			// Tastenentprellung für SM8 Ausgänge
+			if ( debSM8Status[i] > 0 ) {
+				debSM8Status[i]--;
 			}
-		}
-
-	}
-
-	// MPC Motor bits steuern (das MPC Register wird außerhalb der ISR geschrieben)
-	for (i = 0; i < MAX_MOTORS; i++) {
-		// Motor Zeitablauf
-		if ( MotorTimeout[i] > 0 ) {
-			--MotorTimeout[i];
-			if ( MotorTimeout[i] == 0 ) {
-				MotorCtrl[i] = MOTOR_OFF;
+			else if ( bitRead(curSM8Status, i) != bitRead(irqSM8Status, i) ) {
+				bitWrite(curSM8Status, i, bitRead(irqSM8Status, i));
 			}
+
+			// Tastenentprellung für Wandtaster
+			if ( debWallButton[i] > 0 ) {
+				debWallButton[i]--;
+			}
+			else if ( bitRead(curWallButton, i) != bitRead(irqWallButton, i) ) {
+				bitWrite(curWallButton, i, bitRead(irqWallButton, i));
+			}
+
+			// SM8 Tastersteuerung Timeout
+			if ( SM8Timeout[i] > 0 ) {
+				if ( --SM8Timeout[i] == 0 ) {
+					// SM8 Taster Timeout abgelaufen, Tasterausgang abschalten
+					bitSet(valSM8Button, i);
+				}
+			}
+
 		}
 
-		// Motor Control
-		if ( MotorCtrl[i] > MOTOR_OPEN ) {
-			--MotorCtrl[i];
-			// Motor auf Öffnen, Motor AUS
-			bitSet(valMotorRelais, i + MAX_MOTORS);
-			bitClear(valMotorRelais, i);
-		}
-		else if ( MotorCtrl[i] < MOTOR_CLOSE ) {
-			++MotorCtrl[i];
-			// Motor auf Schliessen, Motor AUS
-			bitClear(valMotorRelais, i + MAX_MOTORS);
-			bitClear(valMotorRelais, i);
-		}
-		else {
-			if ( MotorCtrl[i] == MOTOR_OPEN ) {
-				// Motor auf Öffnen, Motor EIN
+		// MPC Motor bits steuern (das MPC Register wird außerhalb der ISR geschrieben)
+		for (i = 0; i < MAX_MOTORS; i++) {
+			// Motor Zeitablauf
+			if ( MotorTimeout[i] > 0 ) {
+				--MotorTimeout[i];
+				if ( MotorTimeout[i] == 0 ) {
+					MotorCtrl[i] = MOTOR_OFF;
+				}
+			}
+
+			// Motor Control
+			if ( MotorCtrl[i] > MOTOR_OPEN ) {
+				--MotorCtrl[i];
+				// Motor auf Öffnen, Motor AUS
 				bitSet(valMotorRelais, i + MAX_MOTORS);
-				bitSet(valMotorRelais, i);
-			}
-			else if ( MotorCtrl[i] == MOTOR_CLOSE ) {
-				// Motor auf Schliessen, Motor EIN
-				bitClear(valMotorRelais, i + MAX_MOTORS);
-				bitSet(valMotorRelais, i);
-			}
-			else if ( MotorCtrl[i] == MOTOR_OFF ) {
-				// Motor AUS, Motor auf Schliessen
 				bitClear(valMotorRelais, i);
+			}
+			else if ( MotorCtrl[i] < MOTOR_CLOSE ) {
+				++MotorCtrl[i];
+				// Motor auf Schliessen, Motor AUS
 				bitClear(valMotorRelais, i + MAX_MOTORS);
+				bitClear(valMotorRelais, i);
+			}
+			else {
+				if ( MotorCtrl[i] == MOTOR_OPEN ) {
+					// Motor auf Öffnen, Motor EIN
+					bitSet(valMotorRelais, i + MAX_MOTORS);
+					bitSet(valMotorRelais, i);
+				}
+				else if ( MotorCtrl[i] == MOTOR_CLOSE ) {
+					// Motor auf Schliessen, Motor EIN
+					bitClear(valMotorRelais, i + MAX_MOTORS);
+					bitSet(valMotorRelais, i);
+				}
+				else if ( MotorCtrl[i] == MOTOR_OFF ) {
+					// Motor AUS, Motor auf Schliessen
+					bitClear(valMotorRelais, i);
+					bitClear(valMotorRelais, i + MAX_MOTORS);
+				}
 			}
 		}
+
+		#ifdef DEBUG_PINS
+		digitalWrite(DBG_TIMERLEN, LOW);	// debugging
+		#endif
 	}
-
-	#ifdef DEBUG_PINS
-	digitalWrite(DBG_TIMERLEN, LOW);	// debugging
-	#endif
-
 }
 
 /* ===================================================================
@@ -552,12 +611,12 @@ void handleMPCInt()
 	#endif
 	isrTrigger = false;
 
-	if ( expanderReadWord(MPC_SM8STATUS, INFTFA) )
+	if ( expanderReadWord(MPC_SM8STATUS, INFTF) )
 	{
 		#ifdef DEBUG_PINS
 		digitalWrite(DBG_MPC, HIGH);	// debugging
 		#endif
-		irqSM8Status = expanderReadWord(MPC_SM8STATUS, INTCAPA);
+		irqSM8Status = expanderReadWord(MPC_SM8STATUS, INTCAP);
 		for (i = 0; i < IOBITS_CNT; i++) {
 			if ( (curSM8Status & (1 << i)) != (irqSM8Status & (1 << i)) ) {
 				debSM8Status[i] = DEBOUNCE_TIME / TIMER_MS;
@@ -568,12 +627,12 @@ void handleMPCInt()
 		#endif
 	}
 
-	if ( expanderReadWord(MPC_WALLBUTTON, INFTFA) )
+	if ( expanderReadWord(MPC_WALLBUTTON, INFTF) )
 	{
 		#ifdef DEBUG_PINS
 		digitalWrite(DBG_MPC, HIGH);	// debugging
 		#endif
-		irqWallButton = expanderReadWord(MPC_WALLBUTTON, INTCAPA);
+		irqWallButton = expanderReadWord(MPC_WALLBUTTON, INTCAP);
 		for (i = 0; i < IOBITS_CNT; i++) {
 			if ( (curWallButton & (1 << i)) != (irqWallButton & (1 << i)) ) {
 				debWallButton[i] = DEBOUNCE_TIME / TIMER_MS;
@@ -959,7 +1018,7 @@ void ctrlSM8Button(void)
 		SerialTimePrintf(F("ctrlSM8Button   - ----------------------------------------\r\n"));
 		SerialTimePrintf(F("ctrlSM8Button   - SM8 key output changed\r\n"));
 		#endif
-		expanderWriteWord(MPC_SM8BUTTON,   GPIOA, valSM8Button);
+		expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
 
 		for (i = 0; i < IOBITS_CNT; i++) {
 			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) ) {
@@ -1160,7 +1219,7 @@ void ctrlMotorRelais(void)
 			#ifdef DEBUG_OUTPUT_MOTOR
 			SerialTimePrintf(F("ctrlMotorRelais -     Output outMotorRelais 0x%04X\r\n"), outMotorRelais);
 			#endif
-			expanderWriteWord(MPC_MOTORRELAIS, GPIOA, outMotorRelais);
+			expanderWriteWord(MPC_MOTORRELAIS, GPIO, outMotorRelais);
 
 			if( doSM8andTimeout ) {
 				for (i = 0; i < MAX_MOTORS; i++) {

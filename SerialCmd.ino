@@ -10,6 +10,10 @@ void setupSerialCommand(void)
 	SCmd.addCommand("HELP",cmdHelp);
 	SCmd.addCommand("INFO",cmdInfo);
 	SCmd.addCommand("UPTIME",cmdUptime);
+	SCmd.addCommand("FS20",cmdFS20);
+	SCmd.addCommand("WALL",cmdWallButton);
+	SCmd.addCommand("BUTTON",cmdWallButton);
+	SCmd.addCommand("WALLBUTTON",cmdWallButton);
 	SCmd.addCommand("MOTOR",cmdMotor);
 	SCmd.addCommand("MOTORTIME",cmdRuntime);
 	SCmd.addCommand("MOTORTYPE",cmdType);
@@ -17,6 +21,7 @@ void setupSerialCommand(void)
 	SCmd.addCommand("RAIN",cmdRainSensor);
 	SCmd.addCommand("STATUS",cmdStatus);
 	SCmd.addCommand("LED",cmdLed);
+	SCmd.addCommand("FACTORYRESET",cmdFactoryReset);
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
 }
 
@@ -41,43 +46,52 @@ void cmdHelp()
 "    uptime\r\n"
 "        Tell how long the system has been running\r\n"
 "\r\n"
+"    fs20 [<ch> [<cmd> [ON|OFF]]]\r\n"
+"         Set/Get FS20 control\r\n"
+"         <ch>     FS20 channel number [1..c]\r\n"
+"         ON|OFF   set key <ch> to value\r\n"
+"\r\n"
+"    button | wall | wallbutton [<b> [ON|OFF]]\r\n"
+"         Set/Get FS20 control\r\n"
+"         <b>      Wall button number [1..m]\r\n"
+"         ON|OFF   set new value\r\n"
+"\r\n"
 "    motor [<m> [<cmd>]]\r\n"
 "         Set/Get motor control\r\n"
-"         <m>    Motor number [1..x]\r\n"
-"         <cmd>  One of the following values:\r\n"
-"                OPEN, CLOSE, OFF, STATUS\r\n"
+"         <m>      Motor number [1..m]\r\n"
+"         <cmd>    can be OPEN, CLOSE, OFF, STATUS\r\n"
 "\r\n"
 "    motortime [<m> [<sec>]\r\n"
 "         Set/Get motor runtime\r\n"
-"         <m>    Motor number [1..x]\r\n"
-"         <sec>  Maximum runtime for this motor (in sec)\r\n"
+"         <m>      Motor number [1..m]\r\n"
+"         <sec>    Maximum runtime for this motor (in sec)\r\n"
 "\r\n"
 "    motortype [<m> [<cmd>]\r\n"
 "         Set/Get motor type\r\n"
-"         <m>    Motor number [1..x]\r\n"
-"         <cmd>  One of the following values:\r\n"
-"                WINDOW, JALOUSIE\r\n"
-"         If a parameter is ommitted, command returns the current value\r\n"
+"         <m>      Motor number [1..m]\r\n"
+"         <cmd>    can be WINDOW or JALOUSIE\r\n"
 "\r\n"
-"    rain [<cmd>] or\r\n"
-"    rainsensor [<cmd>]\r\n"
+"    rain | rainsensor [<cmd>]\r\n"
 "         Set/Get Rain sensor function\r\n"
-"         <cmd>  One of the following values:\r\n"
-"                ENABLE   Enable rain detection (disables AUTO)\r\n"
-"                DISABLE  disable rain detection (disables AUTO)\r\n"
-"                AUTO     Rain detection from hardware-input\r\n"
-"                ON       Raining\r\n"
-"                OFF      No raining\r\n"
+"         <cmd>    can be\r\n"
+"                  ENABLE   Enable rain detection (disables AUTO)\r\n"
+"                  DISABLE  disable rain detection (disables AUTO)\r\n"
+"                  AUTO     Rain detection from hardware-input\r\n"
+"                  ON       Raining\r\n"
+"                  OFF      No raining\r\n"
 "\r\n"
 "    status [on|off]\r\n"
 "         Set/Get FS20Uno status message\r\n"
-"         on      Status messages enabled\r\n"
-"         off     Status messages disabled\r\n"
+"         on        Status messages enabled\r\n"
+"         off       Status messages disabled\r\n"
 "\r\n"
 "    led [<int> <flash>]\r\n"
 "         Set/Get LED alive blinking parameter\r\n"
-"         int     LED blinkinterval in ms\r\n"
-"         flash   LED flash duration in ms\r\n"
+"         int       LED blinkinterval in ms\r\n"
+"         flash     LED flash duration in ms\r\n"
+"\r\n"
+"    factoryreset\r\n"
+"         Reset all values to factory defaults\r\n"
 "\r\n"
 "Set values: Use the command with parameters to set a value\r\n"
 "Get values: Use the command without the given parameter to return the\r\n"
@@ -95,15 +109,89 @@ void cmdUptime()
 	SerialTimePrintf(F("\r\n"));
 }
 
+void cmdFS20()
+{
+//~ "    fs20 [<ch> [<cmd> [ON|OFF|PRG]]]\r\n"
+//~ "         Set/Get FS20 control\r\n"
+//~ "         <ch>         FS20 channel number [1..c]\r\n"
+//~ "         ON|OFF|PRG   set FS20 channel <ch> mode\r\n"
+// valSM8Button -> Tastensteuerung
+// curSM8Status -> FS20 Ausgänge
+	int channel;
+	char *arg;
+
+	arg = SCmd.next();
+	if (arg == NULL) {
+		for(channel=0; channel<IOBITS_CNT; channel++) {
+			SerialPrintf(F("FS20 CH%02d "), channel+1);
+			SerialPrintf(bitRead(curSM8Status, channel)?F("ON"):F("OFF"));
+			SerialPrintf(F("\r\n"));
+		}
+	}
+	else {
+		// Channel number entered
+		channel=atoi(arg)-1;
+		if ( channel<0 || channel>=IOBITS_CNT ) {
+			cmdError(F("Channel number out of range"));
+		}
+		else {
+			// Channel number ok
+			arg = SCmd.next();
+			if (arg != NULL) {
+				// ON|OFF entered?
+				if      ( strnicmp(arg, "ON",2)==0 ) {
+					if( !bitRead(curSM8Status, channel) ) {
+						bitClear(valSM8Button, channel);
+					}
+					cmdOK();
+				}
+				else if ( strnicmp(arg, "OF",2)==0 ) {
+					if( bitRead(curSM8Status, channel) ) {
+						bitClear(valSM8Button, channel);
+					}
+					cmdOK();
+				}
+				else if ( strnicmp(arg, "PRG",3)==0 ) {
+					bitSet(SM8StatusIgnore, channel);
+					bitClear(valSM8Button, channel);
+					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);						
+					SerialPrintf(F("Setting channel %d into program mode, please wait:  "), channel);
+					for(byte d=0; d<(FS20_SM8_IN_PROGRAMMODE/1000); d++) {
+						SerialPrintf(F("\b%1d"), (FS20_SM8_IN_PROGRAMMODE/1000)-d);
+						delay(1000);
+					}
+					bitSet(SM8StatusIgnore, channel);
+					bitClear(valSM8Button, channel);
+					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);						
+					SerialPrintf(F("\r\nChannel %d now in programming mode\r\n"), channel);
+				}
+				else {
+					cmdError(F("Wrong parameter (use 'on' or 'off')"));
+				}
+			}
+			else {
+				SerialPrintf(F("FS20-%02d "), channel+1);
+				SerialPrintf(bitRead(curSM8Status, channel)?F("ON"):F("OFF"));
+				SerialPrintf(F("\r\n"));
+			}
+		}
+	}
+}
+
+void cmdWallButton()
+{
+//~ "    button | wall | wallbutton [<b> [ON|OFF]]\r\n"
+//~ "         Set/Get FS20 control\r\n"
+//~ "         <b>      Wall button number [1..m]\r\n"
+//~ "         ON|OFF   set new value\r\n"
+}
+
 void cmdMotor()
 {
-/*
- * MOTOR m [cmd]
- *       Motor control
- *         m    motor number 1..8
- *         cmd  OPEN, CLOSE, OFF, STATUS
- *              if ommitted returns current value
- */
+//~ "    motor [<m> [<cmd>]]\r\n"
+//~ "         Set/Get motor control\r\n"
+//~ "         <m>      Motor number [1..m]\r\n"
+//~ "         <cmd>    can be OPEN, CLOSE, OFF, STATUS\r\n"
 	int motor;
 	char *arg;
 
@@ -156,13 +244,10 @@ void cmdMotor()
 
 void cmdRuntime()
 {
-/*
- * MOTORTIME x [sec]
- *       Set motor runtime
- *         m    motor number 1..8
- *         sec  max run-time in sec
- *              if ommitted returns current value
- */
+//~ "    motortime [<m> [<sec>]\r\n"
+//~ "         Set/Get motor runtime\r\n"
+//~ "         <m>      Motor number [1..m]\r\n"
+//~ "         <sec>    Maximum runtime for this motor (in sec)\r\n"
 	int motor;
 	double runtime;
 	char *arg;
@@ -207,13 +292,10 @@ void cmdRuntime()
 
 void cmdType()
 {
-/*
- * MOTORTYPE x [cmd]
- *       Motor type control
- *         m    motor number 1..8
- *         cmd  WINDOW, JALOUSIE
- *              if ommitted returns current value
- */
+//~ "    motortype [<m> [<cmd>]\r\n"
+//~ "         Set/Get motor type\r\n"
+//~ "         <m>      Motor number [1..m]\r\n"
+//~ "         <cmd>    can be WINDOW or JALOUSIE\r\n"
 	int motor;
 	char *arg;
 	bool cmd = false;
@@ -265,17 +347,14 @@ void cmdType()
 
 void cmdRainSensor()
 {
-/*
- * RAINSENSOR [cmd]
- *       Set/Get Rain sensor
- * 		   cmd
- *           AUTO     Enable rain hardware inputs
- *           ON       Raining
- *           OFF      No raining
- *           ENABLE   Enable rain detection (disables AUTO)
- *           DISABLE  disable rain detection (disables AUTO)
- *                    if cmd is ommitted, return current values
- */
+//~ "    rain | rainsensor [<cmd>]\r\n"
+//~ "         Set/Get Rain sensor function\r\n"
+//~ "         <cmd>    can be\r\n"
+//~ "                  ENABLE   Enable rain detection (disables AUTO)\r\n"
+//~ "                  DISABLE  disable rain detection (disables AUTO)\r\n"
+//~ "                  AUTO     Rain detection from hardware-input\r\n"
+//~ "                  ON       Raining\r\n"
+//~ "                  OFF      No raining\r\n"
 	char *arg;
 	bool cmd = false;
 
@@ -356,12 +435,10 @@ void cmdRainSensor()
 
 void cmdStatus()
 {
-/*
- * STATUS [ON|OFF]
- *       Set/Get Status sending
- *           ON       Send status messages
- *           OFF      Do not send status messages
- */
+//~ "    status [on|off]\r\n"
+//~ "         Set/Get FS20Uno status message\r\n"
+//~ "         on        Status messages enabled\r\n"
+//~ "         off       Status messages disabled\r\n"
 	char *arg;
 	bool cmd = false;
 
@@ -433,6 +510,13 @@ void cmdLed()
 	else {
 		cmdError(F("Need two arguments"));
 	}
+}
+
+void cmdFactoryReset()
+{
+	eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC()-1);
+	setupEEPROMVars();
+	cmdOK();
 }
 
 void cmdOK(void)
