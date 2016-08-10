@@ -9,6 +9,8 @@ void setupSerialCommand(void)
 	SCmd.addCommand("?",cmdHelp);
 	SCmd.addCommand("HELP",cmdHelp);
 	SCmd.addCommand("INFO",cmdInfo);
+	SCmd.addCommand("ECHO",cmdEcho);
+	SCmd.addCommand("TERM",cmdTerm);
 	SCmd.addCommand("UPTIME",cmdUptime);
 	SCmd.addCommand("FS20",cmdFS20);
 	SCmd.addCommand("BUTTON",cmdWallButton);
@@ -23,6 +25,8 @@ void setupSerialCommand(void)
 	SCmd.addCommand("LED",cmdLed);
 	SCmd.addCommand("FACTORYRESET",cmdFactoryReset);
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
+	SCmd.setEcho(eepromCmdEcho);
+	SCmd.setTerm(eepromCmdTerm);
 }
 
 void processSerialCommand(void)
@@ -36,9 +40,14 @@ void cmdHelp()
 	Serial.print(F(
 "FS20Uno Command Help\r\n"
 "----------------------------------------------------------------------\r\n"
-"    ?\r\n"
-"    HELP\r\n"
+"    HELP, ?\r\n"
 "        List all commands\r\n"
+"\r\n"
+"    ECHO [ON|OFF]\r\n"
+"        Set/Get echo on or off\r\n"
+"\r\n"
+"    TERM [CR|LF]\r\n"
+"        Set/Get command terminator\r\n"
 "\r\n"
 "    INFO\r\n"
 "        Get info about system\r\n"
@@ -53,7 +62,7 @@ void cmdHelp()
 "         OFF      switch channel <ch> OFF\r\n"
 "         PRG      switch channel <ch> into programming mode\r\n"
 "\r\n"
-"    BUTTON | PUSHBUTTON | WALLBUTTON [<b> [ON|OFF]]\r\n"
+"    BUTTON, PUSHBUTTON, WALLBUTTON [<b> [ON|OFF]]\r\n"
 "         Set/Get FS20 control\r\n"
 "         <b>      Wall button number [1..m]\r\n"
 "         ON|OFF   set new value\r\n"
@@ -73,7 +82,7 @@ void cmdHelp()
 "         <m>      Motor number [1..m]\r\n"
 "         <cmd>    can be WINDOW or JALOUSIE\r\n"
 "\r\n"
-"    RAIN | RAINSENSOR [<cmd>]\r\n"
+"    RAIN, RAINSENSOR [<cmd>]\r\n"
 "         Set/Get Rain sensor function\r\n"
 "         <cmd>    can be\r\n"
 "                  ENABLE   Enable rain detection (disables AUTO)\r\n"
@@ -99,6 +108,76 @@ void cmdHelp()
 "Get values: Use the command without the given parameter to return the\r\n"
 "            current value\r\n"
 ));
+}
+
+void cmdEcho(void)
+{
+//~ "    ECHO [ON|OFF]\r\n"
+//~ "        Set/Get echo on or off\r\n"
+	char *arg;
+
+	arg = SCmd.next();
+	if (arg == NULL) {
+		SerialPrintf(F("ECHO "));
+		SerialPrintf(eepromCmdEcho?F("ON"):F("OFF"));
+		SerialPrintf(F("\r\n"));
+	}
+	else if ( strnicmp(arg, "ON",2)==0 ) {
+		eepromCmdEcho = true;
+		SCmd.setEcho(eepromCmdEcho);
+		// Write new value into EEPROM
+		eepromWriteByte(EEPROM_ADDR_CMDECHO, eepromCmdEcho);
+		// Write new EEPROM checksum
+		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		cmdOK();
+	}
+	else if ( strnicmp(arg, "OF",2)==0 ) {
+		eepromCmdEcho = false;
+		SCmd.setEcho(eepromCmdEcho);
+		// Write new value into EEPROM
+		eepromWriteByte(EEPROM_ADDR_CMDECHO, eepromCmdEcho);
+		// Write new EEPROM checksum
+		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		cmdOK();
+	}
+	else {
+		cmdError(F("Wrong parameter (use 'ON' or 'OFF')"));
+	}
+}
+
+void cmdTerm(void)
+{
+//~ "    TERM [CR|LF]\r\n"
+//~ "        Set/Get command terminator\r\n"
+	char *arg;
+
+	arg = SCmd.next();
+	if (arg == NULL) {
+		SerialPrintf(F("TERM "));
+		SerialPrintf(eepromCmdTerm=='\r'?F("CR"):F("LF"));
+		SerialPrintf(F("\r\n"));
+	}
+	else if ( strnicmp(arg, "CR",2)==0 ) {
+		eepromCmdTerm = '\r';
+		SCmd.setTerm(eepromCmdTerm);
+		// Write new value into EEPROM
+		eepromWriteByte(EEPROM_ADDR_CMDTERM, eepromCmdTerm);
+		// Write new EEPROM checksum
+		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		cmdOK();
+	}
+	else if ( strnicmp(arg, "OF",2)==0 ) {
+		eepromCmdTerm = '\n';
+		SCmd.setTerm(eepromCmdTerm);
+		// Write new value into EEPROM
+		eepromWriteByte(EEPROM_ADDR_CMDTERM, eepromCmdTerm);
+		// Write new EEPROM checksum
+		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		cmdOK();
+	}
+	else {
+		cmdError(F("Wrong parameter (use 'CR' or 'LF')"));
+	}
 }
 
 void cmdInfo()
@@ -487,20 +566,20 @@ void cmdStatus()
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintf(eepromSendStatus?F("ON\r\n"):F("OFF\r\n"));
+		SerialPrintf(eepromCmdSendStatus?F("ON\r\n"):F("OFF\r\n"));
 	}
 	else {
 		if ( strnicmp(arg, "ON",2)==0 ) {
-			eepromSendStatus = true;
+			eepromCmdSendStatus = true;
 			cmd = true;
 		}
 		else if ( strnicmp(arg, "OF",2)==0 ) {
-			eepromSendStatus = false;
+			eepromCmdSendStatus = false;
 			cmd = true;
 		}
 		if ( cmd ) {
 			// Write new value into EEPROM
-			eepromWriteByte(EEPROM_ADDR_SENDSTATUS, eepromSendStatus);
+			eepromWriteByte(EEPROM_ADDR_CMDSENDSTATUS, eepromCmdSendStatus);
 			// Write new EEPROM checksum
 			eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
 			cmdOK();
@@ -561,6 +640,8 @@ void cmdFactoryReset()
 	setupEEPROMVars();
 	cmdOK();
 }
+
+
 
 void cmdOK(void)
 {

@@ -175,9 +175,9 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.18"
+#define VERSION "2.19"
 #include "REVISION.h"
-#define DATAVERSION 106
+#define DATAVERSION 107
 
 
 // define next macros to output debug prints
@@ -185,10 +185,10 @@
 #undef DEBUG_PINS				// enable debug output pins
 #undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
-#undef DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
-#define DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
-#define DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
-#define DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
+#define DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
+#undef DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
+#undef DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
+#undef DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
 #undef DEBUG_OUTPUT_MOTOR		// enable motor control related output
 #undef DEBUG_OUTPUT_MOTOR_DETAILS// enable motor control details output
 #undef DEBUG_OUTPUT_RAIN		// enable rain sensor related output
@@ -285,8 +285,13 @@ WORD 		eepromBlinkLen;
 #define RAIN_BIT_ENABLE	1
 volatile byte eepromRain;
 
+
+// Cmd interface echo
+volatile bool eepromCmdEcho;
+// Cmd interface terminator
+volatile char eepromCmdTerm;
 // Sende autom. Statusänderung
-volatile bool eepromSendStatus = true;
+volatile bool eepromCmdSendStatus;
 
 
 // Software Regendetection (wird nicht in EEPROM gespeichert)

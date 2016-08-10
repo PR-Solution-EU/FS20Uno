@@ -196,7 +196,9 @@ void setupEEPROMVars()
 		bitSet(eepromRain, RAIN_BIT_AUTO);
 		bitClear(eepromRain, RAIN_BIT_ENABLE);
 		eepromWriteByte(EEPROM_ADDR_RAIN, eepromRain);
-		eepromWriteByte(EEPROM_ADDR_SENDSTATUS, DEFAULT_SENDSTATUS);
+		eepromWriteByte(EEPROM_ADDR_CMDSENDSTATUS, DEFAULT_CMDSENDSTATUS);
+		eepromWriteByte(EEPROM_ADDR_CMDECHO, DEFAULT_CMDECHO);
+		eepromWriteByte(EEPROM_ADDR_CMDTERM, DEFAULT_CMDTERM);
 		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
 	}
 	#ifdef DEBUG_OUTPUT_EEPROM
@@ -214,7 +216,9 @@ void setupEEPROMVars()
 		eepromMaxRuntime[i]	= eepromReadLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*i));
 	}
 	eepromRain = eepromReadByte(EEPROM_ADDR_RAIN);
-	eepromSendStatus = eepromReadByte(EEPROM_ADDR_SENDSTATUS);
+	eepromCmdSendStatus = eepromReadByte(EEPROM_ADDR_CMDSENDSTATUS);
+	eepromCmdEcho = eepromReadByte(EEPROM_ADDR_CMDECHO);
+	eepromCmdTerm = eepromReadByte(EEPROM_ADDR_CMDTERM);
 
 	#ifdef DEBUG_OUTPUT_EEPROM
 	SerialTimePrintf(F("EEPROM values:\r\n"));
@@ -227,6 +231,8 @@ void setupEEPROMVars()
 	}
 	SerialPrintf(F("\r\n"));
 	SerialTimePrintf(F("  eepromRain:          0x%02x\r\n"), eepromRain);
-	SerialTimePrintf(F("  eepromSendStatus:    %s\r\n"), eepromSendStatus?"yes":"no");
+	SerialTimePrintf(F("  eepromCmdSendStatus: %s\r\n"), eepromCmdSendStatus?"yes":"no");
+	SerialTimePrintf(F("  eepromCmdEcho:       %s\r\n"), eepromCmdEcho?"yes":"no");
+	SerialTimePrintf(F("  eepromCmdTerm:       %s\r\n"), eepromCmdTerm=='\r'?"CR":"LF");
 	#endif
 }

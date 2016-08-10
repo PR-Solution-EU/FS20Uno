@@ -74,8 +74,7 @@ void printProgramInfo(bool copyright)
 	SerialPrintf(F("%s v%s (build %s)\r\n"), PROGRAM, VERSION, REVISION);
 	SerialPrintf(F("compiled on %s %s (GnuC%s %s)\r\n"), __DATE__, __TIME__, __GNUG__?"++ ":" ", __VERSION__);
 	if( copyright ) {
-		SerialPrintf(F("(c) 2016 by PR-Solution (http://p-r-solution.de)\r\n"));
-		SerialPrintf(F("Norbert Richter <norbert-richter@p-r-solution.de>\r\n"));
+		SerialPrintf(F("(c) 2016 www.p-r-solution.de - Norbert Richter <n.richter@p-r-solution.de>\r\n"));
 	}
 }
 
@@ -157,7 +156,7 @@ void SerialTimePrintf(const __FlashStringHelper *fmt, ... )
  * ===================================================================*/
 void sendStatus(const __FlashStringHelper *fmt, ... )
 {
-	if( eepromSendStatus ) {
+	if( eepromCmdSendStatus ) {
 		char buf[MAX_PRINTF_BUFFER]; // resulting string limited to 128 chars
 
 		va_list args;
