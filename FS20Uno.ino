@@ -963,7 +963,7 @@ void ctrlWallButton(void)
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(WallButtonChange, i) ) {
-					sendStatus(F("04 KEY %2d %s"), i+1, bitRead(curWallButton,i)?"ON":"OFF");
+					sendStatus(F("04 PB %2d %s"), i+1, bitRead(curWallButton,i)?"ON":"OFF");
 				}
 			}
 			for (i = 0; i < MAX_MOTORS; i++) {
@@ -1287,6 +1287,7 @@ void ctrlRainSensor(void)
 	static bool prevRainInput = false;
 	static bool prevRainEnable = false;
 	static bool prevRainEnableInput = false;
+	const char *strMode;
 
 	// Eingänge entprellen
 	debEnable.update();
@@ -1315,10 +1316,12 @@ void ctrlRainSensor(void)
 		RainInput  = softRainInput;
 	}
 
+	strMode = bitRead(eepromRain, RAIN_BIT_AUTO)!=0?"AUTO":"MANUAL";
+
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable ) {
 		#ifdef DEBUG_OUTPUT_RAIN
 		SerialTimePrintf(F("ctrlRainSensor  - ----------------------------------------\r\n"));
-		SerialTimePrintf(F("ctrlRainSensor  - RainMode:   %s\r\n"), bitRead(eepromRain, RAIN_BIT_AUTO)!=0?"Auto":"Software");
+		SerialTimePrintf(F("ctrlRainSensor  - RainMode:   %s\r\n"), strMode);
 		SerialTimePrintf(F("ctrlRainSensor  - RainEnable: %d\r\n"), RainEnable);
 		SerialTimePrintf(F("ctrlRainSensor  - RainInput:  %d\r\n"), RainInput);
 		#endif
@@ -1327,11 +1330,11 @@ void ctrlRainSensor(void)
 			SerialTimePrintf(F("ctrlRainSensor  - Rain inputs changed, sensor enabled\r\n"));
 			#endif
 			if ( RainInput ) {
-				#ifdef DEBUG_OUTPUT_RAIN
-				SerialTimePrintf(F("ctrlRainSensor  - Rain active, close all windows\r\n"));
-				#endif
 				byte i;
 
+				#ifdef DEBUG_OUTPUT_RAIN
+				SerialTimePrintf(F("ctrlRainSensor  - Rain enabled, wet\r\n"));
+				#endif
 				for (i = 0; i < MAX_MOTORS; i++) {
 					if ( bitRead(eepromMTypeBitmask, i) ) {
 						if ( getMotorDirection(i)!=MOTOR_CLOSE && getMotorDirection(i)!=MOTOR_CLOSE_DELAYED) {
@@ -1342,30 +1345,24 @@ void ctrlRainSensor(void)
 						}
 					}
 				}
+				sendStatus(F("05 RAIN WET ENABLED %s"), strMode);
 				isRaining = true;
-				#ifdef DEBUG_OUTPUT_RAIN
-				SerialTimePrintf(F("ctrlRainSensor  - Now it's raining\r\n"));
-				#endif
 				digitalWrite(STATUS_LED, HIGH);
 			}
 			else {
 				#ifdef DEBUG_OUTPUT_RAIN
-				SerialTimePrintf(F("ctrlRainSensor  - Rain inactive, do nothing\r\n"));
+				SerialTimePrintf(F("ctrlRainSensor  - Rain enabled, dry\r\n"));
 				#endif
+				sendStatus(F("05 RAIN DRY ENABLED %s"), strMode);
 				isRaining = false;
-				#ifdef DEBUG_OUTPUT_RAIN
-				SerialTimePrintf(F("ctrlRainSensor  - Now it's not raining\r\n"));
-				#endif
 				digitalWrite(STATUS_LED, LOW);
 			}
 		}
 		else {
 			#ifdef DEBUG_OUTPUT_RAIN
-			SerialTimePrintf(F("ctrlRainSensor  - Rain inputs changed, sensor disabled\r\n"));
+			SerialTimePrintf(F("ctrlRainSensor  - Rain disabled, dry\r\n"));
 			#endif
-			#ifdef DEBUG_OUTPUT_RAIN
-			SerialTimePrintf(F("ctrlRainSensor  - Now it's not raining\r\n"));
-			#endif
+			sendStatus(F("05 RAIN DRY DISABLED %s"), strMode);
 			isRaining = false;
 			digitalWrite(STATUS_LED, LOW);
 		}
