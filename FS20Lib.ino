@@ -3,33 +3,11 @@
  * ===================================================================*/
 
 #define MAX_PRINTF_BUFFER	128
+#define strnicmp(str1, str2, n) strncasecmp_P(str1, (const char *)str2, n)
 
 /* *******************************************************************
  * LOW-LEVEL Functions
  * ********************************************************************/
-
-/* ===================================================================
- * Function:    stricmp
- * Return:      Returns a negative value if str1<str2;
- *              0 if str1 and str2 are identical;
- *              and positive value if str1>str2.
- * Arguments:	str1, str2 - strings to comparre
- * Description: compares str1 and str2 lexicographically without
- *              regards to case
- * ===================================================================*/
-int stricmp(const char * str1, const char *str2)
-{
-    char c1, c2;
-    int v;
-
-    do {
-        c1 = *str1++;
-        c2 = *str2++;
-        v = (unsigned int) tolower(c1) - (unsigned int) tolower(c2);
-    } while ((v == 0) && (c1 != '\0') && (c2 != '\0') );
-
-    return v;
-}
 
 /* ===================================================================
  * Function:    strnicmp
@@ -40,23 +18,10 @@ int stricmp(const char * str1, const char *str2)
  * Description: compares at most n characters of str2 to str1,
  *              lexicographically, by ignoring case.
  * ===================================================================*/
-int strnicmp(const char *str1, const char *str2, size_t Count)
-{
-    char c1, c2;
-    int v;
-
-    if (Count == 0)
-        return 0;
-
-    do {
-        c1 = *str1++;
-        c2 = *str2++;
-        /* the casts are necessary when str1 is shorter & char is signed */
-        v = (unsigned int) tolower(c1) - (unsigned int) tolower(c2);
-    } while ((v == 0) && (c1 != '\0') && (--Count > 0));
-
-    return v;
-}
+//~ int strnicmp(const char *str1, const __FlashStringHelper *Fstr2, size_t Count)
+//~ {
+	//~ return strncasecmp_P(str1, (const char *)Fstr2, Count);
+//~ }
 
 
 /* *******************************************************************
