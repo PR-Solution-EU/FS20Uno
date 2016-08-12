@@ -167,10 +167,10 @@
 #include <MsTimer2.h>			// http://playground.arduino.cc/Main/MsTimer2
 #include <Bounce2.h>			// https://github.com/thomasfredericks/Bounce2
 #include <Adafruit_SleepyDog.h> // https://github.com/adafruit/Adafruit_SleepyDog
-#include <SerialCommand.h>		// https://github.com/scogswell/ArduinoSerialCommand
 //#include <PrintEx.h>			// https://github.com/Chris--A/PrintEx#printex-library-for-arduino-
 
 // Eigene includes
+#include "SerialCommand.h"		// https://github.com/scogswell/ArduinoSerialCommand
 #include "FS20Uno.h"
 #include "I2C.h"
 
