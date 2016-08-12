@@ -158,7 +158,7 @@
 
 /* ===================================================================
  * TODO
- * SerialCmd: LOGIN
+ * SerialCmd: LOGIN  (using password function on WIZ110SR)
  * ===================================================================*/
 
 #include <Arduino.h>
@@ -175,9 +175,9 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.19"
+#define VERSION "2.20"
 #include "REVISION.h"
-#define DATAVERSION 107
+#define DATAVERSION 108
 
 
 // define next macros to output debug prints
@@ -185,7 +185,7 @@
 #undef DEBUG_PINS				// enable debug output pins
 #undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
-#define DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
+#undef DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
 #undef DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
 #undef DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
 #undef DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
@@ -213,14 +213,11 @@
 	#define DBG_INT 			12			// Debug PIN = D12
 	#define DBG_MPC 			11			// Debug PIN = D11
 	#define DBG_TIMER	 		10			// Debug PIN = D10
-	#define DBG_TIMERLEN 		9			// Debug PIN = D9
 #endif
 
 // loop() timer vars
 TIMER ledTimer = 0;
-WORD  ledDelay = 0;
 bool  ledStatus = false;
-
 TIMER runTimer = 0;
 
 // MPC output data
@@ -330,7 +327,6 @@ void setup()
 	pinMode(DBG_INT, OUTPUT); 		// debugging
 	pinMode(DBG_MPC, OUTPUT); 		// debugging
 	pinMode(DBG_TIMER, OUTPUT);		// debugging
-	pinMode(DBG_TIMERLEN, OUTPUT);	// debugging
 	#endif
 
 	pinMode(STATUS_LED, OUTPUT);   // for onboard LED
@@ -339,11 +335,13 @@ void setup()
 
 	// Input pins pulled-up
 	pinMode(RAIN_ENABLE, INPUT_PULLUP);
+	digitalWrite(RAIN_ENABLE, RAIN_ENABLE_AKTIV==0?HIGH:LOW);
 	// After setting up the button, setup the Bounce instance :
 	debEnable.attach(RAIN_ENABLE);
 	debEnable.interval(DEBOUNCE_TIME); // interval in ms
 
 	pinMode(RAIN_INPUT, INPUT_PULLUP);
+	digitalWrite(RAIN_INPUT, RAIN_INPUT_AKTIV==0?HIGH:LOW);
 	debInput.attach(RAIN_INPUT);
 	debInput.interval(DEBOUNCE_TIME);
 
@@ -353,7 +351,6 @@ void setup()
 	digitalWrite(DBG_INT, LOW);  	// debugging
 	digitalWrite(DBG_MPC, LOW);		// debugging
 	digitalWrite(DBG_TIMER, LOW);	// debugging
-	digitalWrite(DBG_TIMERLEN, LOW);// debugging
 	#endif
 
 	Wire.begin();
@@ -402,7 +399,7 @@ void setup()
 									// the interrupt pins open drain
 
 	// Read EEPROM program variables
-	setupEEPROMVars();
+	eepromInitVars();
 
 	#ifdef WATCHDOG_ENABLED
 	#ifndef DEBUG_OUTPUT_WATCHDOG
@@ -473,12 +470,23 @@ void setup()
 	extISREnabled = true;
 	timerISREnabled = true;
 
+	// Init vars
+	ledStatus = false;
+	ledTimer = millis() + eepromBlinkInterval;
+	runTimer = millis() + 500;
+
 	// indicate setup was done
 	digitalWrite(STATUS_LED, LOW);
 
 #ifdef DEBUG_OUTPUT_SETUP
 	SerialTimePrintf(F("setup - Setup done, starting main loop()\r\n"));
 #endif
+
+	//~ // Test timer
+    //~ cli(); //halt the interrupts
+    //~ extern unsigned long timer0_millis;
+    //~ timer0_millis = (0xffffffffUL - 10000UL); //change the value of the register
+    //~ sei(); //re-enable the interrupts
 }
 
 
@@ -518,10 +526,6 @@ void timerISR()
 
 		#ifdef DEBUG_PINS
 		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	// debugging
-		#endif
-
-		#ifdef DEBUG_PINS
-		digitalWrite(DBG_TIMERLEN, HIGH);	// debugging
 		#endif
 
 		for (i = 0; i < IOBITS_CNT; i++) {
@@ -592,9 +596,8 @@ void timerISR()
 				}
 			}
 		}
-
 		#ifdef DEBUG_PINS
-		digitalWrite(DBG_TIMERLEN, LOW);	// debugging
+		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	// debugging
 		#endif
 	}
 }
@@ -1079,7 +1082,7 @@ void ctrlMotorRelais(void)
 		//~ MOTORBITS valMotorStat11;
 		//~ MOTORBITS valMotorDirChange;
 
-		preMotorTimer = 0;
+		preMotorTimer = millis() + RELAIS_OPERATE_TIME;
 		preMotorCount = 0;
 		preMotorRelais[0] = valMotorRelais;
 		preMotorRelais[1] = valMotorRelais;
@@ -1197,12 +1200,12 @@ void ctrlMotorRelais(void)
 		#endif
 
 		// Nächste Ausgabe ohne Delay
-		preMotorTimer = millis() - RELAIS_OPERATE_TIME;
+		preMotorTimer = millis();
 
 		tmpMotorRelais = valMotorRelais;
 	}
 
-	if ( millis() > (preMotorTimer + RELAIS_OPERATE_TIME) ) {
+	if ( (long)( millis() - preMotorTimer) >= 0 ) {
 		// Aktuelle Motorsteuerungsbits holen
 		bool doSM8andTimeout = true;
 
@@ -1216,7 +1219,7 @@ void ctrlMotorRelais(void)
 			#ifdef DEBUG_OUTPUT_MOTOR_DETAILS
 			SerialTimePrintf(F("ctrlMotorRelais - D   b)preMotorCount=%d\r\n"), preMotorCount);
 			#endif
-			preMotorTimer = millis();
+			preMotorTimer += RELAIS_OPERATE_TIME;
 			doSM8andTimeout = false;
 		}
 
@@ -1297,38 +1300,38 @@ void ctrlRainSensor(void)
 	sensRainEnable = (debEnable.read() == RAIN_ENABLE_AKTIV);
 	sensRainInput  = (debInput.read()  == RAIN_INPUT_AKTIV);
 
+	// AUTO Modus aktivieren, wenn Enable-Eingang sich ändert
 	if( sensRainEnable != prevRainEnableInput ) {
-		// AUTO Modus wieder aktivieren, wenn Enable-Eingang sich
-		// geändert hat
 		bitSet(eepromRain, RAIN_BIT_AUTO);
+		eepromWriteVars(EEPROM_RAIN);
 		prevRainEnableInput = sensRainEnable;
 	}
 
-	// Regensignale abhängig vom Modus lesen
+	// Regensensor Enable/Disable abhängig vom Modus lesen
 	if ( bitRead(eepromRain, RAIN_BIT_AUTO) ) {
-		// AUTO Modus aktiv
+		// AUTO Modus aktiv, Enable/Disable vom Eingangssignal lesen
 		RainEnable = sensRainEnable;
-		RainInput  = sensRainInput;
 	}
 	else {
-		// Modus manuell
+		// Modus manuell, Enable/Disable vom Softwarestatus lesen
 		RainEnable = bitRead(eepromRain, RAIN_BIT_ENABLE);
-		RainInput  = softRainInput;
 	}
+	
+	// Regensensor ist aktiv, wenn Eingang aktiv oder Softeinstellung aktiv
+	RainInput  = (sensRainInput || softRainInput);
+
 
 	strMode = bitRead(eepromRain, RAIN_BIT_AUTO)!=0?"AUTO":"MANUAL";
-
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable ) {
 		#ifdef DEBUG_OUTPUT_RAIN
 		SerialTimePrintf(F("ctrlRainSensor  - ----------------------------------------\r\n"));
+		SerialTimePrintf(F("ctrlRainSensor  - digitalRead(%d): %d\r\n"), RAIN_INPUT, digitalRead(RAIN_INPUT));
+		SerialTimePrintf(F("ctrlRainSensor  - digitalRead(%d): %d\r\n"), RAIN_ENABLE, digitalRead(RAIN_ENABLE));
 		SerialTimePrintf(F("ctrlRainSensor  - RainMode:   %s\r\n"), strMode);
 		SerialTimePrintf(F("ctrlRainSensor  - RainEnable: %d\r\n"), RainEnable);
 		SerialTimePrintf(F("ctrlRainSensor  - RainInput:  %d\r\n"), RainInput);
 		#endif
 		if ( RainEnable ) {
-			#ifdef DEBUG_OUTPUT_RAIN
-			SerialTimePrintf(F("ctrlRainSensor  - Rain inputs changed, sensor enabled\r\n"));
-			#endif
 			if ( RainInput ) {
 				byte i;
 
@@ -1338,14 +1341,14 @@ void ctrlRainSensor(void)
 				for (i = 0; i < MAX_MOTORS; i++) {
 					if ( bitRead(eepromMTypeBitmask, i) ) {
 						if ( getMotorDirection(i)!=MOTOR_CLOSE && getMotorDirection(i)!=MOTOR_CLOSE_DELAYED) {
-							#ifdef DEBUG_OUTPUT_RAIN
+							#ifdef DEBUG_OUTPUT_MOTOR
 							SerialTimePrintf(F("ctrlRainSensor  - Close window %d\r\n"), i);
 							#endif
 							setMotorDirection(i, MOTOR_CLOSE);
 						}
 					}
 				}
-				sendStatus(F("05 RAIN WET ENABLED %s"), strMode);
+				sendStatus(F("05 RAIN %s ENABLED WET"), strMode);
 				isRaining = true;
 				digitalWrite(STATUS_LED, HIGH);
 			}
@@ -1353,16 +1356,24 @@ void ctrlRainSensor(void)
 				#ifdef DEBUG_OUTPUT_RAIN
 				SerialTimePrintf(F("ctrlRainSensor  - Rain enabled, dry\r\n"));
 				#endif
-				sendStatus(F("05 RAIN DRY ENABLED %s"), strMode);
+				sendStatus(F("05 RAIN %s ENABLED DRY"), strMode);
 				isRaining = false;
 				digitalWrite(STATUS_LED, LOW);
 			}
 		}
 		else {
-			#ifdef DEBUG_OUTPUT_RAIN
-			SerialTimePrintf(F("ctrlRainSensor  - Rain disabled, dry\r\n"));
-			#endif
-			sendStatus(F("05 RAIN DRY DISABLED %s"), strMode);
+			if ( RainInput ) {
+				#ifdef DEBUG_OUTPUT_RAIN
+				SerialTimePrintf(F("ctrlRainSensor  - Rain disabled, wet\r\n"));
+				#endif
+				sendStatus(F("05 RAIN %s DISABLED WET"), strMode);
+			}
+			else {
+				#ifdef DEBUG_OUTPUT_RAIN
+				SerialTimePrintf(F("ctrlRainSensor  - Rain disabled, dry\r\n"));
+				#endif
+				sendStatus(F("05 RAIN %s DISABLED DRY"), strMode);
+			}
 			isRaining = false;
 			digitalWrite(STATUS_LED, LOW);
 		}
@@ -1386,9 +1397,8 @@ void beAlive(void)
 	#endif
 
 	// Live timer und watchdog handling
-	if ( millis() > (runTimer + 500) )
-	{
-		runTimer = millis();
+	if ( (long)( millis() - runTimer) >= 0 ) {
+		runTimer += 500;
 		#ifdef WATCHDOG_ENABLED
 		Watchdog.reset();
 		#endif
@@ -1415,18 +1425,16 @@ void beAlive(void)
  * ===================================================================*/
 void blinkLED(void)
 {
-	if ( millis() > (ledTimer + ledDelay) )
-	{
-		ledTimer = millis();
+	if ( (long)( millis() - ledTimer) >= 0 ) {
 		if ( !ledStatus ) {
-			digitalWrite(STATUS_LED, isRaining?LOW:HIGH);
-			ledDelay = eepromBlinkLen;
+			ledTimer += eepromBlinkLen;
 			ledStatus = true;
+			digitalWrite(STATUS_LED, isRaining?LOW:HIGH);
 		}
 		else {
-			digitalWrite(STATUS_LED, isRaining?HIGH:LOW);
-			ledDelay = eepromBlinkInterval;
+			ledTimer += eepromBlinkInterval;
 			ledStatus = false;
+			digitalWrite(STATUS_LED, isRaining?HIGH:LOW);
 		}
 	}
 }
@@ -1465,9 +1473,10 @@ void loop()
 
 	// Live timer und watchdog handling
 	beAlive();
+
 	// LED Blinken, um anzuzeigen, dass die Hauptschleife läuft
 	blinkLED();
 
-	// Pro
+	// Process serial command interface
 	processSerialCommand();
 }

@@ -41,6 +41,7 @@ void printProgramInfo(bool copyright)
 	if( copyright ) {
 		SerialPrintf(F("(c) 2016 www.p-r-solution.de - Norbert Richter <n.richter@p-r-solution.de>\r\n"));
 	}
+	//SerialTimePrintf(F("EEPROM: %d byte\r\n"), EEPROM.length());
 }
 
 /* ===================================================================

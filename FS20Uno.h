@@ -19,8 +19,8 @@
 #define RAIN_INPUT 			4	// Input Signal für Regensensor
 #define RAIN_INPUT_AKTIV	0
 
-#define RAIN_ENABLE			5	// Input Signal für Regensensor aktiv
-#define RAIN_ENABLE_AKTIV	0
+#define RAIN_ENABLE			9	// Input Signal für Regensensor aktiv
+#define RAIN_ENABLE_AKTIV	1
 
 // Motor Steuerungskommandos:
 //   0: Motor AUS
@@ -96,14 +96,26 @@ typedef DWORD TIMER;
 #define EEPROM_ADDR_MTYPE_BITMASK		(4+EEPROM_ADDR_LED_BLINK_LEN)
 #define EEPROM_ADDR_MOTOR_MAXRUNTIME	(4+EEPROM_ADDR_MTYPE_BITMASK)
 #define EEPROM_ADDR_RAIN				((4*MAX_MOTORS)+EEPROM_ADDR_MOTOR_MAXRUNTIME)
-#define EEPROM_ADDR_CMDSENDSTATUS		(1+EEPROM_ADDR_RAIN)
-#define EEPROM_ADDR_CMDECHO				(1+EEPROM_ADDR_CMDSENDSTATUS)
-#define EEPROM_ADDR_CMDTERM				(1+EEPROM_ADDR_CMDECHO)
-#define EEPROM_ADDR_FREE				(1+EEPROM_ADDR_CMDTERM)
+#define EEPROM_ADDR_SENDSTATUS			(1+EEPROM_ADDR_RAIN)
+#define EEPROM_ADDR_ECHO				(1+EEPROM_ADDR_SENDSTATUS)
+#define EEPROM_ADDR_TERM				(1+EEPROM_ADDR_ECHO)
+#define EEPROM_ADDR_FREE				(1+EEPROM_ADDR_TERM)
 
-#define DEFAULT_CMDSENDSTATUS	false
-#define DEFAULT_CMDECHO			false
-#define DEFAULT_CMDTERM			'\r'
+// EEPROM Data Typen
+#define EEPROM_ALL						0xffff
+#define EEPROM_LED_BLINK_INTERVAL		(1<<0)
+#define EEPROM_LED_BLINK_LEN			(1<<1)
+#define EEPROM_MTYPE_BITMASK			(1<<2)
+#define EEPROM_MOTOR_MAXRUNTIME			(1<<3)
+#define EEPROM_RAIN						(1<<4)
+#define EEPROM_SENDSTATUS				(1<<5)
+#define EEPROM_ECHO						(1<<6)
+#define EEPROM_TERM						(1<<7)
+
+
+#define DEFAULT_CMDSENDSTATUS		false
+#define DEFAULT_CMDECHO				false
+#define DEFAULT_CMDTERM				'\r'
 
 // TODO: MASK and BITS are not correct for all MAX_MOTORS values
 #if MAX_MOTORS<=4

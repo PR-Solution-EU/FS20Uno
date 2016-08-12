@@ -35,7 +35,7 @@ unsigned long eepromCalcCRC(void)
 		}
 	}
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("eepromCalcCRC() returns 0x%08lx\r\n"), crc);
+	SerialTimePrintf(F("EEPROM - eepromCalcCRC() returns 0x%08lx\r\n"), crc);
 	#endif
 	return crc;
 }
@@ -56,7 +56,7 @@ unsigned long eepromReadLong(int address)
 		data |= EEPROM[address+i];
 	}
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("eepromReadLong(0x%04x) returns 0x%08lx [%ld]\r\n"), address, data, data);
+	SerialTimePrintf(F("EEPROM - eepromReadLong(0x%04x) returns 0x%08lx [%ld]\r\n"), address, data, data);
 	#endif
 	return data;
 }
@@ -71,7 +71,7 @@ unsigned long eepromReadLong(int address)
 void eepromWriteLong(int address, unsigned long data)
 {
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("eepromWriteLong(0x%04x, %0x%08lx [%ld])\r\n"), address, data, data);
+	SerialTimePrintf(F("EEPROM - eepromWriteLong(0x%04x, 0x%08lx [%ld] )\r\n"), address, data, data);
 	#endif
 	for (char i=3 ; i>=0; --i) {
 		EEPROM.update(address+i, (byte)(data & 0xff));
@@ -95,7 +95,7 @@ unsigned int eepromReadWord(int address)
 		data |= EEPROM[address+i];
 	}
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("eepromReadWord(0x%04x) returns 0x%04x [%d]\r\n"), address, data, data);
+	SerialTimePrintf(F("EEPROM - eepromReadWord(0x%04x) returns 0x%04x [%d]\r\n"), address, data, data);
 	#endif
 	return data;
 }
@@ -110,7 +110,7 @@ unsigned int eepromReadWord(int address)
 void eepromWriteWord(int address, unsigned int data)
 {
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("eepromWriteWord(0x%04x, %0x%04x [%d])\r\n"), address, data, data);
+	SerialTimePrintf(F("EEPROM - eepromWriteWord(0x%04x, 0x%04x [%d] )\r\n"), address, data, data);
 	#endif
 	for (char i=1 ; i>=0; --i) {
 		EEPROM.update(address+i, (byte)(data & 0xff));
@@ -130,7 +130,7 @@ byte eepromReadByte(int address)
 
 	data = EEPROM[address];
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("eepromReadByte(0x%04x) returns 0x%02x [%d]\r\n"), address, data, data);
+	SerialTimePrintf(F("EEPROM - eepromReadByte(0x%04x) returns 0x%02x [%d]\r\n"), address, data, data);
 	#endif
 	return data;
 }
@@ -145,7 +145,7 @@ byte eepromReadByte(int address)
 void eepromWriteByte(int address, byte data)
 {
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("eepromWriteByte(0x%04x, %0x%02x [%d])\r\n"), address, data, data);
+	SerialTimePrintf(F("EEPROM - eepromWriteByte(0x%04x, 0x%02x [%d] )\r\n"), address, data, data);
 	#endif
 	EEPROM.update(address, data);
 }
@@ -158,13 +158,13 @@ void eepromWriteByte(int address, byte data)
 
 
 /* ===================================================================
- * Function:	setupEEPROMVars
+ * Function:	eepromInitVars
  * Return:
  * Arguments:
  * Description: Initalisiere Standard Werte einiger Programmvariablen
  *              aus EEPROM-Daten
  * ===================================================================*/
-void setupEEPROMVars()
+void eepromInitVars()
 {
 	int i;
 
@@ -176,63 +176,120 @@ void setupEEPROMVars()
 
 	#ifdef DEBUG_OUTPUT_EEPROM
 	//Print length of data to run CRC on.
-	SerialTimePrintf(F("EEPROM length: %d\r\n"), EEPROM.length());
+	SerialTimePrintf(F("EEPROM - length: %d\r\n"), EEPROM.length());
 	//Print the result of calling eepromCRC()
-	SerialTimePrintf(F("EEPROM CRC32: 0x%08lx\r\n"), dataCRC);
-	SerialTimePrintf(F("Stored CRC32: 0x%08lx\r\n"), eepromCRC);
+	SerialTimePrintf(F("EEPROM - values CRC32: 0x%08lx\r\n"), dataCRC);
+	SerialTimePrintf(F("EEPROM - stored CRC32: 0x%08lx\r\n"), eepromCRC);
 	#endif
 
 	if ( dataCRC != eepromCRC ) {
 		#ifdef DEBUG_OUTPUT_EEPROM
-		SerialTimePrintf(F("EEPROM CRC32 not matching, write defaults...\r\n"));
+		SerialTimePrintf(F("EEPROM - CRC32 not matching, set defaults...\r\n"));
 		#endif
-		eepromWriteLong(EEPROM_ADDR_LED_BLINK_INTERVAL, LED_BLINK_INTERVAL);
-		eepromWriteLong(EEPROM_ADDR_LED_BLINK_LEN, 		LED_BLINK_LEN);
-		eepromWriteLong(EEPROM_ADDR_MTYPE_BITMASK, 		MTYPE_BITMASK);
+
+		eepromBlinkInterval = LED_BLINK_INTERVAL;
+		eepromBlinkLen = LED_BLINK_LEN;
+		eepromMTypeBitmask = MTYPE_BITMASK;
 		for(i=0; i<MAX_MOTORS; i++) {
-			eepromWriteLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*i),
-				bitRead(MTYPE_BITMASK,i)!=0?MOTOR_WINDOW_MAXRUNTIME:MOTOR_JALOUSIE_MAXRUNTIME);
+			eepromMaxRuntime[i] = bitRead(MTYPE_BITMASK,i)!=0?MOTOR_WINDOW_MAXRUNTIME:MOTOR_JALOUSIE_MAXRUNTIME;
 		}
 		bitSet(eepromRain, RAIN_BIT_AUTO);
 		bitClear(eepromRain, RAIN_BIT_ENABLE);
-		eepromWriteByte(EEPROM_ADDR_RAIN, eepromRain);
-		eepromWriteByte(EEPROM_ADDR_CMDSENDSTATUS, DEFAULT_CMDSENDSTATUS);
-		eepromWriteByte(EEPROM_ADDR_CMDECHO, DEFAULT_CMDECHO);
-		eepromWriteByte(EEPROM_ADDR_CMDTERM, DEFAULT_CMDTERM);
-		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		eepromCmdSendStatus = DEFAULT_CMDSENDSTATUS;
+		eepromCmdEcho = DEFAULT_CMDECHO;
+		eepromCmdTerm = DEFAULT_CMDTERM;
+
+		eepromWriteVars(EEPROM_ALL);
 	}
 	#ifdef DEBUG_OUTPUT_EEPROM
 	else {
-		SerialTimePrintf(F("EEPROM CRC232 is valid\r\n"));
+		SerialTimePrintf(F("EEPROM - CRC232 is valid\r\n"));
 	}
 	#endif
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM read defaults...\r\n"));
+	SerialTimePrintf(F("EEPROM - read defaults...\r\n"));
 	#endif
-	eepromBlinkInterval	= eepromReadLong(EEPROM_ADDR_LED_BLINK_INTERVAL);
-	eepromBlinkLen		= eepromReadLong(EEPROM_ADDR_LED_BLINK_LEN);
-	eepromMTypeBitmask 	= eepromReadLong(EEPROM_ADDR_MTYPE_BITMASK);
-	for(i=0; i<MAX_MOTORS; i++) {
-		eepromMaxRuntime[i]	= eepromReadLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*i));
-	}
-	eepromRain = eepromReadByte(EEPROM_ADDR_RAIN);
-	eepromCmdSendStatus = eepromReadByte(EEPROM_ADDR_CMDSENDSTATUS);
-	eepromCmdEcho = eepromReadByte(EEPROM_ADDR_CMDECHO);
-	eepromCmdTerm = eepromReadByte(EEPROM_ADDR_CMDTERM);
+
+	eepromReadVars();
 
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM values:\r\n"));
-	SerialTimePrintf(F("  eepromBlinkInterval: %d\r\n"),     eepromBlinkInterval);
-	SerialTimePrintf(F("  eepromBlinkLen:      %d\r\n"),     eepromBlinkLen);
-	SerialTimePrintf(F("  eepromMTypeBitmask:  0x%02x\r\n"), eepromMTypeBitmask);
-	SerialTimePrintf(F("  eepromMaxRuntime:    "));
+	SerialTimePrintf(F("EEPROM - values:\r\n"));
+	SerialTimePrintf(F("EEPROM -   eepromBlinkInterval: %d\r\n"),     eepromBlinkInterval);
+	SerialTimePrintf(F("EEPROM -   eepromBlinkLen:      %d\r\n"),     eepromBlinkLen);
+	SerialTimePrintf(F("EEPROM -   eepromMTypeBitmask:  0x%02x\r\n"), eepromMTypeBitmask);
+	SerialTimePrintf(F("EEPROM -   eepromMaxRuntime:    "));
 	for(i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%ld"), i?",":"", eepromMaxRuntime[i]);
 	}
 	SerialPrintf(F("\r\n"));
-	SerialTimePrintf(F("  eepromRain:          0x%02x\r\n"), eepromRain);
-	SerialTimePrintf(F("  eepromCmdSendStatus: %s\r\n"), eepromCmdSendStatus?"yes":"no");
-	SerialTimePrintf(F("  eepromCmdEcho:       %s\r\n"), eepromCmdEcho?"yes":"no");
-	SerialTimePrintf(F("  eepromCmdTerm:       %s\r\n"), eepromCmdTerm=='\r'?"CR":"LF");
+	SerialTimePrintf(F("EEPROM -   eepromRain:          0x%02x\r\n"), eepromRain);
+	SerialTimePrintf(F("EEPROM -   eepromCmdSendStatus: %s\r\n"), eepromCmdSendStatus?"yes":"no");
+	SerialTimePrintf(F("EEPROM -   eepromCmdEcho:       %s\r\n"), eepromCmdEcho?"yes":"no");
+	SerialTimePrintf(F("EEPROM -   eepromCmdTerm:       %s\r\n"), eepromCmdTerm=='\r'?"CR":"LF");
 	#endif
+}
+
+
+/* ===================================================================
+ * Function:	eepromWriteVars
+ * Return:
+ * Arguments:
+ * Description: Schreibe alle EEPROM Programmvariablen in EEPROM
+ * ===================================================================*/
+void eepromWriteVars(WORD varType)
+{
+	#ifdef DEBUG_OUTPUT_EEPROM
+	SerialTimePrintf(F("EEPROM - eepromWriteVars()\r\n"));
+	#endif
+
+	if ( varType & EEPROM_LED_BLINK_INTERVAL ) {
+		eepromWriteLong(EEPROM_ADDR_LED_BLINK_INTERVAL, eepromBlinkInterval);
+	}
+	if ( varType & EEPROM_LED_BLINK_LEN ) {
+		eepromWriteLong(EEPROM_ADDR_LED_BLINK_LEN, eepromBlinkLen);
+	}
+	if ( varType & EEPROM_MTYPE_BITMASK ) {
+		eepromWriteLong(EEPROM_ADDR_MTYPE_BITMASK, eepromMTypeBitmask);
+	}
+	if ( varType & EEPROM_MOTOR_MAXRUNTIME ) {
+		for(byte i=0; i<MAX_MOTORS; i++) {
+			eepromWriteLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*i), eepromMaxRuntime[i]);
+		}
+	}
+	if ( varType & EEPROM_RAIN ) {
+		eepromWriteByte(EEPROM_ADDR_RAIN, eepromRain);
+	}
+	if ( varType & EEPROM_SENDSTATUS ) {
+		eepromWriteByte(EEPROM_ADDR_SENDSTATUS, eepromCmdSendStatus);
+	}
+	if ( varType & EEPROM_ECHO ) {
+		eepromWriteByte(EEPROM_ADDR_ECHO, eepromCmdEcho);
+	}
+	if ( varType & EEPROM_TERM ) {
+		eepromWriteByte(EEPROM_ADDR_TERM, eepromCmdTerm);
+	}
+	eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+}
+
+/* ===================================================================
+ * Function:	eepromReadVars
+ * Return:
+ * Arguments:
+ * Description: Lese alle EEPROM Programmvariablen aus EEPROM
+ * ===================================================================*/
+void eepromReadVars()
+{
+	#ifdef DEBUG_OUTPUT_EEPROM
+	SerialTimePrintf(F("EEPROM - eepromReadVars()\r\n"));
+	#endif
+	eepromBlinkInterval	= eepromReadLong(EEPROM_ADDR_LED_BLINK_INTERVAL);
+	eepromBlinkLen		= eepromReadLong(EEPROM_ADDR_LED_BLINK_LEN);
+	eepromMTypeBitmask 	= eepromReadLong(EEPROM_ADDR_MTYPE_BITMASK);
+	for(byte i=0; i<MAX_MOTORS; i++) {
+		eepromMaxRuntime[i]	= eepromReadLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*i));
+	}
+	eepromRain = eepromReadByte(EEPROM_ADDR_RAIN);
+	eepromCmdSendStatus = eepromReadByte(EEPROM_ADDR_SENDSTATUS);
+	eepromCmdEcho = eepromReadByte(EEPROM_ADDR_ECHO);
+	eepromCmdTerm = eepromReadByte(EEPROM_ADDR_TERM);
 }

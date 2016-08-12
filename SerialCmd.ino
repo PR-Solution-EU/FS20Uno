@@ -191,19 +191,13 @@ void cmdEcho(void)
 	else if ( strnicmp(arg, F("ON"),2)==0 ) {
 		eepromCmdEcho = true;
 		SCmd.setEcho(eepromCmdEcho);
-		// Write new value into EEPROM
-		eepromWriteByte(EEPROM_ADDR_CMDECHO, eepromCmdEcho);
-		// Write new EEPROM checksum
-		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		eepromWriteVars(EEPROM_ECHO);
 		cmdOK();
 	}
 	else if ( strnicmp(arg, F("OF"),2)==0 ) {
 		eepromCmdEcho = false;
 		SCmd.setEcho(eepromCmdEcho);
-		// Write new value into EEPROM
-		eepromWriteByte(EEPROM_ADDR_CMDECHO, eepromCmdEcho);
-		// Write new EEPROM checksum
-		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		eepromWriteVars(EEPROM_ECHO);
 		cmdOK();
 	}
 	else {
@@ -226,19 +220,13 @@ void cmdTerm(void)
 	else if ( strnicmp(arg, F("CR"),2)==0 ) {
 		eepromCmdTerm = '\r';
 		SCmd.setTerm(eepromCmdTerm);
-		// Write new value into EEPROM
-		eepromWriteByte(EEPROM_ADDR_CMDTERM, eepromCmdTerm);
-		// Write new EEPROM checksum
-		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		eepromWriteVars(EEPROM_TERM);
 		cmdOK();
 	}
 	else if ( strnicmp(arg, F("OF"),2)==0 ) {
 		eepromCmdTerm = '\n';
 		SCmd.setTerm(eepromCmdTerm);
-		// Write new value into EEPROM
-		eepromWriteByte(EEPROM_ADDR_CMDTERM, eepromCmdTerm);
-		// Write new EEPROM checksum
-		eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+		eepromWriteVars(EEPROM_TERM);
 		cmdOK();
 	}
 	else {
@@ -466,10 +454,7 @@ void cmdRuntime()
 				}
 				else {
 					eepromMaxRuntime[motor] = (DWORD)(runtime*1000.0);
-					// Write new value into EEPROM
-					eepromWriteLong(EEPROM_ADDR_MOTOR_MAXRUNTIME+(4*motor), eepromMaxRuntime[motor]);
-					// Write new EEPROM checksum
-					eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+					eepromWriteVars(EEPROM_MOTOR_MAXRUNTIME);
 					SerialPrintf(F("%d.%-d s"), eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
 					cmdOK();
 				}
@@ -486,7 +471,6 @@ void cmdType()
 //~ "         <cmd>    can be WINDOW or JALOUSIE\r\n"
 	int motor;
 	char *arg;
-	bool cmd = false;
 
 	arg = SCmd.next();
 	if (arg == NULL) {
@@ -506,18 +490,12 @@ void cmdType()
 			if (arg != NULL) {
 				if      ( strnicmp(arg, F("WIN"),3)==0 ) {
 					bitSet(eepromMTypeBitmask, motor);
-					cmd = true;
+					eepromWriteVars(EEPROM_MTYPE_BITMASK);
+					cmdOK();
 				}
 				else if ( strnicmp(arg, F("JAL"),3)==0 ) {
 					bitClear(eepromMTypeBitmask, motor);
-					cmd = true;
-				}
-				if ( cmd ) {
-					// Write new value into EEPROM
-					eepromWriteLong(EEPROM_ADDR_MTYPE_BITMASK, (DWORD)eepromMTypeBitmask);
-
-					// Write new EEPROM checksum
-					eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+					eepromWriteVars(EEPROM_MTYPE_BITMASK);
 					cmdOK();
 				}
 				else {
@@ -550,36 +528,37 @@ void cmdRainSensor()
 	if (arg == NULL) {
 		debEnable.update();
 		debInput.update();
+		bool sensorEnabled;
 
-		SerialPrintf(F("Rain sensor mode:         "));
-		SerialPrintf(bitRead(eepromRain, RAIN_BIT_AUTO)!=0?F("AUTO"):F("Manual"));
-		SerialPrintf(F("\r\n"));
+		/*
+		Rainsensor input:   Dry|Raining
+		Rainsensor setting: Dry|Raining
+		Sensor monitoring:  Enabled|Disabled readin from input|setting
+		Rainsensor status:  Dry|Raining
+		*/
 
-		SerialPrintf(F("Rainsensor enable status: "));
-		SerialPrintf(bitRead(eepromRain, RAIN_BIT_ENABLE)!=0?F("Enabled"):F("Disabled"));
-		if( bitRead(eepromRain, RAIN_BIT_AUTO)!=0 ) {
-			SerialPrintf(F(" - ignored"));
+		SerialPrintf(F("Sensor monitoring:  "));
+		if( bitRead(eepromRain, RAIN_BIT_AUTO) ) {
+			sensorEnabled = (debEnable.read() == RAIN_ENABLE_AKTIV);
 		}
+		else {
+			sensorEnabled = bitRead(eepromRain, RAIN_BIT_ENABLE);
+		}
+		SerialPrintf(sensorEnabled?F("Enabled"):F("Disabled"));
+		SerialPrintf(F(" reading from "));
+		SerialPrintf(bitRead(eepromRain, RAIN_BIT_AUTO)?F("input"):F("setting"));
 		SerialPrintf(F("\r\n"));
-		SerialPrintf(F("Rainsensor status:        "));
+
+		SerialPrintf(F("Rainsensor input:   "));
+		SerialPrintf((debInput.read()==RAIN_INPUT_AKTIV)?F("Raining"):F("Dry"));
+		SerialPrintf(F("\r\n"));
+		
+		SerialPrintf(F("Rainsensor setting: "));
 		SerialPrintf(softRainInput?F("Raining"):F("Dry"));
-		if( bitRead(eepromRain, RAIN_BIT_AUTO)!=0 ) {
-			SerialPrintf(F(" - ignored"));
-		}
 		SerialPrintf(F("\r\n"));
 
-		SerialPrintf(F("Rainsensor enable input:  "));
-		SerialPrintf((debEnable.read() == RAIN_ENABLE_AKTIV)?F("Enabled"):F("Disabled"));
-		if( bitRead(eepromRain, RAIN_BIT_AUTO)==0 &&
-		   (debEnable.read() == RAIN_ENABLE_AKTIV)!=bitRead(eepromRain, RAIN_BIT_ENABLE) ) {
-			SerialPrintf(F(" - ignored"));
-		}
-		SerialPrintf(F("\r\n"));
-		SerialPrintf(F("Rainsensor input:         "));
-		SerialPrintf((debInput.read()  == RAIN_INPUT_AKTIV)?F("Raining"):F("Dry"));
-		if( bitRead(eepromRain, RAIN_BIT_AUTO)==0 ) {
-			SerialPrintf(F(" - ignored"));
-		}
+		SerialPrintf(F("Rainsensor status:  "));
+		SerialPrintf( sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? F("Raining") : F("Dry") );
 		SerialPrintf(F("\r\n"));
 	}
 	else {
@@ -608,10 +587,7 @@ void cmdRainSensor()
 			cmd = true;
 		}
 		if ( cmd ) {
-			// Write new value into EEPROM
-			eepromWriteByte(EEPROM_ADDR_RAIN, eepromRain);
-			// Write new EEPROM checksum
-			eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+			eepromWriteVars(EEPROM_RAIN);
 			cmdOK();
 		}
 		else {
@@ -628,7 +604,6 @@ void cmdStatus()
 //~ "         on        Status messages enabled\r\n"
 //~ "         off       Status messages disabled\r\n"
 	char *arg;
-	bool cmd = false;
 
 	arg = SCmd.next();
 	if (arg == NULL) {
@@ -637,17 +612,12 @@ void cmdStatus()
 	else {
 		if ( strnicmp(arg, F("ON"),2)==0 ) {
 			eepromCmdSendStatus = true;
-			cmd = true;
+			eepromWriteVars(EEPROM_SENDSTATUS);
+			cmdOK();
 		}
 		else if ( strnicmp(arg, F("OF"),2)==0 ) {
 			eepromCmdSendStatus = false;
-			cmd = true;
-		}
-		if ( cmd ) {
-			// Write new value into EEPROM
-			eepromWriteByte(EEPROM_ADDR_CMDSENDSTATUS, eepromCmdSendStatus);
-			// Write new EEPROM checksum
-			eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+			eepromWriteVars(EEPROM_SENDSTATUS);
 			cmdOK();
 		}
 		else {
@@ -686,12 +656,7 @@ void cmdLed()
 			eepromBlinkInterval = Interval;
 			eepromBlinkLen = Flash;
 
-			// Write new value into EEPROM
-			eepromWriteLong(EEPROM_ADDR_LED_BLINK_INTERVAL, (DWORD)eepromBlinkInterval);
-			eepromWriteLong(EEPROM_ADDR_LED_BLINK_LEN, (DWORD)eepromBlinkLen);
-
-			// Write new EEPROM checksum
-			eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC());
+			eepromWriteVars(EEPROM_LED_BLINK_INTERVAL | EEPROM_LED_BLINK_LEN);
 			cmdOK();
 		}
 	}
@@ -703,7 +668,7 @@ void cmdLed()
 void cmdFactoryReset()
 {
 	eepromWriteLong(EEPROM_ADDR_CRC32, eepromCalcCRC()-1);
-	setupEEPROMVars();
+	eepromInitVars();
 	cmdOK();
 }
 
