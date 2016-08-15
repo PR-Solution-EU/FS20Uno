@@ -36,7 +36,7 @@
  * ===================================================================*/
 void printProgramInfo(bool copyright)
 {
-	SerialPrintf(F("%s v%s (build %s)\r\n"), PROGRAM, VERSION, REVISION);
+	SerialPrintf(F("\r\n%s v%s (build %s)\r\n"), PROGRAM, VERSION, REVISION);
 	SerialPrintf(F("compiled on %s %s (GnuC%s %s)\r\n"), __DATE__, __TIME__, __GNUG__?"++ ":" ", __VERSION__);
 	if( copyright ) {
 		SerialPrintf(F("(c) 2016 www.p-r-solution.de - Norbert Richter <n.richter@p-r-solution.de>\r\n"));

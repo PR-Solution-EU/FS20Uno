@@ -72,7 +72,7 @@
 #define DEBOUNCE_TIME				20
 
 // Bitmask für Fenster Motoren (DFF=1, Jalousien=0)
-#define MTYPE_BITMASK				0b00001111
+#define MTYPE_BITMASK				0b01010101
 
 // LED Blink Interval in ms
 #define LED_BLINK_INTERVAL			1900

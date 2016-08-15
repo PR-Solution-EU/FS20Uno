@@ -175,9 +175,9 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.20"
+#define VERSION "2.21"
 #include "REVISION.h"
-#define DATAVERSION 108
+#define DATAVERSION 109
 
 
 // define next macros to output debug prints

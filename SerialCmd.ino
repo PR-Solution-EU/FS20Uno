@@ -290,22 +290,28 @@ void cmdFS20()
 					bitSet(SM8StatusIgnore, channel);
 					bitClear(valSM8Button, channel);
 					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
-					SerialPrintf(F("Setting channel %d into program mode, please wait:  "), channel);
+					SerialPrintf(F("Setting channel %d into program mode, please wait:  "), channel+1);
 					for(byte d=0; d<(FS20_SM8_IN_PROGRAMMODE/1000); d++) {
 						SerialPrintf(F("\b%1d"), (FS20_SM8_IN_PROGRAMMODE/1000)-d);
+						#ifdef WATCHDOG_ENABLED
+						Watchdog.reset();
+						#endif
 						delay(1000);
+						#ifdef WATCHDOG_ENABLED
+						Watchdog.reset();
+						#endif
 					}
 					bitSet(SM8StatusIgnore, channel);
 					bitClear(valSM8Button, channel);
 					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
-					SerialPrintf(F("\r\nChannel %d now in programming mode\r\n"), channel);
+					SerialPrintf(F("\r\nChannel %d now in programming mode\r\n"), channel+1);
 				}
 				else {
 					cmdError(F("Wrong parameter (use 'ON', 'OFF' or 'PRG')"));
 				}
 			}
 			else {
-				SerialPrintf(F("FS20-%02d "), channel+1);
+				SerialPrintf(F("FS20 CH%02d "), channel+1);
 				SerialPrintf(bitRead(curSM8Status, channel)?F("ON"):F("OFF"));
 				SerialPrintf(F("\r\n"));
 			}
