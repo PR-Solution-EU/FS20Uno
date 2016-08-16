@@ -111,7 +111,12 @@ void cmdHelp()
 			"MOTOR [<m> [<cmd>]]\r\n"
 			"  Set/Get motor status\r\n"
 			"     <m>      Motor number [1..m]\r\n"
-			"     <cmd>    can be OPEN, CLOSE, OFF, STATUS\r\n"
+			"     <cmd>    can be\r\n"
+			"              OPEN   - run motor in OPEN direction\r\n"
+			"              CLOSE  - run motor in CLOSE direction\r\n"
+			"              TOOGLE - toogle motor direction\r\n"
+			"              OFF    - stop motor\r\n"
+			"              STATUS - return the current status\r\n"
 			));
 	}
 	else if ( strnicmp(arg, F("MOTORTI"),7)==0 ) {
@@ -408,6 +413,18 @@ void cmdMotor()
 				else if ( strnicmp(arg, F("OF"),2)==0 ) {
 					if( getMotorDirection(motor)!=MOTOR_OFF ) {
 						setMotorDirection(motor, MOTOR_OFF);
+					}
+					cmdOK();
+				}
+				else if ( strnicmp(arg, F("TO"),2)==0 ) {
+					if( getMotorDirection(motor)==MOTOR_OFF ) {
+						setMotorDirection(motor, MOTOR_OPEN);
+					}
+					else if( getMotorDirection(motor)>MOTOR_CLOSE ) {
+						setMotorDirection(motor, MOTOR_CLOSE);
+					}
+					else if( getMotorDirection(motor)<MOTOR_OPEN ) {
+						setMotorDirection(motor, MOTOR_OPEN);
 					}
 					cmdOK();
 				}
