@@ -426,7 +426,7 @@ void cmdMotor()
 					cmdOK();
 				}
 				else if ( strnicmp(arg, F("TOP"),3)==0 ) {
-					if( getMotorDirection(motor)==MOTOR_OFF ) {
+					if( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)<=MOTOR_CLOSE ) {
 						setMotorDirection(motor, MOTOR_OPEN);
 					}
 					else {
@@ -435,7 +435,7 @@ void cmdMotor()
 					cmdOK();
 				}
 				else if ( strnicmp(arg, F("TCL"),3)==0 ) {
-					if( getMotorDirection(motor)==MOTOR_OFF ) {
+					if( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)>=MOTOR_OPEN  ) {
 						setMotorDirection(motor, MOTOR_CLOSE);
 					}
 					else {
