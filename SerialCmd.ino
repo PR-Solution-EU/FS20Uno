@@ -112,9 +112,11 @@ void cmdHelp()
 			"  Set/Get motor status\r\n"
 			"     <m>      Motor number [1..m]\r\n"
 			"     <cmd>    can be\r\n"
-			"              OPEN   - run motor in OPEN direction\r\n"
-			"              CLOSE  - run motor in CLOSE direction\r\n"
-			"              TOOGLE - toogle motor direction\r\n"
+			"              OPEN   - motor in OPEN direction\r\n"
+			"              CLOSE  - motor in CLOSE direction\r\n"
+			"              TOPEN  - toogle OPEN direction\r\n"
+			"              TCLOSE - toogle CLOSE direction\r\n"
+			"              TOOGLE - toogle direction\r\n"
 			"              OFF    - stop motor\r\n"
 			"              STATUS - return the current status\r\n"
 			));
@@ -206,7 +208,7 @@ void cmdEcho(void)
 		cmdOK();
 	}
 	else {
-		cmdError(F("Wrong parameter (use 'ON' or 'OFF')"));
+		cmdError(F("Unknown parameter (use 'ON' or 'OFF')"));
 	}
 }
 
@@ -235,7 +237,7 @@ void cmdTerm(void)
 		cmdOK();
 	}
 	else {
-		cmdError(F("Wrong parameter (use 'CR' or 'LF')"));
+		cmdError(F("Unknown parameter (use 'CR' or 'LF')"));
 	}
 }
 
@@ -312,7 +314,7 @@ void cmdFS20()
 					SerialPrintf(F("\r\nChannel %d now in programming mode\r\n"), channel+1);
 				}
 				else {
-					cmdError(F("Wrong parameter (use 'ON', 'OFF' or 'PRG')"));
+					cmdError(F("Unknown parameter (use 'ON', 'OFF' or 'PRG')"));
 				}
 			}
 			else {
@@ -361,7 +363,7 @@ void cmdWallButton()
 					cmdOK();
 				}
 				else {
-					cmdError(F("Wrong parameter (use 'ON' or 'OFF')"));
+					cmdError(F("Unknown parameter (use 'ON' or 'OFF')"));
 				}
 			}
 			else {
@@ -375,10 +377,17 @@ void cmdWallButton()
 
 void cmdMotor()
 {
-//~ "    motor [<m> [<cmd>]]\r\n"
-//~ "         Set/Get motor control\r\n"
-//~ "         <m>      Motor number [1..m]\r\n"
-//~ "         <cmd>    can be OPEN, CLOSE, OFF, STATUS\r\n"
+//~ "MOTOR [<m> [<cmd>]]\r\n"
+//~ "  Set/Get motor status\r\n"
+//~ "     <m>      Motor number [1..m]\r\n"
+//~ "     <cmd>    can be\r\n"
+//~ "              OPEN   - motor in OPEN direction\r\n"
+//~ "              CLOSE  - motor in CLOSE direction\r\n"
+//~ "              TOPEN  - toogle OPEN direction\r\n"
+//~ "              TCLOSE - toogle CLOSE direction\r\n"
+//~ "              TOOGLE - toogle direction\r\n"
+//~ "              OFF    - stop motor\r\n"
+//~ "              STATUS - return the current status\r\n"
 	int motor;
 	char *arg;
 
@@ -416,7 +425,25 @@ void cmdMotor()
 					}
 					cmdOK();
 				}
-				else if ( strnicmp(arg, F("TO"),2)==0 ) {
+				else if ( strnicmp(arg, F("TOP"),3)==0 ) {
+					if( getMotorDirection(motor)==MOTOR_OFF ) {
+						setMotorDirection(motor, MOTOR_OPEN);
+					}
+					else {
+						setMotorDirection(motor, MOTOR_OFF);
+					}
+					cmdOK();
+				}
+				else if ( strnicmp(arg, F("TCL"),3)==0 ) {
+					if( getMotorDirection(motor)==MOTOR_OFF ) {
+						setMotorDirection(motor, MOTOR_CLOSE);
+					}
+					else {
+						setMotorDirection(motor, MOTOR_OFF);
+					}
+					cmdOK();
+				}
+				else if ( strnicmp(arg, F("TOG"),3)==0 ) {
 					if( getMotorDirection(motor)==MOTOR_OFF ) {
 						setMotorDirection(motor, MOTOR_OPEN);
 					}
@@ -429,7 +456,7 @@ void cmdMotor()
 					cmdOK();
 				}
 				else {
-					cmdError(F("Wrong parameter (use 'OPEN', 'CLOSE' or 'OFF')"));
+					cmdError(F("Unknown 2. parameter (use 'HELP MOTOR' for more info)"));
 				}
 			}
 			if (arg == NULL || strnicmp(arg, F("STAT"),4)==0 ) {
@@ -522,7 +549,7 @@ void cmdType()
 					cmdOK();
 				}
 				else {
-					cmdError(F("Wrong parameter (use 'WINDOW' or 'JALOUSIE'"));
+					cmdError(F("Unknown parameter (use 'WINDOW' or 'JALOUSIE'"));
 				}
 			}
 			if (arg == NULL || strnicmp(arg, F("STAT"),4)==0 ) {
@@ -614,7 +641,7 @@ void cmdRainSensor()
 			cmdOK();
 		}
 		else {
-			cmdError(F("Wrong parameter (use 'ENABLE', 'DISABLE', 'AUTO', 'ON' or 'OFF'"));
+			cmdError(F("Unknown parameter (use 'ENABLE', 'DISABLE', 'AUTO', 'ON' or 'OFF'"));
 		}
 	}
 }
@@ -644,7 +671,7 @@ void cmdStatus()
 			cmdOK();
 		}
 		else {
-			cmdError(F("Wrong parameter (use 'ON' or 'OFF'"));
+			cmdError(F("Unknown parameter (use 'ON' or 'OFF'"));
 		}
 	}
 }
