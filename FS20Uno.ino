@@ -175,9 +175,9 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.24"
+#define VERSION "2.25"
 #include "REVISION.h"
-#define DATAVERSION 109
+#define DATAVERSION 110
 
 
 // define next macros to output debug prints
@@ -338,12 +338,12 @@ void setup()
 	digitalWrite(RAIN_ENABLE, RAIN_ENABLE_AKTIV==0?HIGH:LOW);
 	// After setting up the button, setup the Bounce instance :
 	debEnable.attach(RAIN_ENABLE);
-	debEnable.interval(DEBOUNCE_TIME); // interval in ms
+	debEnable.interval(RAIN_DEBOUNCE_TIME); // interval in ms
 
 	pinMode(RAIN_INPUT, INPUT_PULLUP);
 	digitalWrite(RAIN_INPUT, RAIN_INPUT_AKTIV==0?HIGH:LOW);
 	debInput.attach(RAIN_INPUT);
-	debInput.interval(DEBOUNCE_TIME);
+	debInput.interval(RAIN_DEBOUNCE_TIME);
 
 
 
@@ -627,7 +627,7 @@ void handleMPCInt()
 		irqSM8Status = expanderReadWord(MPC_SM8STATUS, INTCAP);
 		for (i = 0; i < IOBITS_CNT; i++) {
 			if ( (curSM8Status & (1 << i)) != (irqSM8Status & (1 << i)) ) {
-				debSM8Status[i] = DEBOUNCE_TIME / TIMER_MS;
+				debSM8Status[i] = SM8_DEBOUNCE_TIME / TIMER_MS;
 			}
 		}
 		#ifdef DEBUG_PINS
@@ -643,7 +643,7 @@ void handleMPCInt()
 		irqWallButton = expanderReadWord(MPC_WALLBUTTON, INTCAP);
 		for (i = 0; i < IOBITS_CNT; i++) {
 			if ( (curWallButton & (1 << i)) != (irqWallButton & (1 << i)) ) {
-				debWallButton[i] = DEBOUNCE_TIME / TIMER_MS;
+				debWallButton[i] = WPB_DEBOUNCE_TIME / TIMER_MS;
 			}
 		}
 		#ifdef DEBUG_PINS

@@ -69,7 +69,12 @@
 #define FS20_SM8_IN_PROGRAMMODE		6000
 
 // Tasten Entprellzeit in ms
-#define DEBOUNCE_TIME				20
+// Eingang Regensensor
+#define RAIN_DEBOUNCE_TIME			20
+// Wandtaster Entprellzeit
+#define WPB_DEBOUNCE_TIME			100
+// SM89 Ausgänge Entprellzeit
+#define SM8_DEBOUNCE_TIME			30
 
 // Bitmask für Fenster Motoren (DFF=1, Jalousien=0)
 #define MTYPE_BITMASK				0b01010101
