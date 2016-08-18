@@ -61,7 +61,9 @@ void cmdHelp()
 			"\r\n"
 			"To get current values use the command without any parameter.\r\n"
 			"To set values use command with parameters.\r\n"
-			"For command parameter details use 'HELP command', e.g. HELP INFO\r\n"
+			"\r\n"
+			"For command parameter details use 'HELP <command>', e.g. HELP INFO\r\n"
+			"\r\n"
 			));
 	}
 	else if ( strnicmp(arg, F("EC"),2)==0 ) {
@@ -194,6 +196,7 @@ void cmdEcho(void)
 		SerialPrintf(F("ECHO "));
 		SerialPrintf(eepromCmdEcho?F("ON"):F("OFF"));
 		SerialPrintf(F("\r\n"));
+		cmdOK();
 	}
 	else if ( strnicmp(arg, F("ON"),2)==0 ) {
 		eepromCmdEcho = true;
@@ -223,6 +226,7 @@ void cmdTerm(void)
 		SerialPrintf(F("TERM "));
 		SerialPrintf(eepromCmdTerm=='\r'?F("CR"):F("LF"));
 		SerialPrintf(F("\r\n"));
+		cmdOK();
 	}
 	else if ( strnicmp(arg, F("CR"),2)==0 ) {
 		eepromCmdTerm = '\r';
@@ -269,6 +273,7 @@ void cmdFS20()
 			SerialPrintf(bitRead(curSM8Status, channel)?F("ON"):F("OFF"));
 			SerialPrintf(F("\r\n"));
 		}
+		cmdOK();
 	}
 	else {
 		// Channel number entered
@@ -312,6 +317,7 @@ void cmdFS20()
 					bitClear(valSM8Button, channel);
 					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
 					SerialPrintf(F("\r\nChannel %d now in programming mode\r\n"), channel+1);
+					cmdOK();
 				}
 				else {
 					cmdError(F("Unknown parameter (use 'ON', 'OFF' or 'PRG')"));
@@ -321,6 +327,7 @@ void cmdFS20()
 				SerialPrintf(F("FS20 CH%02d "), channel+1);
 				SerialPrintf(bitRead(curSM8Status, channel)?F("ON"):F("OFF"));
 				SerialPrintf(F("\r\n"));
+				cmdOK();
 			}
 		}
 	}
@@ -342,6 +349,7 @@ void cmdWallButton()
 			SerialPrintf(bitRead(curWallButton, button)?F("ON"):F("OFF"));
 			SerialPrintf(F("\r\n"));
 		}
+		cmdOK();
 	}
 	else {
 		// Button number entered
@@ -370,6 +378,7 @@ void cmdWallButton()
 				SerialPrintf(F("PB%02d "), button+1);
 				SerialPrintf(bitRead(curWallButton, button)?F("ON"):F("OFF"));
 				SerialPrintf(F("\r\n"));
+				cmdOK();
 			}
 		}
 	}
@@ -398,6 +407,7 @@ void cmdMotor()
 			SerialPrintf(getMotorDirection(motor)==MOTOR_OFF?F("OFF"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OPENING"):F("CLOSING"));
 			SerialPrintf(F("\r\n"));
 		}
+		cmdOK();
 	}
 	else {
 		motor=atoi(arg)-1;
@@ -463,6 +473,7 @@ void cmdMotor()
 				SerialPrintf(F("M%02d "), motor+1);
 				SerialPrintf(getMotorDirection(motor)==MOTOR_OFF?F("OFF"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OPENING"):F("CLOSING"));
 				SerialPrintf(F("\r\n"));
+				cmdOK();
 			}
 		}
 	}
@@ -483,6 +494,7 @@ void cmdRuntime()
 		for(motor=0; motor<MAX_MOTORS; motor++) {
 			SerialPrintf(F("M%02d TIME %4d.%-3d\r\n"), motor+1, eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
 		}
+		cmdOK();
 	}
 	else {
 		motor=atoi(arg)-1;
@@ -495,6 +507,7 @@ void cmdRuntime()
 			if (arg == NULL) {
 				// Status
 				SerialPrintf(F("M%02d TIME %4d.%-3d\r\n"), motor+1, eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
+				cmdOK();
 			}
 			else {
 				// Set new runtime value
@@ -505,7 +518,7 @@ void cmdRuntime()
 				else {
 					eepromMaxRuntime[motor] = (DWORD)(runtime*1000.0);
 					eepromWriteVars(EEPROM_MOTOR_MAXRUNTIME);
-					SerialPrintf(F("%d.%-d s"), eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
+					SerialPrintf(F("%d.%-d s\r\n"), eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
 					cmdOK();
 				}
 			}
@@ -529,6 +542,7 @@ void cmdType()
 			SerialPrintf(bitRead(eepromMTypeBitmask, motor)?F("WINDOW"):F("JALOUSIE"));
 			SerialPrintf(F("\r\n"));
 		}
+		cmdOK();
 	}
 	else {
 		motor=atoi(arg)-1;
@@ -556,6 +570,7 @@ void cmdType()
 				SerialPrintf(F("M%02d TYPE "), motor+1);
 				SerialPrintf(bitRead(eepromMTypeBitmask, motor)?F("WINDOW"):F("JALOUSIE"));
 				SerialPrintf(F("\r\n"));
+				cmdOK();
 			}
 		}
 	}
@@ -610,6 +625,7 @@ void cmdRainSensor()
 		SerialPrintf(F("Rainsensor status:  "));
 		SerialPrintf( sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? F("Raining") : F("Dry") );
 		SerialPrintf(F("\r\n"));
+		cmdOK();
 	}
 	else {
 		if ( strnicmp(arg, F("ON"),2)==0 ) {
@@ -699,8 +715,8 @@ void cmdLed()
 	else if ( argInterval != NULL && argFlash != NULL ) {
 		Interval=(WORD)atoi(argInterval);
 		Flash=(WORD)atoi(argFlash);
-		if ( Interval<=Flash ) {
-			cmdError(F("Wrong arguments, flash time must be greater than interval time"));
+		if ( Interval<Flash ) {
+			cmdError(F("Wrong arguments, flash time must be greater or equal interval time"));
 		}
 		else {
 			eepromBlinkInterval = Interval;

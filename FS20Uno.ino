@@ -175,7 +175,7 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.25"
+#define VERSION "2.26"
 #include "REVISION.h"
 #define DATAVERSION 110
 

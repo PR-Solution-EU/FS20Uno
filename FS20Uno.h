@@ -60,7 +60,7 @@
 // Fenster zu:   47s
 // Jalousie auf: 15s
 // Jalousie zu:  18s
-#define MOTOR_WINDOW_MAXRUNTIME		50000
+#define MOTOR_WINDOW_MAXRUNTIME		60000
 #define MOTOR_JALOUSIE_MAXRUNTIME	20000
 
 // SM8 IN Schaltzeit in ms
@@ -72,9 +72,9 @@
 // Eingang Regensensor
 #define RAIN_DEBOUNCE_TIME			20
 // Wandtaster Entprellzeit
-#define WPB_DEBOUNCE_TIME			100
+#define WPB_DEBOUNCE_TIME			80
 // SM89 Ausgänge Entprellzeit
-#define SM8_DEBOUNCE_TIME			30
+#define SM8_DEBOUNCE_TIME			20
 
 // Bitmask für Fenster Motoren (DFF=1, Jalousien=0)
 #define MTYPE_BITMASK				0b01010101
