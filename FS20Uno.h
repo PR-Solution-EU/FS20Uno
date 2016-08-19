@@ -22,6 +22,7 @@
 #define RAIN_ENABLE			9	// Input Signal für Regensensor aktiv
 #define RAIN_ENABLE_AKTIV	1
 
+
 // Motor Steuerungskommandos:
 //   0: Motor AUS
 //  >0: Motor Öffnen
@@ -45,6 +46,10 @@
 // Timer2 Intervall in ms
 #define TIMER_MS					10
 
+// Watchdog Timer
+// Mögliche Werte (ms): 15,30,60,120,250,500,1000,2000,4000,8000
+#define WATCHDOG_TIME				4000
+
 /* ===================================================================
  * Standardwerte
  * ===================================================================*/
@@ -56,10 +61,11 @@
 #define MOTOR_SWITCHOVER			250
 
 // Motor maximale Laufzeit in ms
-// Fenster auf:  47s
-// Fenster zu:   47s
-// Jalousie auf: 15s
-// Jalousie zu:  18s
+// Fenster auf:  52000 ms
+// Fenster zu:   50000 ms
+// Jalousie auf: 15000 ms
+// Jalousie zu:  18000 ms
+#define MOTOR_MAXRUNTIME		 	655350
 #define MOTOR_WINDOW_MAXRUNTIME		60000
 #define MOTOR_JALOUSIE_MAXRUNTIME	20000
 
@@ -77,6 +83,11 @@
 #define SM8_DEBOUNCE_TIME			20
 
 // Bitmask für Fenster Motoren (DFF=1, Jalousien=0)
+enum mtype
+{
+   JALOUSIE = 0,
+   WINDOW = 1
+} MTYPE;
 #define MTYPE_BITMASK				0b01010101
 
 // LED Blink Interval in ms
@@ -151,10 +162,9 @@ typedef DWORD TIMER;
 #define IOBITS_CNT	(MAX_MOTORS * 2)
 
 typedef char MOTOR_CTRL;
-
-#if   (MOTOR_WINDOW_MAXRUNTIME/TIMER_MS)<=255
+#if   (MOTOR_MAXRUNTIME/TIMER_MS)<=255
 	typedef byte MOTOR_TIMEOUT;
-#elif (MOTOR_WINDOW_MAXRUNTIME/TIMER_MS)<=65535
+#elif (MOTOR_MAXRUNTIME/TIMER_MS)<=65535
 	typedef WORD MOTOR_TIMEOUT;
 #else
 	typedef DWORD MOTOR_TIMEOUT;

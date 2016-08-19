@@ -2,7 +2,7 @@
  * FS20Uno Helper Functions
  * ===================================================================*/
 
-#define MAX_PRINTF_BUFFER	128
+#define MAX_PRINTF_BUFFER	160
 #define strnicmp(str1, str2, n) strncasecmp_P(str1, (const char *)str2, n)
 
 /* *******************************************************************
@@ -38,10 +38,45 @@ void printProgramInfo(bool copyright)
 {
 	SerialPrintf(F("\r\n%s v%s (build %s)\r\n"), PROGRAM, VERSION, REVISION);
 	SerialPrintf(F("compiled on %s %s (GnuC%s %s)\r\n"), __DATE__, __TIME__, __GNUG__?"++ ":" ", __VERSION__);
+	SerialPrintf(F("using avr library %s (%s)\r\n"),  __AVR_LIBC_VERSION_STRING__, __AVR_LIBC_DATE_STRING__);
 	if( copyright ) {
 		SerialPrintf(F("(c) 2016 www.p-r-solution.de - Norbert Richter <n.richter@p-r-solution.de>\r\n"));
 	}
 	//SerialTimePrintf(F("EEPROM: %d byte\r\n"), EEPROM.length());
+	watchdogReset();
+}
+
+
+/* ===================================================================
+ * Function:    watchdogInit
+ * Return:
+ * Arguments:	
+ * Description: Init watchdog
+ * ===================================================================*/
+void watchdogInit(void)
+{
+	#ifdef WATCHDOG_ENABLED
+	#ifndef DEBUG_OUTPUT_WATCHDOG
+	Watchdog.enable(WATCHDOG_TIME);
+	#else
+	int countdownMS = Watchdog.enable(WATCHDOG_TIME);
+	SerialTimePrintf(F("setup - Enabled the watchdog with max countdown of %d ms\r\n"), countdownMS);
+	#endif
+	#endif
+
+}
+
+/* ===================================================================
+ * Function:    watchdogReset
+ * Return:
+ * Arguments:	
+ * Description: Reset watchdog
+ * ===================================================================*/
+void watchdogReset(void)
+{
+	#ifdef WATCHDOG_ENABLED
+	Watchdog.reset();
+	#endif
 }
 
 /* ===================================================================
@@ -65,6 +100,7 @@ void SerialPrintf(const __FlashStringHelper *fmt, ... )
 	#endif
 	va_end(args);
 	Serial.print(buf);
+	watchdogReset();
 }
 
 /* ===================================================================
@@ -111,6 +147,7 @@ void SerialTimePrintf(const __FlashStringHelper *fmt, ... )
 	va_end(args);
 
 	Serial.print(buf);
+	watchdogReset();
 }
 
 /* ===================================================================
@@ -137,5 +174,123 @@ void sendStatus(const __FlashStringHelper *fmt, ... )
 		va_end(args);
 		Serial.print(buf);
 		Serial.print("\r\n");
+		watchdogReset();
 	}
+}
+
+
+
+/* ===================================================================
+ * Function:    setMotorDirection
+ * Return:
+ * Arguments:
+ * Description: Motor in neue Laufrichtung (oder AUS) schalten
+ * ===================================================================*/
+void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
+{
+	if ( motorNum < MAX_MOTORS ) {
+		// Neue Richtung: Öffnen
+		if ( newDirection >= MOTOR_OPEN ) {
+			// Motor läuft auf Schliessen
+			if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
+				// Motor auf Öffnen mit Umschaltdelay
+				MotorCtrl[motorNum] = MOTOR_OPEN_DELAYED;
+				sendStatus(F("01 M%i OPENING DELAYED"), motorNum+1);
+			}
+			// Motor läuft auf Öffnen
+			else if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
+				// Motor aus
+				MotorCtrl[motorNum] = MOTOR_OFF;
+				sendStatus(F("01 M%i OFF"), motorNum+1);
+			}
+			// Motor ist aus
+			else {
+				// Motor auf öffnen ohne Umschaltdelay
+				MotorCtrl[motorNum] = MOTOR_OPEN;
+				sendStatus(F("01 M%i OPENING"), motorNum+1);
+			}
+		}
+		// Neue Richtung: Schliessen
+		else if ( newDirection <= MOTOR_CLOSE ) {
+			// Motor läuft auf Öffnen
+			if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
+				// Motor auf Schliessen mit Umschaltdelay
+				MotorCtrl[motorNum] = MOTOR_CLOSE_DELAYED;
+				sendStatus(F("01 M%i CLOSING DELAYED"), motorNum+1);
+			}
+			// Motor läuft auf Schliessen
+			else if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
+				// Motor aus
+				MotorCtrl[motorNum] = MOTOR_OFF;
+				sendStatus(F("01 M%i OFF"), motorNum+1);
+			}
+			// Motor ist aus
+			else {
+				// Motor auf Schliessen ohne Umschaltdelay
+				MotorCtrl[motorNum] = MOTOR_CLOSE;
+				sendStatus(F("01 M%i CLOSING"), motorNum+1);
+			}
+		}
+		// Neue Richtung: AUS
+		else {
+			// Motor AUS
+			MotorCtrl[motorNum] = MOTOR_OFF;
+			sendStatus(F("01 M%i OFF"), motorNum+1);
+		}
+	}
+}
+
+/* ===================================================================
+ * Function:    getMotorDirection
+ * Return:		Laufrichtung
+ *              MOTOR_OPEN, MOTOR_OPEN_DELAYED
+ *              MOTOR_CLOSE, MOTOR_CLOSE_DELAYED
+ *              MOTOR_OFF
+ * Arguments:	motorNum - die Motorennummer [0..x]
+ * Description: Motor Laufrichtung zurückgeben
+ * ===================================================================*/
+char getMotorDirection(byte motorNum)
+{
+	if (MotorCtrl[motorNum] == MOTOR_OPEN) {
+		return MOTOR_OPEN;
+	}
+	else if (MotorCtrl[motorNum] > MOTOR_OPEN) {
+		return MOTOR_OPEN_DELAYED;
+	}
+	else if (MotorCtrl[motorNum] == MOTOR_CLOSE) {
+		return MOTOR_CLOSE;
+	}
+	else if (MotorCtrl[motorNum] < MOTOR_CLOSE) {
+		return MOTOR_CLOSE_DELAYED;
+	}
+	return MOTOR_OFF;
+}
+
+/* ===================================================================
+ * Function:    setMotorType
+ * Return:
+ * Arguments:	motorNum - die Motorennummer [0..x]
+ *              mType    - Motortyp: WINDOW, JALOUSIE
+ * Description: Motortyp setzen
+ * ===================================================================*/
+void setMotorType(byte motorNum, mtype mType)
+{
+	if( mType == WINDOW ) {
+		bitSet(eepromMTypeBitmask, motorNum);
+	}
+	else {
+		bitClear(eepromMTypeBitmask, motorNum);
+	}
+}
+
+/* ===================================================================
+ * Function:    setMotorType
+ * Return:
+ * Arguments:	motorNum - die Motorennummer [0..x]
+ *              mType    - Motortyp: WINDOW, JALOUSIE
+ * Description: Motortyp setzen
+ * ===================================================================*/
+mtype getMotorType(byte motorNum)
+{
+	return bitRead(eepromMTypeBitmask, motorNum) ? WINDOW : JALOUSIE;
 }

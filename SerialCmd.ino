@@ -55,7 +55,7 @@ void cmdHelp()
 			"MOTORTYPE     Set/Get motor type\r\n"
 			"RAINSENSOR    Set/Get Rain sensor function\r\n"
 			"PUSHBUTTON    Set/Get wall pushbutton status\r\n"
-			"STATUS        Set/Get FS20Uno status message\r\n"
+			"STATUS        Set/Get autosend status messages\r\n"
 			"TERM          Set/Get command terminator\r\n"
 			"UPTIME        Get system uptime\r\n"
 			"\r\n"
@@ -120,6 +120,7 @@ void cmdHelp()
 			"              TCLOSE - toogle CLOSE direction\r\n"
 			"              TOOGLE - toogle direction\r\n"
 			"              OFF    - stop motor\r\n"
+			"              SYNC   - set motor in a default defined state\r\n"
 			"              STATUS - return the current status\r\n"
 			));
 	}
@@ -162,7 +163,7 @@ void cmdHelp()
 	else if ( strnicmp(arg, F("ST"),2)==0 ) {
 		Serial.print(F(
 			"STATUS [ON|OFF]\r\n"
-			"  Set/Get system status message\r\n"
+			"  Set/Get autosend system status message\r\n"
 			"     ON        Status messages enabled\r\n"
 			"               Automatically send status messages when system status changes\r\n"
 			"     OFF       Status messages disabled\r\n"
@@ -181,6 +182,7 @@ void cmdHelp()
 			"  Tell how long the system has been running\r\n"
 			));
 	}
+	watchdogReset();
 	
 	Serial.print(F("\r\n"));
 }
@@ -272,6 +274,7 @@ void cmdFS20()
 			SerialPrintf(F("FS20 CH%02d "), channel+1);
 			SerialPrintf(bitRead(curSM8Status, channel)?F("ON"):F("OFF"));
 			SerialPrintf(F("\r\n"));
+			watchdogReset();
 		}
 		cmdOK();
 	}
@@ -305,13 +308,9 @@ void cmdFS20()
 					SerialPrintf(F("Setting channel %d into program mode, please wait:  "), channel+1);
 					for(byte d=0; d<(FS20_SM8_IN_PROGRAMMODE/1000); d++) {
 						SerialPrintf(F("\b%1d"), (FS20_SM8_IN_PROGRAMMODE/1000)-d);
-						#ifdef WATCHDOG_ENABLED
-						Watchdog.reset();
-						#endif
+						watchdogReset();
 						delay(1000);
-						#ifdef WATCHDOG_ENABLED
-						Watchdog.reset();
-						#endif
+						watchdogReset();
 					}
 					bitSet(SM8StatusIgnore, channel);
 					bitClear(valSM8Button, channel);
@@ -348,6 +347,7 @@ void cmdWallButton()
 			SerialPrintf(F("PB%02d "), button+1);
 			SerialPrintf(bitRead(curWallButton, button)?F("ON"):F("OFF"));
 			SerialPrintf(F("\r\n"));
+			watchdogReset();
 		}
 		cmdOK();
 	}
@@ -384,6 +384,7 @@ void cmdWallButton()
 	}
 }
 
+
 void cmdMotor()
 {
 //~ "MOTOR [<m> [<cmd>]]\r\n"
@@ -396,6 +397,7 @@ void cmdMotor()
 //~ "              TCLOSE - toogle CLOSE direction\r\n"
 //~ "              TOOGLE - toogle direction\r\n"
 //~ "              OFF    - stop motor\r\n"
+//~ "              SYNC   - set motor into a default state\r\n"
 //~ "              STATUS - return the current status\r\n"
 	int motor;
 	char *arg;
@@ -403,9 +405,7 @@ void cmdMotor()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			SerialPrintf(F("M%02d "), motor+1);
-			SerialPrintf(getMotorDirection(motor)==MOTOR_OFF?F("OFF"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OPENING"):F("CLOSING"));
-			SerialPrintf(F("\r\n"));
+			cmdMotorPrintStatus(motor);
 		}
 		cmdOK();
 	}
@@ -465,19 +465,50 @@ void cmdMotor()
 					}
 					cmdOK();
 				}
+				else if ( strnicmp(arg, F("SY"),2)==0 ) {
+					if ( getMotorType(motor)==WINDOW ) {
+						setMotorDirection(motor, MOTOR_CLOSE);
+					}
+					else {
+						setMotorDirection(motor, MOTOR_OPEN);
+					}
+					cmdOK();
+				}
 				else {
 					cmdError(F("Unknown 2. parameter (use 'HELP MOTOR' for more info)"));
 				}
 			}
-			if (arg == NULL || strnicmp(arg, F("STAT"),4)==0 ) {
-				SerialPrintf(F("M%02d "), motor+1);
-				SerialPrintf(getMotorDirection(motor)==MOTOR_OFF?F("OFF"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OPENING"):F("CLOSING"));
-				SerialPrintf(F("\r\n"));
+			if (arg == NULL || strnicmp(arg, F("ST"),2)==0 ) {
+				cmdMotorPrintStatus(motor);
 				cmdOK();
 			}
 		}
 	}
 }
+void cmdMotorPrintStatus(int motor)
+{
+	byte runTimePercent = (byte)((long)MotorRuntime[motor]*100L / (long)(eepromMaxRuntime[motor] / TIMER_MS));
+	
+	if( runTimePercent<1 && MotorRuntime[motor]>0 ) {
+		runTimePercent=1;
+	}
+	if( runTimePercent>100 ) {
+		runTimePercent=100;
+	}
+	//~ SerialPrintf(F("M%02d %-7s  %6d = %3d%%\r\n")
+				//~ ,motor+1
+				//~ ,getMotorDirection(motor)==MOTOR_OFF?"OFF":(getMotorDirection(motor)>=MOTOR_OPEN)?"OPENING":"CLOSING"
+				//~ ,MotorRuntime[motor]*TIMER_MS
+				//~ ,runTimePercent);
+	SerialPrintf(F("M%02d %-7s %3d%% %s\r\n")
+				,motor+1
+				,runTimePercent==0?"CLOSE":(runTimePercent==100?"OPEN":"BETWEEN")
+				,runTimePercent
+				,getMotorDirection(motor)==MOTOR_OFF?"OFF":(getMotorDirection(motor)>=MOTOR_OPEN)?"OPENING":"CLOSING"
+				);
+	watchdogReset();
+}
+
 
 void cmdRuntime()
 {
@@ -492,7 +523,7 @@ void cmdRuntime()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			SerialPrintf(F("M%02d TIME %4d.%-3d\r\n"), motor+1, eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
+			cmdRuntimePrintStatus(motor);
 		}
 		cmdOK();
 	}
@@ -506,14 +537,14 @@ void cmdRuntime()
 
 			if (arg == NULL) {
 				// Status
-				SerialPrintf(F("M%02d TIME %4d.%-3d\r\n"), motor+1, eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
+				cmdRuntimePrintStatus(motor);
 				cmdOK();
 			}
 			else {
 				// Set new runtime value
 				runtime = atof(arg);
-				if ( runtime<5.0 || runtime>300.0) {
-					cmdError(F("Runtime out of range (min=5, max=300)"));
+				if ( runtime<1.0 || runtime>(double)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
+					cmdError(F("Motor runtime out of range"));
 				}
 				else {
 					eepromMaxRuntime[motor] = (DWORD)(runtime*1000.0);
@@ -525,6 +556,12 @@ void cmdRuntime()
 		}
 	}
 }
+void cmdRuntimePrintStatus(int motor)
+{
+	SerialPrintf(F("M%02d %4d.%-3d\r\n"), motor+1, eepromMaxRuntime[motor] / 1000, eepromMaxRuntime[motor] % 1000);
+	watchdogReset();
+}
+
 
 void cmdType()
 {
@@ -538,9 +575,7 @@ void cmdType()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			SerialPrintf(F("M%02d TYPE "), motor+1);
-			SerialPrintf(bitRead(eepromMTypeBitmask, motor)?F("WINDOW"):F("JALOUSIE"));
-			SerialPrintf(F("\r\n"));
+			cmdTypePrintStatus(motor);
 		}
 		cmdOK();
 	}
@@ -553,12 +588,12 @@ void cmdType()
 			arg = SCmd.next();
 			if (arg != NULL) {
 				if      ( strnicmp(arg, F("WIN"),3)==0 ) {
-					bitSet(eepromMTypeBitmask, motor);
+					setMotorType(motor, WINDOW);
 					eepromWriteVars(EEPROM_MTYPE_BITMASK);
 					cmdOK();
 				}
 				else if ( strnicmp(arg, F("JAL"),3)==0 ) {
-					bitClear(eepromMTypeBitmask, motor);
+					setMotorType(motor, JALOUSIE);
 					eepromWriteVars(EEPROM_MTYPE_BITMASK);
 					cmdOK();
 				}
@@ -567,14 +602,20 @@ void cmdType()
 				}
 			}
 			if (arg == NULL || strnicmp(arg, F("STAT"),4)==0 ) {
-				SerialPrintf(F("M%02d TYPE "), motor+1);
-				SerialPrintf(bitRead(eepromMTypeBitmask, motor)?F("WINDOW"):F("JALOUSIE"));
-				SerialPrintf(F("\r\n"));
+				cmdTypePrintStatus(motor);
 				cmdOK();
 			}
 		}
 	}
 }
+void cmdTypePrintStatus(int motor)
+{
+	SerialPrintf(F("M%02d "), motor+1);
+	SerialPrintf( getMotorType(motor)==WINDOW ? F("WINDOW") : F("JALOUSIE") );
+	SerialPrintf(F("\r\n"));
+	watchdogReset();
+}
+
 
 void cmdRainSensor()
 {
@@ -625,6 +666,7 @@ void cmdRainSensor()
 		SerialPrintf(F("Rainsensor status:  "));
 		SerialPrintf( sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? F("Raining") : F("Dry") );
 		SerialPrintf(F("\r\n"));
+
 		cmdOK();
 	}
 	else {
@@ -674,6 +716,7 @@ void cmdStatus()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		SerialPrintf(eepromCmdSendStatus?F("ON\r\n"):F("OFF\r\n"));
+		cmdOK();
 	}
 	else {
 		if ( strnicmp(arg, F("ON"),2)==0 ) {
@@ -711,6 +754,7 @@ void cmdLed()
 	if (argInterval == NULL) {
 		SerialPrintf(F("Interval %d ms\r\n"), eepromBlinkInterval);
 		SerialPrintf(F("Flash %d ms\r\n"), eepromBlinkLen);
+		cmdOK();
 	}
 	else if ( argInterval != NULL && argFlash != NULL ) {
 		Interval=(WORD)atoi(argInterval);
@@ -721,7 +765,6 @@ void cmdLed()
 		else {
 			eepromBlinkInterval = Interval;
 			eepromBlinkLen = Flash;
-
 			eepromWriteVars(EEPROM_LED_BLINK_INTERVAL | EEPROM_LED_BLINK_LEN);
 			cmdOK();
 		}
