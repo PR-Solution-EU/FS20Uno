@@ -96,6 +96,7 @@ enum mtype
 #define LED_BLINK_LEN				100
 
 
+
 /* ===================================================================
  * Type & Constant Definition
  * ===================================================================*/
@@ -103,19 +104,21 @@ typedef unsigned int  WORD;
 typedef unsigned long DWORD;
 typedef DWORD TIMER;
 
-
 // EEPROM Data Adressen
 #define EEPROM_ADDR_CRC32				0
-#define EEPROM_ADDR_DATAVERSION			(4+EEPROM_ADDR_CRC32)
-#define EEPROM_ADDR_LED_BLINK_INTERVAL	(4+EEPROM_ADDR_DATAVERSION)
-#define EEPROM_ADDR_LED_BLINK_LEN		(4+EEPROM_ADDR_LED_BLINK_INTERVAL)
-#define EEPROM_ADDR_MTYPE_BITMASK		(4+EEPROM_ADDR_LED_BLINK_LEN)
-#define EEPROM_ADDR_MOTOR_MAXRUNTIME	(4+EEPROM_ADDR_MTYPE_BITMASK)
-#define EEPROM_ADDR_RAIN				((4*MAX_MOTORS)+EEPROM_ADDR_MOTOR_MAXRUNTIME)
-#define EEPROM_ADDR_SENDSTATUS			(1+EEPROM_ADDR_RAIN)
-#define EEPROM_ADDR_ECHO				(1+EEPROM_ADDR_SENDSTATUS)
-#define EEPROM_ADDR_TERM				(1+EEPROM_ADDR_ECHO)
-#define EEPROM_ADDR_FREE				(1+EEPROM_ADDR_TERM)
+#define EEPROM_ADDR_DATAVERSION			(EEPROM_ADDR_CRC32				+sizeof(unsigned long) )
+#define EEPROM_ADDR_EEPROMDATA			(EEPROM_ADDR_DATAVERSION		+sizeof(byte) )
+
+#define EEPROM_ADDR_LED_BLINK_INTERVAL	(EEPROM_ADDR_DATAVERSION		+sizeof(byte) )
+#define EEPROM_ADDR_LED_BLINK_LEN		(EEPROM_ADDR_LED_BLINK_INTERVAL	+sizeof(eeprom.BlinkInterval) )
+#define EEPROM_ADDR_MTYPE_BITMASK		(EEPROM_ADDR_LED_BLINK_LEN		+sizeof(eeprom.BlinkLen) )
+#define EEPROM_ADDR_MOTOR_MAXRUNTIME	(EEPROM_ADDR_MTYPE_BITMASK		+sizeof(eeprom.MTypeBitmask) )
+#define EEPROM_ADDR_MOTOR_NAME			(EEPROM_ADDR_MOTOR_MAXRUNTIME	+sizeof(eeprom.MaxRuntime) )
+#define EEPROM_ADDR_RAIN				(EEPROM_ADDR_MOTOR_NAME			+sizeof(eeprom.MotorName) )
+#define EEPROM_ADDR_SENDSTATUS			(EEPROM_ADDR_RAIN				+sizeof(eeprom.Rain) )
+#define EEPROM_ADDR_ECHO				(EEPROM_ADDR_SENDSTATUS			+sizeof(eeprom.CmdSendStatus) )
+#define EEPROM_ADDR_TERM				(EEPROM_ADDR_ECHO				+sizeof(eeprom.CmdEcho) )
+#define EEPROM_ADDR_FREE				(EEPROM_ADDR_TERM				+sizeof(eeprom.CmdTerm) )
 
 // EEPROM Data Typen
 #define EEPROM_ALL						0xffff
@@ -123,10 +126,11 @@ typedef DWORD TIMER;
 #define EEPROM_LED_BLINK_LEN			(1<<1)
 #define EEPROM_MTYPE_BITMASK			(1<<2)
 #define EEPROM_MOTOR_MAXRUNTIME			(1<<3)
-#define EEPROM_RAIN						(1<<4)
-#define EEPROM_SENDSTATUS				(1<<5)
-#define EEPROM_ECHO						(1<<6)
-#define EEPROM_TERM						(1<<7)
+#define EEPROM_MOTOR_NAME				(1<<4)
+#define EEPROM_RAIN						(1<<5)
+#define EEPROM_SENDSTATUS				(1<<6)
+#define EEPROM_ECHO						(1<<7)
+#define EEPROM_TERM						(1<<8)
 
 
 #define DEFAULT_CMDSENDSTATUS		false

@@ -159,7 +159,7 @@ void SerialTimePrintf(const __FlashStringHelper *fmt, ... )
  * ===================================================================*/
 void sendStatus(const __FlashStringHelper *fmt, ... )
 {
-	if( eepromCmdSendStatus ) {
+	if( eeprom.CmdSendStatus ) {
 		char buf[MAX_PRINTF_BUFFER]; // resulting string limited to 128 chars
 
 		va_list args;
@@ -276,10 +276,10 @@ char getMotorDirection(byte motorNum)
 void setMotorType(byte motorNum, mtype mType)
 {
 	if( mType == WINDOW ) {
-		bitSet(eepromMTypeBitmask, motorNum);
+		bitSet(eeprom.MTypeBitmask, motorNum);
 	}
 	else {
-		bitClear(eepromMTypeBitmask, motorNum);
+		bitClear(eeprom.MTypeBitmask, motorNum);
 	}
 }
 
@@ -292,5 +292,5 @@ void setMotorType(byte motorNum, mtype mType)
  * ===================================================================*/
 mtype getMotorType(byte motorNum)
 {
-	return bitRead(eepromMTypeBitmask, motorNum) ? WINDOW : JALOUSIE;
+	return bitRead(eeprom.MTypeBitmask, motorNum) ? WINDOW : JALOUSIE;
 }

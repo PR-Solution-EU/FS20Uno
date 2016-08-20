@@ -158,7 +158,7 @@
 
 /* ===================================================================
  * TODO
- * SerialCmd: LOGIN  (using password function on WIZ110SR)
+ * - SerialCmd: LOGIN  (using password function on WIZ110SR)
  * ===================================================================*/
 
 #include <Arduino.h>
@@ -175,9 +175,9 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"
-#define VERSION "2.26"
+#define VERSION "2.28"
 #include "REVISION.h"
-#define DATAVERSION 110
+#define DATAVERSION 117
 
 
 // define next macros to output debug prints
@@ -186,6 +186,7 @@
 #undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
 #undef DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
+#undef DEBUG_OUTPUT_EEPROM_DETAILS		// enable EEPROM related outputs
 #undef DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
 #undef DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
 #undef DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
@@ -199,6 +200,7 @@
 	#undef DEBUG_OUTPUT_SETUP
 	#undef DEBUG_OUTPUT_WATCHDOG
 	#undef DEBUG_OUTPUT_EEPROM
+	#undef DEBUG_OUTPUT_EEPROM_DETAILS
 	#undef DEBUG_OUTPUT_SM8STATUS
 	#undef DEBUG_OUTPUT_WALLBUTTON
 	#undef DEBUG_OUTPUT_SM8OUTPUT
@@ -214,6 +216,11 @@
 	#define DBG_MPC 			11			// Debug PIN = D11
 	#define DBG_TIMER	 		10			// Debug PIN = D10
 #endif
+
+
+// Interrup soft enable flags
+volatile bool extISREnabled = false;
+volatile bool timerISREnabled = false;
 
 // loop() timer vars
 TIMER ledTimer = 0;
@@ -267,33 +274,19 @@ volatile char debWallButton[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 //   1: Motor sofort schalten
 //  >1: Motor Delay in (abs(Wert) - 1) * 10 ms
 volatile MOTOR_CTRL    MotorCtrl[MAX_MOTORS]	= {MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF};
+// Enthält Timeout Zähler. Wenn Zähler 0 wird, dann Motor Aus.
 volatile MOTOR_TIMEOUT MotorTimeout[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
+// Enthält die aktuelle Laufzeit jedes Motors
+// Wird beim Öffnen inkrementiert /(max <= MaxRuntime[]
+// und beim Schliessen dekrementiert (min >=0 )
 volatile MOTOR_TIMEOUT MotorRuntime[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
+
+volatile TIMER WallButtonTimer[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 
 // SM8 Tastensteuerung "gedrückt"-Zeit
 volatile SM8_TIMEOUT   SM8Timeout[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 volatile bool isrTrigger = false;
-
-// EEPROM Variablen
-MOTORBITS	eepromMTypeBitmask;
-DWORD 		eepromMaxRuntime[MAX_MOTORS];
-WORD 		eepromBlinkInterval;
-WORD 		eepromBlinkLen;
-
-// Speichert die beiden RAIN-Bits
-#define RAIN_BIT_AUTO	0
-#define RAIN_BIT_ENABLE	1
-volatile byte eepromRain;
-
-
-// Cmd interface echo
-volatile bool eepromCmdEcho;
-// Cmd interface terminator
-volatile char eepromCmdTerm;
-// Sende autom. Statusänderung
-volatile bool eepromCmdSendStatus;
-
 
 // Software Regendetection (wird nicht in EEPROM gespeichert)
 volatile bool softRainInput = false;
@@ -303,10 +296,24 @@ Bounce debEnable = Bounce();
 Bounce debInput = Bounce();
 volatile bool isRaining = false;
 
-
-// Interrup soft enable flags
-volatile bool extISREnabled = false;
-volatile bool timerISREnabled = false;
+// EEPROM Variablen
+#define RAIN_BIT_AUTO	0
+#define RAIN_BIT_ENABLE	1
+volatile struct EEPROM {
+	WORD 		BlinkInterval;
+	WORD 		BlinkLen;
+	MOTORBITS	MTypeBitmask;
+	DWORD 		MaxRuntime[MAX_MOTORS];
+	char 		MotorName[MAX_MOTORS][21];
+	// Speichert die beiden RAIN-Bits
+	byte 		Rain;
+	// Cmd interface echo
+	bool 		CmdEcho;
+	// Cmd interface terminator
+	char 		CmdTerm;
+	// Sende autom. Statusänderung
+	bool 		CmdSendStatus;
+} eeprom;
 
 
 /* ===================================================================
@@ -385,6 +392,9 @@ void setup()
 	expanderWriteBoth(MPC_SM8STATUS,   IOPOL, 0xFF);	// invert polarity of signal
 	expanderWriteBoth(MPC_WALLBUTTON,  IOPOL, 0xFF);	// invert polarity of signal
 
+	// interrupt on change to previous one
+	expanderWriteBoth(MPC_WALLBUTTON,  INTCON, 0x00);	// enable interrupts
+
 	// enable interrupts on input MPC
 	expanderWriteBoth(MPC_SM8STATUS,   GPINTEN, 0xFF);	// enable interrupts
 	expanderWriteBoth(MPC_WALLBUTTON,  GPINTEN, 0xFF);	// enable interrupts
@@ -407,7 +417,7 @@ void setup()
 	// Variableninitalisierung
 	// Annahme: Fenster sind geschlossen, Jalousien offen
 	for(int motor=0; motor<MAX_MOTORS; motor++) {
-		MotorRuntime[motor] = getMotorType(motor)==WINDOW ? 0 : (eepromMaxRuntime[motor]/TIMER_MS);
+		MotorRuntime[motor] = getMotorType(motor)==WINDOW ? 0 : (eeprom.MaxRuntime[motor]/TIMER_MS);
 	}
 
 	setupSerialCommand();
@@ -450,7 +460,7 @@ void setup()
 
 	// Variablen initalisieren
 	ledStatus = false;
-	ledTimer = millis() + eepromBlinkInterval;
+	ledTimer = millis() + eeprom.BlinkInterval;
 	runTimer = millis() + 500;
 
 	// Fertig signalisieren
@@ -505,7 +515,7 @@ void timerISR()
 			if ( debSM8Status[i] > 0 ) {
 				debSM8Status[i]--;
 			}
-			else if ( bitRead(curSM8Status, i) != bitRead(irqSM8Status, i) ) {
+			else {
 				bitWrite(curSM8Status, i, bitRead(irqSM8Status, i));
 			}
 
@@ -513,7 +523,7 @@ void timerISR()
 			if ( debWallButton[i] > 0 ) {
 				debWallButton[i]--;
 			}
-			else if ( bitRead(curWallButton, i) != bitRead(irqWallButton, i) ) {
+			else {
 				bitWrite(curWallButton, i, bitRead(irqWallButton, i));
 			}
 
@@ -534,7 +544,7 @@ void timerISR()
 				// Motor läuft, Richtung feststellen
 				if ( bitRead(regMotorRelais, i + MAX_MOTORS) ) {
 					// Motor läuft auf Öffnen
-					if ( MotorRuntime[i] < (eepromMaxRuntime[i] / TIMER_MS) ) {
+					if ( MotorRuntime[i] < (eeprom.MaxRuntime[i] / TIMER_MS) ) {
 						++MotorRuntime[i];
 					}
 				}
@@ -626,13 +636,22 @@ void handleMPCInt()
 
 	if ( expanderReadWord(MPC_WALLBUTTON, INFTF) )
 	{
+		static IOBITS tmpWallButton = IOBITS_ZERO;
 		#ifdef DEBUG_PINS
 		digitalWrite(DBG_MPC, HIGH);	// debugging
 		#endif
-		irqWallButton = expanderReadWord(MPC_WALLBUTTON, INTCAP);
+		// irqWallButton = expanderReadWord(MPC_WALLBUTTON, INTCAP);
+		irqWallButton = expanderReadWord(MPC_WALLBUTTON, GPIO);
+		#ifdef DEBUG_OUTPUT_WALLBUTTON
+		SerialTimePrintf(F("handleMPCInt    - IRQ - irqWallButton: 0x%04x\r\n"), irqWallButton);
+		#endif
 		for (i = 0; i < IOBITS_CNT; i++) {
-			if ( (curWallButton & (1 << i)) != (irqWallButton & (1 << i)) ) {
+			if ( bitRead(tmpWallButton,i) != bitRead(irqWallButton,i) ) {
+				#ifdef DEBUG_OUTPUT_WALLBUTTON
+				SerialTimePrintf(F("handleMPCInt    - IRQ - debounce key %d\r\n"), i);
+				#endif
 				debWallButton[i] = WPB_DEBOUNCE_TIME / TIMER_MS;
+				bitWrite(tmpWallButton, i, bitRead(irqWallButton,i));
 			}
 		}
 		#ifdef DEBUG_PINS
@@ -901,6 +920,10 @@ void ctrlWallButton(void)
 			 Pegel Öffnen und Schliessen = 0:
 				- Taster entriegeln
 		*/
+		#ifdef DEBUG_OUTPUT_WALLBUTTON
+		SerialTimePrintf(F("ctrlWallButton  - tmpWallButton: 0x%04x\r\n"), tmpWallButton);
+		SerialTimePrintf(F("ctrlWallButton  - curWallButton: 0x%04x\r\n"), curWallButton);
+		#endif
 		if ( prevWallButton != curWallButton ) {
 			byte i;
 
@@ -914,6 +937,31 @@ void ctrlWallButton(void)
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(WallButtonChange, i) ) {
 					sendStatus(F("04 PB %2d %s"), i+1, bitRead(curWallButton,i)?"ON":"OFF");
+					if ( bitRead(curWallButton,i) ) {
+						WallButtonTimer[i % MAX_MOTORS] = millis();
+					}
+					else {
+						TIMER dt = 0;
+						TIMER maxTime = 0;
+						if ( millis() > WallButtonTimer[i % MAX_MOTORS] ) {
+							dt  = millis() - WallButtonTimer[i % MAX_MOTORS];
+							// Aufrunden
+							maxTime =  dt + (TIMER_MS / 2);
+							maxTime /= TIMER_MS;
+							maxTime *= TIMER_MS;
+						}
+						#ifdef DEBUG_OUTPUT_WALLBUTTON
+						SerialTimePrintf(F("ctrlWallButton  - motor %d: delta_t=%ld ms\r\n"), i % MAX_MOTORS, dt);
+						#endif
+						if( maxTime > 10000 ) {
+							#ifdef DEBUG_OUTPUT_WALLBUTTON
+							SerialTimePrintf(F("ctrlWallButton  - Setting new timeout for motor %d: %ld ms\r\n"), i % MAX_MOTORS, maxTime);
+							#endif
+							sendStatus(F("01 M%i TIMEOUT=%ld"), (i % MAX_MOTORS)+1, maxTime);
+							eeprom.MaxRuntime[i % MAX_MOTORS] = maxTime;
+							eepromWriteVars(EEPROM_MOTOR_MAXRUNTIME);
+						}
+					}
 				}
 				watchdogReset();
 			}
@@ -925,6 +973,7 @@ void ctrlWallButton(void)
 				else if ( bitRead(WallButtonChange, i + MAX_MOTORS) != 0 && bitRead(WallButtonSlope, i + MAX_MOTORS) != 0 ) {
 					setMotorDirection(i, MOTOR_CLOSE);
 				}
+
 				// Pegel Öffnen und Schliessen = 1:
 				if ( bitRead(WallButton, i) != 0 && bitRead(WallButton, i + MAX_MOTORS) != 0 ) {
 					setMotorDirection(i, MOTOR_OFF);
@@ -940,12 +989,12 @@ void ctrlWallButton(void)
 			}
 
 			#ifdef DEBUG_OUTPUT_WALLBUTTON
-			SerialTimePrintf(F("ctrlWallButton  - ----------------------------------------\r\n"));
-			SerialTimePrintf(F("ctrlWallButton  - prevWallButton:   0x%04x\r\n"), prevWallButton);
-			SerialTimePrintf(F("ctrlWallButton  - WallButton:       0x%04x\r\n"), WallButton);
-			SerialTimePrintf(F("ctrlWallButton  - WallButtonSlope:  0x%04x\r\n"), WallButtonSlope);
-			SerialTimePrintf(F("ctrlWallButton  - WallButtonChange: 0x%04x\r\n"), WallButtonChange);
-			SerialTimePrintf(F("ctrlWallButton  - WallButtonLocked: 0x%04x\r\n"), WallButtonLocked);
+			//~ SerialTimePrintf(F("ctrlWallButton  - ----------------------------------------\r\n"));
+			//~ SerialTimePrintf(F("ctrlWallButton  - prevWallButton:   0x%04x\r\n"), prevWallButton);
+			//~ SerialTimePrintf(F("ctrlWallButton  - WallButton:       0x%04x\r\n"), WallButton);
+			//~ SerialTimePrintf(F("ctrlWallButton  - WallButtonSlope:  0x%04x\r\n"), WallButtonSlope);
+			//~ SerialTimePrintf(F("ctrlWallButton  - WallButtonChange: 0x%04x\r\n"), WallButtonChange);
+			//~ SerialTimePrintf(F("ctrlWallButton  - WallButtonLocked: 0x%04x\r\n"), WallButtonLocked);
 			#endif
 
 			prevWallButton = curWallButton;
@@ -1189,9 +1238,9 @@ void ctrlMotorRelais(void)
 						 || ( bitRead(outMotorRelais, i) &&
 							  bitRead(tmpOutMotorRelais, i+MAX_MOTORS)!=bitRead(outMotorRelais, i+MAX_MOTORS) ) ) {
 						#ifdef DEBUG_OUTPUT_MOTOR
-						SerialTimePrintf(F("ctrlMotorRelais -     Set motor %d timeout to %d.%-d s\r\n"), i+1, eepromMaxRuntime[i] / 1000, eepromMaxRuntime[i] % 1000);
+						SerialTimePrintf(F("ctrlMotorRelais -     Set motor %d timeout to %d.%-d s\r\n"), i+1, eeprom.MaxRuntime[i] / 1000, eeprom.MaxRuntime[i] % 1000);
 						#endif
-						MotorTimeout[i] = eepromMaxRuntime[i] / TIMER_MS;
+						MotorTimeout[i] = eeprom.MaxRuntime[i] / TIMER_MS;
 					}
 					// SM8 Ausgang für "Öffnen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Schliessen"
 					if ( bitRead(curSM8Status, i)
@@ -1241,7 +1290,7 @@ void ctrlRainSensor(void)
 	bool sensRainEnable;
 	static bool prevRainInput = false;
 	static bool prevRainEnable = false;
-	static bool prevRainEnableInput = false;
+	static bool prevRainEnableInput = true;
 	const char *strMode;
 
 	// Eingänge entprellen
@@ -1254,26 +1303,30 @@ void ctrlRainSensor(void)
 
 	// AUTO Modus aktivieren, wenn Enable-Eingang sich ändert
 	if( sensRainEnable != prevRainEnableInput ) {
-		bitSet(eepromRain, RAIN_BIT_AUTO);
+		#ifdef DEBUG_OUTPUT_RAIN
+		SerialTimePrintf(F("ctrlRainSensor  - sensRainEnable      = %d\r\n"), sensRainEnable);
+		SerialTimePrintf(F("ctrlRainSensor  - prevRainEnableInput = %d\r\n"), prevRainEnableInput);
+		#endif
+		bitSet(eeprom.Rain, RAIN_BIT_AUTO);
 		eepromWriteVars(EEPROM_RAIN);
 		prevRainEnableInput = sensRainEnable;
 	}
 
 	// Regensensor Enable/Disable abhängig vom Modus lesen
-	if ( bitRead(eepromRain, RAIN_BIT_AUTO) ) {
+	if ( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
 		// AUTO Modus aktiv, Enable/Disable vom Eingangssignal lesen
 		RainEnable = sensRainEnable;
 	}
 	else {
 		// Modus manuell, Enable/Disable vom Softwarestatus lesen
-		RainEnable = bitRead(eepromRain, RAIN_BIT_ENABLE);
+		RainEnable = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
 	}
 	
 	// Regensensor ist aktiv, wenn Eingang aktiv oder Softeinstellung aktiv
 	RainInput  = (sensRainInput || softRainInput);
 
 
-	strMode = bitRead(eepromRain, RAIN_BIT_AUTO)!=0?"AUTO":"MANUAL";
+	strMode = bitRead(eeprom.Rain, RAIN_BIT_AUTO)!=0?"AUTO":"MANUAL";
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable ) {
 		#ifdef DEBUG_OUTPUT_RAIN
 		SerialTimePrintf(F("ctrlRainSensor  - ----------------------------------------\r\n"));
@@ -1377,12 +1430,12 @@ void blinkLED(void)
 {
 	if ( (long)( millis() - ledTimer) >= 0 ) {
 		if ( !ledStatus ) {
-			ledTimer += eepromBlinkLen;
+			ledTimer += eeprom.BlinkLen;
 			ledStatus = true;
 			digitalWrite(STATUS_LED, isRaining?LOW:HIGH);
 		}
 		else {
-			ledTimer += eepromBlinkInterval;
+			ledTimer += eeprom.BlinkInterval;
 			ledStatus = false;
 			digitalWrite(STATUS_LED, isRaining?HIGH:LOW);
 		}
