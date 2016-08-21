@@ -3,23 +3,24 @@
  * Zeiten in ms müssen Vielfache von 10 sein
  * ===================================================================*/
 // MCP23017 Adressen
-#define MPC1    			0x0	// MCP23017 #1 I2C Adresse
-#define MPC2    			0x1	// MCP23017 #2 I2C Adresse
-#define MPC3				0x2	// MCP23017 #3 I2C Adresse
-#define MPC4    			0x3	// MCP23017 #4 I2C Adresse
-// MPC device naming
-#define MPC_MOTORRELAIS		MPC1
-#define MPC_SM8BUTTON		MPC2
-#define MPC_SM8STATUS		MPC3
-#define MPC_WALLBUTTON		MPC4
+#define MPC1    			0x0		// MCP23017 #1 I2C Adresse
+#define MPC2    			0x1		// MCP23017 #2 I2C Adresse
+#define MPC3				0x2		// MCP23017 #3 I2C Adresse
+#define MPC4    			0x3		// MCP23017 #4 I2C Adresse
 
-#define MPC_INT_INPUT 		3	// MPC Interrupteingang
+// MPC Funktionsnamen
+#define MPC_MOTORRELAIS		MPC1	// MPC für Motorrelais
+#define MPC_SM8BUTTON		MPC2	// MPC für FS20-SM8 Tasten
+#define MPC_SM8STATUS		MPC3	// MPC für FS20-SM8 Ausgänge
+#define MPC_WALLBUTTON		MPC4	// MPC für Wandtaster
+
+#define MPC_INT_INPUT 		3		// Arduino Port für MPC Interrupteingang
 #define STATUS_LED 			LED_BUILTIN	// LED
 
-#define RAIN_INPUT 			4	// Input Signal für Regensensor
+#define RAIN_INPUT 			4		// Arduino Port für Regensensor
 #define RAIN_INPUT_AKTIV	0
 
-#define RAIN_ENABLE			9	// Input Signal für Regensensor aktiv
+#define RAIN_ENABLE			9		// Arduino Port für Aktivitätsschalter
 #define RAIN_ENABLE_AKTIV	1
 
 
@@ -37,7 +38,7 @@
 #define MOTOR_OFF			0
 
 
-// Serial
+// Serielles Interface Baudrate
 #define SERIAL_BAUDRATE				115200
 
 // Anzahl der Motoren
@@ -85,8 +86,8 @@
 // Bitmask für Fenster Motoren (DFF=1, Jalousien=0)
 enum mtype
 {
-   JALOUSIE = 0,
-   WINDOW = 1
+	JALOUSIE = 0,
+	WINDOW = 1
 } MTYPE;
 #define MTYPE_BITMASK				0b01010101
 
@@ -100,25 +101,14 @@ enum mtype
 /* ===================================================================
  * Type & Constant Definition
  * ===================================================================*/
-typedef unsigned int  WORD;
-typedef unsigned long DWORD;
-typedef DWORD TIMER;
+typedef unsigned int  	WORD;
+typedef unsigned long 	DWORD;
+typedef unsigned long	TIMER;
 
 // EEPROM Data Adressen
 #define EEPROM_ADDR_CRC32				0
 #define EEPROM_ADDR_DATAVERSION			(EEPROM_ADDR_CRC32				+sizeof(unsigned long) )
 #define EEPROM_ADDR_EEPROMDATA			(EEPROM_ADDR_DATAVERSION		+sizeof(byte) )
-
-#define EEPROM_ADDR_LED_BLINK_INTERVAL	(EEPROM_ADDR_DATAVERSION		+sizeof(byte) )
-#define EEPROM_ADDR_LED_BLINK_LEN		(EEPROM_ADDR_LED_BLINK_INTERVAL	+sizeof(eeprom.BlinkInterval) )
-#define EEPROM_ADDR_MTYPE_BITMASK		(EEPROM_ADDR_LED_BLINK_LEN		+sizeof(eeprom.BlinkLen) )
-#define EEPROM_ADDR_MOTOR_MAXRUNTIME	(EEPROM_ADDR_MTYPE_BITMASK		+sizeof(eeprom.MTypeBitmask) )
-#define EEPROM_ADDR_MOTOR_NAME			(EEPROM_ADDR_MOTOR_MAXRUNTIME	+sizeof(eeprom.MaxRuntime) )
-#define EEPROM_ADDR_RAIN				(EEPROM_ADDR_MOTOR_NAME			+sizeof(eeprom.MotorName) )
-#define EEPROM_ADDR_SENDSTATUS			(EEPROM_ADDR_RAIN				+sizeof(eeprom.Rain) )
-#define EEPROM_ADDR_ECHO				(EEPROM_ADDR_SENDSTATUS			+sizeof(eeprom.CmdSendStatus) )
-#define EEPROM_ADDR_TERM				(EEPROM_ADDR_ECHO				+sizeof(eeprom.CmdEcho) )
-#define EEPROM_ADDR_FREE				(EEPROM_ADDR_TERM				+sizeof(eeprom.CmdTerm) )
 
 // EEPROM Data Typen
 #define EEPROM_ALL						0xffff
@@ -132,6 +122,9 @@ typedef DWORD TIMER;
 #define EEPROM_ECHO						(1<<7)
 #define EEPROM_TERM						(1<<8)
 
+/* Fenster Position Wiederherstellungsverzögerung
+ * falls RAIN RESUME aktiv */
+#define DEFAULT_RAINRESUMETIME		30
 
 #define DEFAULT_CMDSENDSTATUS		false
 #define DEFAULT_CMDECHO				false
@@ -163,22 +156,28 @@ typedef DWORD TIMER;
 	#assert Too many motor devices (MAX_MOTORS > 16)
 #endif
 
+
 #define IOBITS_CNT	(MAX_MOTORS * 2)
 
 typedef char MOTOR_CTRL;
-#if   (MOTOR_MAXRUNTIME/TIMER_MS)<=255
+
+#if   (MOTOR_MAXRUNTIME/TIMER_MS)<=UINT8_MAX
+	#define MAX_MOTOR_TIMEOUT UINT8_MAX
 	typedef byte MOTOR_TIMEOUT;
-#elif (MOTOR_MAXRUNTIME/TIMER_MS)<=65535
+#elif (MOTOR_MAXRUNTIME/TIMER_MS)<=UINT16_MAX
+	#define MAX_MOTOR_TIMEOUT UINT16_MAX
 	typedef WORD MOTOR_TIMEOUT;
 #else
+	#define MAX_MOTOR_TIMEOUT UINT32_MAX;
 	typedef DWORD MOTOR_TIMEOUT;
 #endif
 
-
-#if   (FS20_SM8_IN_RESPONSE/TIMER_MS)<=255
+#if   (FS20_SM8_IN_RESPONSE/TIMER_MS)<=UINT8_MAX
 	typedef byte SM8_TIMEOUT;
-#elif (FS20_SM8_IN_RESPONSE/TIMER_MS)<=65535
+#elif (FS20_SM8_IN_RESPONSE/TIMER_MS)<=UINT16_MAX
 	typedef WORD SM8_TIMEOUT;
 #else
 	typedef DWORD SM8_TIMEOUT;
 #endif
+
+#define NO_MOTOR_POSITION MAX_MOTOR_TIMEOUT

@@ -11,7 +11,7 @@
  * Function:	eepromCalcCRC
  * Return:
  * Arguments:
- * Description: Berechnet CRC32 Summe über alle Daten
+ * Description: Berechnet CRC32 Summe über alle EEPROM Daten
  *              (exklusive der gespeicherten CRC32 Summe selbst)
  * ===================================================================*/
 const PROGMEM unsigned long ccrc_table[16] = {
@@ -23,66 +23,55 @@ const PROGMEM unsigned long ccrc_table[16] = {
 unsigned long eepromCalcCRC(void)
 {
 	unsigned long crc  = ~0L;
+	unsigned int k;
+	byte data;
 
+	DEBUG_RUNTIME_START(mseepromCalcCRC);
 	for (unsigned int index = 0 ; index < EEPROM.length()  ; ++index) {
 		if ( index<EEPROM_ADDR_CRC32 || index>=(EEPROM_ADDR_CRC32+4)) {
-			unsigned int k;
-			k = ((crc ^ EEPROM[index]) & 0x0f);
+			data = EEPROM.read(index);
+			k = ((crc ^ data) & 0x0f);
 			crc = (unsigned long)pgm_read_dword_near( ccrc_table + k ) ^ (crc >> 4);
-			k = ((crc ^ (EEPROM[index] >> 4)) & 0x0f);
+			k = ((crc ^ (data >> 4)) & 0x0f);
 			crc = (unsigned long)pgm_read_dword_near( ccrc_table + k ) ^ (crc >> 4);
 			crc = ~crc;
 		}
+		watchdogReset();
 	}
+	DEBUG_RUNTIME_END("eepromCalcCRC()",mseepromCalcCRC);
 	#ifdef DEBUG_OUTPUT_EEPROM
 	SerialTimePrintf(F("EEPROM - eepromCalcCRC() returns 0x%08lx\r\n"), crc);
 	#endif
 	return crc;
 }
 
-
 /* ===================================================================
- * Function:	eepromReadArray
- * Return:		
- * Arguments:   EEPROM Adresse
- *              Adresse auf das Array
- *              Größe des Array in Byte
- * Description: Liest n Byte aus dem EEPROM in ein Array
- * ===================================================================*/
-void eepromReadArray(int address, byte *array, size_t size)
-{
-	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM - eepromReadArray(0x%04x, %p, %d)\r\n"), address, array, size);
-	#endif
-	for(size_t i=0; i<size; i++) {
-		*array = EEPROM[address];
-		#ifdef DEBUG_OUTPUT_EEPROM_DETAILS
-		SerialTimePrintf(F("           EEPROM[0x%04x] returns 0x%02x [%d]\r\n"), address, *array, *array);
-		#endif
-		array++;
-		address++;
-	}
-}
-
-/* ===================================================================
- * Function:	eepromWriteArray
+ * Function:	CalcCRC
  * Return:
- * Arguments:   EEPROM Adresse
- *              Adresse auf das Array
- *              Größe des Array in Byte
- * Description: Schreibt n Byte aus einem Array in das EEPROM
+ * Arguments:	addr - Startadresse des Bereichs
+ * 				size - Größe des Bereichs in Byte
+ * Description: Berechnet CRC32 Summe über alle RAM Daten
  * ===================================================================*/
-void eepromWriteArray(int address, byte *array, size_t size)
+unsigned long CalcCRC(byte *addr, size_t size)
 {
-	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM - eepromWriteArray(0x%04x, %p, %d)\r\n"), address, array, size);
-	#endif
-	for(size_t i=0; i<size; i++) {
-		#ifdef DEBUG_OUTPUT_EEPROM_DETAILS
-		SerialTimePrintf(F("           EEPROM.update(0x%04x, 0x%02x [%d])\r\n"), address, *array, *array);
-		#endif
-		EEPROM.update(address++, *array++);
+	unsigned long crc  = ~0L;
+	unsigned int k;
+	byte data;
+
+	DEBUG_RUNTIME_START(msCalcCRC);
+	for (size_t index = 0 ; index < size; ++index) {
+		data = *(addr+index);
+		k = ((crc ^ data) & 0x0f);
+		crc = (unsigned long)pgm_read_dword_near( ccrc_table + k ) ^ (crc >> 4);
+		k = ((crc ^ (data >> 4)) & 0x0f);
+		crc = (unsigned long)pgm_read_dword_near( ccrc_table + k ) ^ (crc >> 4);
+		crc = ~crc;
 	}
+	DEBUG_RUNTIME_END("CalcCRC()",msCalcCRC);
+	#ifdef DEBUG_OUTPUT_EEPROM
+	SerialTimePrintf(F("EEPROM - CalcCRC(%p, %ld) returns 0x%08lx\r\n"), addr, (unsigned long)size, crc);
+	#endif
+	return crc;
 }
 
 
@@ -106,14 +95,13 @@ void eepromInitVars()
 
 	// Write data version into EEPROM before checking CRC32
 	byte dataversion = DATAVERSION;
-	eepromWriteArray(EEPROM_ADDR_DATAVERSION, (byte *)&dataversion, sizeof(dataversion));
+	EEPROM.put(EEPROM_ADDR_DATAVERSION, dataversion);
 
+	// Vergleiche kalkulierte CRC32 mit gespeicherter CRC32
 	dataCRC = eepromCalcCRC();
-	eepromReadArray(EEPROM_ADDR_CRC32, (byte *)&eepromCRC, sizeof(eepromCRC));
+	EEPROM.get(EEPROM_ADDR_CRC32, eepromCRC);
 
 	#ifdef DEBUG_OUTPUT_EEPROM
-	//Print length of data to run CRC on.
-	SerialTimePrintf(F("EEPROM - length: %d\r\n"), EEPROM.length());
 	//Print the result of calling eepromCRC()
 	SerialTimePrintf(F("EEPROM - values CRC32: 0x%08lx\r\n"), dataCRC);
 	SerialTimePrintf(F("EEPROM - stored CRC32: 0x%08lx\r\n"), eepromCRC);
@@ -130,26 +118,32 @@ void eepromInitVars()
 		for(i=0; i<MAX_MOTORS; i++) {
 			eeprom.MaxRuntime[i] = bitRead(MTYPE_BITMASK,i)!=0?MOTOR_WINDOW_MAXRUNTIME:MOTOR_JALOUSIE_MAXRUNTIME;
 			sprintf_P((char *)eeprom.MotorName[i], PSTR("MOTOR %02d"), i);
+			// Annahme: Fenster sind geschlossen, Jalousien offen
+			eeprom.MotorPosition[i] = getMotorType(i)==WINDOW ? 0 : (eeprom.MaxRuntime[i]/TIMER_MS);
 		}
 		bitSet(eeprom.Rain, RAIN_BIT_AUTO);
 		bitClear(eeprom.Rain, RAIN_BIT_ENABLE);
+		eeprom.RainResumeTime = DEFAULT_RAINRESUMETIME;
 		eeprom.CmdSendStatus = DEFAULT_CMDSENDSTATUS;
 		eeprom.CmdEcho = DEFAULT_CMDECHO;
 		eeprom.CmdTerm = DEFAULT_CMDTERM;
 
-		eepromWriteVars(EEPROM_ALL);
+		eepromWriteVars();
+
 	}
 	#ifdef DEBUG_OUTPUT_EEPROM
 	else {
 		SerialTimePrintf(F("EEPROM - CRC232 is valid\r\n"));
 	}
 	#endif
+
 	#ifdef DEBUG_OUTPUT_EEPROM
 	SerialTimePrintf(F("EEPROM - read defaults...\r\n"));
 	#endif
-
-	eepromReadVars();
-
+	DEBUG_RUNTIME_START(mseepromReadDefaults);
+	EEPROM.get(EEPROM_ADDR_EEPROMDATA, eeprom);
+	DEBUG_RUNTIME_END("eepromInitVars() read defaults",mseepromReadDefaults);
+	
 	#ifdef DEBUG_OUTPUT_EEPROM
 	SerialTimePrintf(F("EEPROM - values:\r\n"));
 	SerialTimePrintf(F("EEPROM -   eeprom.BlinkInterval: %d\r\n"),     eeprom.BlinkInterval);
@@ -165,7 +159,13 @@ void eepromInitVars()
 		SerialPrintf(F("%s%s"), i?",":"", (char *)eeprom.MotorName[i]);
 	}
 	SerialPrintf(F("\r\n"));
+	SerialTimePrintf(F("EEPROM -   eeprom.MotorPosition: "));
+	for(i=0; i<MAX_MOTORS; i++) {
+		SerialPrintf(F("%s%d"), i?",":"", eeprom.MotorPosition[i]);
+	}
+	SerialPrintf(F("\r\n"));
 	SerialTimePrintf(F("EEPROM -   eeprom.Rain:          0x%02x\r\n"), eeprom.Rain);
+	SerialTimePrintf(F("EEPROM -   eeprom.RainResumeTime:%d\r\n"), eeprom.RainResumeTime);
 	SerialTimePrintf(F("EEPROM -   eeprom.CmdSendStatus: %s\r\n"), eeprom.CmdSendStatus?"yes":"no");
 	SerialTimePrintf(F("EEPROM -   eeprom.CmdEcho:       %s\r\n"), eeprom.CmdEcho?"yes":"no");
 	SerialTimePrintf(F("EEPROM -   eeprom.CmdTerm:       %s\r\n"), eeprom.CmdTerm=='\r'?"CR":"LF");
@@ -174,32 +174,43 @@ void eepromInitVars()
 
 
 /* ===================================================================
- * Function:	eepromWriteVars
+ * Function:    eepromWriteVars()
  * Return:
  * Arguments:
- * Description: Schreibe alle EEPROM Programmvariablen in EEPROM
+ * Description: Schreibt ggf. geänderte EEPROM Daten ins EEPROM
  * ===================================================================*/
-void eepromWriteVars(WORD varType)
+void eepromWriteVars(void)
 {
+	static unsigned long prevEEPROMDataCRC32 = 0;
+	unsigned long curEEPROMDataCRC32 = 0;
+	unsigned long eepromCRC;
+	
+	DEBUG_RUNTIME_START(mseepromWriteVars);
+	curEEPROMDataCRC32 = CalcCRC((byte *)&eeprom, sizeof(eeprom));
+	DEBUG_RUNTIME_END("eepromWriteVars()", mseepromWriteVars);
+
+	EEPROM.get(EEPROM_ADDR_CRC32, eepromCRC);
+
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM - eepromWriteVars()\r\n"));
+	SerialTimePrintf(F("EEPROM - prevEEPROMDataCRC32: 0x%08lx\r\n"), prevEEPROMDataCRC32);
+	SerialTimePrintf(F("EEPROM - curEEPROMDataCRC32:  0x%08lx\r\n"), curEEPROMDataCRC32);
+	SerialTimePrintf(F("EEPROM - eepromCRC:           0x%08lx\r\n"), eepromCRC);
 	#endif
 
-	eepromWriteArray(EEPROM_ADDR_EEPROMDATA, (byte *)&eeprom, sizeof(eeprom));
-	unsigned long eepromCRC = eepromCalcCRC();
-	eepromWriteArray(EEPROM_ADDR_CRC32, (byte *)&eepromCRC, sizeof(eepromCRC));
-}
+	if( curEEPROMDataCRC32 != prevEEPROMDataCRC32 ) {
+		#ifdef DEBUG_OUTPUT_EEPROM
+		SerialTimePrintf(F("EEPROM - Data changed, write EEPROM data\r\n"));
+		#endif
+		// Write new EEPROM data
+		EEPROM.put(EEPROM_ADDR_EEPROMDATA, eeprom);
 
-/* ===================================================================
- * Function:	eepromReadVars
- * Return:
- * Arguments:
- * Description: Lese alle EEPROM Programmvariablen aus EEPROM
- * ===================================================================*/
-void eepromReadVars()
-{
-	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM - eepromReadVars()\r\n"));
-	#endif
-	eepromReadArray(EEPROM_ADDR_EEPROMDATA, (byte *)&eeprom, sizeof(eeprom));
+		// Wire new CRC
+		eepromCRC = eepromCalcCRC();
+		EEPROM.put(EEPROM_ADDR_CRC32, eepromCRC);
+		#ifdef DEBUG_OUTPUT_EEPROM
+		SerialTimePrintf(F("EEPROM - eepromCRC:           0x%08lx\r\n"), eepromCRC);
+		#endif
+
+		prevEEPROMDataCRC32 = curEEPROMDataCRC32;
+	}
 }

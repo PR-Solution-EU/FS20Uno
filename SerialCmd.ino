@@ -112,18 +112,19 @@ void cmdHelp()
 	}
 	else if ( strnicmp(arg, F("MOTOR"),5)==0 ) {
 		Serial.print(F(
-			"MOTOR [<m> [<cmd>]]\r\n"
+			"MOTOR [<m> [<cmd> [<param>]]\r\n"
 			"  Set/Get motor status\r\n"
 			"     <m>      Motor number [1..m]\r\n"
 			"     <cmd>    can be\r\n"
-			"              OPEN   - motor in OPEN direction\r\n"
-			"              CLOSE  - motor in CLOSE direction\r\n"
-			"              TOPEN  - toogle OPEN direction\r\n"
-			"              TCLOSE - toogle CLOSE direction\r\n"
-			"              TOOGLE - toogle direction\r\n"
-			"              OFF    - stop motor\r\n"
-			"              SYNC   - set motor in a default defined state\r\n"
-			"              STATUS - return the current status\r\n"
+			"         OPEN      Motor in OPEN direction\r\n"
+			"         CLOSE     Motor in CLOSE direction\r\n"
+			"         TOPEN     Toogle OPEN direction\r\n"
+			"         TCLOSE    Toogle CLOSE direction\r\n"
+			"         TOOGLE    Toogle direction\r\n"
+			"         GOTO <p>  Goto position <p> (in %, 0-100)\r\n"
+			"         OFF       Stop motor\r\n"
+			"         SYNC      Set motor in a default defined state\r\n"
+			"         STATUS    Return the current status\r\n"
 			));
 	}
 	else if ( strnicmp(arg, F("MOTORNA"),7)==0 ) {
@@ -155,11 +156,15 @@ void cmdHelp()
 			"RAIN, RAINSENSOR [<cmd>]\r\n"
 			"  Set/Get rain sensor\r\n"
 			"     <cmd>    can be\r\n"
-			"       AUTO     Rain detection and detection enabled from input signals\r\n"
-			"       ENABLE   Enable rain detection, disables AUTO\r\n"
-			"       DISABLE  disable rain detection, disables AUTO\r\n"
-			"       ON       Raining, disables AUTO\r\n"
-			"       OFF      No raining, disables AUTO\r\n"
+			"       AUTO        Rain detection and detection enabled from input signals\r\n"
+			"       ENABLE      Enable rain detection, disables AUTO\r\n"
+			"       DISABLE     Disable rain detection, disables AUTO\r\n"
+			"       ON          Raining, disables AUTO\r\n"
+			"       OFF         No raining, disables AUTO\r\n"
+			"       RESUME <s>  Resume window position after rain was gone\r\n"
+			"                   <s> is the delay in sec after rain was gone before resume starr\r\n"
+			"                   and before resume starts.\r\n"
+			"       FORGET      Do not remember window position, keep it close\r\n"
 			));
 	}
 	else if ( strnicmp(arg, F("PU"),2)==0 ) {
@@ -213,13 +218,13 @@ void cmdEcho(void)
 	else if ( strnicmp(arg, F("ON"),2)==0 ) {
 		eeprom.CmdEcho = true;
 		SCmd.setEcho(eeprom.CmdEcho);
-		eepromWriteVars(EEPROM_ECHO);
+		eepromWriteVars();
 		cmdOK();
 	}
 	else if ( strnicmp(arg, F("OF"),2)==0 ) {
 		eeprom.CmdEcho = false;
 		SCmd.setEcho(eeprom.CmdEcho);
-		eepromWriteVars(EEPROM_ECHO);
+		eepromWriteVars();
 		cmdOK();
 	}
 	else {
@@ -243,13 +248,13 @@ void cmdTerm(void)
 	else if ( strnicmp(arg, F("CR"),2)==0 ) {
 		eeprom.CmdTerm = '\r';
 		SCmd.setTerm(eeprom.CmdTerm);
-		eepromWriteVars(EEPROM_TERM);
+		eepromWriteVars();
 		cmdOK();
 	}
 	else if ( strnicmp(arg, F("OF"),2)==0 ) {
 		eeprom.CmdTerm = '\n';
 		SCmd.setTerm(eeprom.CmdTerm);
-		eepromWriteVars(EEPROM_TERM);
+		eepromWriteVars();
 		cmdOK();
 	}
 	else {
@@ -397,18 +402,19 @@ void cmdWallButton()
 
 void cmdMotor()
 {
-//~ "MOTOR [<m> [<cmd>]]\r\n"
+//~ "MOTOR [<m> [<cmd> [<param>]]\r\n"
 //~ "  Set/Get motor status\r\n"
 //~ "     <m>      Motor number [1..m]\r\n"
 //~ "     <cmd>    can be\r\n"
-//~ "              OPEN   - motor in OPEN direction\r\n"
-//~ "              CLOSE  - motor in CLOSE direction\r\n"
-//~ "              TOPEN  - toogle OPEN direction\r\n"
-//~ "              TCLOSE - toogle CLOSE direction\r\n"
-//~ "              TOOGLE - toogle direction\r\n"
-//~ "              OFF    - stop motor\r\n"
-//~ "              SYNC   - set motor into a default state\r\n"
-//~ "              STATUS - return the current status\r\n"
+//~ "              OPEN     - motor in OPEN direction\r\n"
+//~ "              CLOSE    - motor in CLOSE direction\r\n"
+//~ "              TOPEN    - toogle OPEN direction\r\n"
+//~ "              TCLOSE   - toogle CLOSE direction\r\n"
+//~ "              TOOGLE   - toogle direction\r\n"
+//~ "              GOTO <p> - goto <p> percent\r\n"
+//~ "              OFF      - stop motor\r\n"
+//~ "              SYNC     - set motor in a default defined state\r\n"
+//~ "              STATUS   - return the current status\r\n"
 	int motor;
 	char *arg;
 
@@ -444,6 +450,18 @@ void cmdMotor()
 						setMotorDirection(motor, MOTOR_OFF);
 					}
 					cmdOK();
+				}
+				else if ( strnicmp(arg, F("GO"),2)==0 ) {
+					arg = SCmd.next();
+					int percent=atoi(arg);
+
+					if ( percent<0 || percent>100 ) {
+						cmdError(F("Parameter out of range (0-100)"));
+					}
+					else {
+						setMotorPosition(motor, (MOTOR_TIMEOUT)((long)(eeprom.MaxRuntime[motor] / TIMER_MS) * (long)percent / 100L));
+						cmdOK();
+					}
 				}
 				else if ( strnicmp(arg, F("TOP"),3)==0 ) {
 					if( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)<=MOTOR_CLOSE ) {
@@ -497,19 +515,14 @@ void cmdMotor()
 }
 void cmdMotorPrintStatus(int motor)
 {
-	byte runTimePercent = (byte)((long)MotorRuntime[motor]*100L / (long)(eeprom.MaxRuntime[motor] / TIMER_MS));
+	byte runTimePercent = (byte)((long)MotorPosition[motor]*100L / (long)(eeprom.MaxRuntime[motor] / TIMER_MS));
 	
-	if( runTimePercent<1 && MotorRuntime[motor]>0 ) {
+	if( runTimePercent<1 && MotorPosition[motor]>0 ) {
 		runTimePercent=1;
 	}
 	if( runTimePercent>100 ) {
 		runTimePercent=100;
 	}
-	//~ SerialPrintf(F("M%02d %-7s  %6d = %3d%%\r\n")
-				//~ ,motor+1
-				//~ ,getMotorDirection(motor)==MOTOR_OFF?"OFF":(getMotorDirection(motor)>=MOTOR_OPEN)?"OPENING":"CLOSING"
-				//~ ,MotorRuntime[motor]*TIMER_MS
-				//~ ,runTimePercent);
 	SerialPrintf(F("M%02d %-7s %3d%% %-7s (%s)\r\n")
 				,motor+1
 				,runTimePercent==0?"CLOSE":(runTimePercent==100?"OPEN":"BETWEEN")
@@ -558,7 +571,7 @@ void cmdRuntime()
 				}
 				else {
 					eeprom.MaxRuntime[motor] = (DWORD)(runtime*1000.0);
-					eepromWriteVars(EEPROM_MOTOR_MAXRUNTIME);
+					eepromWriteVars();
 					cmdRuntimePrintStatus(motor);
 					cmdOK();
 				}
@@ -608,7 +621,7 @@ void cmdName()
 				#endif
 				strncpy((char *)&eeprom.MotorName[motor], arg, sizeof(eeprom.MotorName[motor])-1);
 				eeprom.MotorName[motor][sizeof(eeprom.MotorName[motor])-1]='\0';
-				eepromWriteVars(EEPROM_MOTOR_NAME);
+				eepromWriteVars();
 				cmdOK();
 			}
 			else {
@@ -651,12 +664,12 @@ void cmdType()
 			if (arg != NULL) {
 				if      ( strnicmp(arg, F("WIN"),3)==0 ) {
 					setMotorType(motor, WINDOW);
-					eepromWriteVars(EEPROM_MTYPE_BITMASK);
+					eepromWriteVars();
 					cmdOK();
 				}
 				else if ( strnicmp(arg, F("JAL"),3)==0 ) {
 					setMotorType(motor, JALOUSIE);
-					eepromWriteVars(EEPROM_MTYPE_BITMASK);
+					eepromWriteVars();
 					cmdOK();
 				}
 				else {
@@ -679,14 +692,18 @@ void cmdTypePrintStatus(int motor)
 
 void cmdRainSensor()
 {
-//~ "    rain | rainsensor [<cmd>]\r\n"
-//~ "         Set/Get Rain sensor function\r\n"
-//~ "         <cmd>    can be\r\n"
-//~ "                  ENABLE   Enable rain detection (disables AUTO)\r\n"
-//~ "                  DISABLE  disable rain detection (disables AUTO)\r\n"
-//~ "                  AUTO     Rain detection from hardware-input\r\n"
-//~ "                  ON       Raining\r\n"
-//~ "                  OFF      No raining\r\n"
+//~ "RAIN, RAINSENSOR [<cmd>]\r\n"
+//~ "  Set/Get rain sensor\r\n"
+//~ "     <cmd>    can be\r\n"
+//~ "       AUTO        Rain detection and detection enabled from input signals\r\n"
+//~ "       ENABLE      Enable rain detection, disables AUTO\r\n"
+//~ "       DISABLE     Disable rain detection, disables AUTO\r\n"
+//~ "       ON          Raining, disables AUTO\r\n"
+//~ "       OFF         No raining, disables AUTO\r\n"
+//~ "       RESUME <s>  Resume window position after rain was gone\r\n"
+//~ "                   <s> is the delay in sec after rain was gone before resume starr\r\n"
+//~ "                   and before resume starts.\r\n"
+//~ "       FORGET      Do not remember window position, keep it close\r\n"
 	char *arg;
 	bool cmd = false;
 
@@ -723,6 +740,13 @@ void cmdRainSensor()
 		SerialPrintf(softRainInput?F("Raining"):F("Dry"));
 		SerialPrintf(F("\r\n"));
 
+		SerialPrintf(F("Window position:    "));
+		SerialPrintf(bitRead(eeprom.Rain, RAIN_BIT_RESUME)?F("Resume"):F("Forget"));
+		if( bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
+			SerialPrintf(F(" (%d sec delay)"), eeprom.RainResumeTime);
+		}
+		SerialPrintf(F("\r\n"));
+
 		SerialPrintf(F("Rainsensor status:  "));
 		SerialPrintf( sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? F("Raining") : F("Dry") );
 		SerialPrintf(F("\r\n"));
@@ -754,8 +778,27 @@ void cmdRainSensor()
 			bitSet(eeprom.Rain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
+		else if ( strnicmp(arg, F("RE"),2)==0 ) {
+			int delay = eeprom.RainResumeTime;
+			arg = SCmd.next();
+			if( arg!=NULL ) {
+				delay=atoi(arg);
+			}
+			if ( delay<0 || delay>6000 ) {
+				cmdError(F("Parameter out of range (0-6000)"));
+			}
+			else {
+				eeprom.RainResumeTime = delay;
+				bitSet(eeprom.Rain, RAIN_BIT_RESUME);
+				cmd = true;
+			}
+		}
+		else if ( strnicmp(arg, F("FO"),2)==0 ) {
+			bitClear(eeprom.Rain, RAIN_BIT_RESUME);
+			cmd = true;
+		}
 		if ( cmd ) {
-			eepromWriteVars(EEPROM_RAIN);
+			eepromWriteVars();
 			cmdOK();
 		}
 		else {
@@ -781,12 +824,12 @@ void cmdStatus()
 	else {
 		if ( strnicmp(arg, F("ON"),2)==0 ) {
 			eeprom.CmdSendStatus = true;
-			eepromWriteVars(EEPROM_SENDSTATUS);
+			eepromWriteVars();
 			cmdOK();
 		}
 		else if ( strnicmp(arg, F("OF"),2)==0 ) {
 			eeprom.CmdSendStatus = false;
-			eepromWriteVars(EEPROM_SENDSTATUS);
+			eepromWriteVars();
 			cmdOK();
 		}
 		else {
@@ -825,7 +868,7 @@ void cmdLed()
 		else {
 			eeprom.BlinkInterval = Interval;
 			eeprom.BlinkLen = Flash;
-			eepromWriteVars(EEPROM_LED_BLINK_INTERVAL | EEPROM_LED_BLINK_LEN);
+			eepromWriteVars();
 			cmdOK();
 		}
 	}
@@ -836,8 +879,8 @@ void cmdLed()
 
 void cmdFactoryReset()
 {
-	unsigned long eepromCRC = eepromCalcCRC()-1;
-	eepromWriteArray(EEPROM_ADDR_CRC32, (byte *)&eepromCRC, sizeof(eepromCRC));
+	unsigned long eepromCRC = eepromCalcCRC() - 1;
+	EEPROM.put(EEPROM_ADDR_CRC32, eepromCRC);
 	eepromInitVars();
 	cmdOK();
 }

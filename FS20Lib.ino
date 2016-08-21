@@ -6,25 +6,6 @@
 #define strnicmp(str1, str2, n) strncasecmp_P(str1, (const char *)str2, n)
 
 /* *******************************************************************
- * LOW-LEVEL Functions
- * ********************************************************************/
-
-/* ===================================================================
- * Function:    strnicmp
- * Return:      Returns a negative value if str1<str2;
- *              0 if str1 and str2 are identical;
- *              and positive value if str1>str2.
- * Arguments:	str1, str2 - strings to comparre
- * Description: compares at most n characters of str2 to str1,
- *              lexicographically, by ignoring case.
- * ===================================================================*/
-//~ int strnicmp(const char *str1, const __FlashStringHelper *Fstr2, size_t Count)
-//~ {
-	//~ return strncasecmp_P(str1, (const char *)Fstr2, Count);
-//~ }
-
-
-/* *******************************************************************
  * HIGH-LEVEL Functions
  * ********************************************************************/
 
@@ -42,7 +23,6 @@ void printProgramInfo(bool copyright)
 	if( copyright ) {
 		SerialPrintf(F("(c) 2016 www.p-r-solution.de - Norbert Richter <n.richter@p-r-solution.de>\r\n"));
 	}
-	//SerialTimePrintf(F("EEPROM: %d byte\r\n"), EEPROM.length());
 	watchdogReset();
 }
 
@@ -179,6 +159,25 @@ void sendStatus(const __FlashStringHelper *fmt, ... )
 }
 
 
+/* ===================================================================
+ * Function:    setMotorPosition
+ * Return:
+ * Arguments:
+ * Description: Motor auf bestimmte Position schalten
+ * ===================================================================*/
+void setMotorPosition(byte motorNum, MOTOR_TIMEOUT destPosition)
+{
+	#ifdef DEBUG_OUTPUT_MOTOR
+	SerialTimePrintf(F("setMotorPosition- Motor %d current pos=%d, destPosition=%d\r\n"), motorNum+1, MotorPosition[motorNum], destPosition);
+	#endif
+	destMotorPosition[motorNum] = destPosition;
+	if ( destMotorPosition[motorNum] > MotorPosition[motorNum] ) {
+		setMotorDirection(motorNum, MOTOR_OPEN);
+	}
+	else {
+		setMotorDirection(motorNum, MOTOR_CLOSE);
+	}
+}
 
 /* ===================================================================
  * Function:    setMotorDirection
