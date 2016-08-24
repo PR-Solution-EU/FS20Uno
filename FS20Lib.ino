@@ -65,22 +65,61 @@ void watchdogReset(void)
  * Arguments:	printf arguments
  * Description: Serial output message
  * ===================================================================*/
-void SerialPrintf(const __FlashStringHelper *fmt, ... )
+void vaSerialPrint(const __FlashStringHelper *fmt, va_list argp)
 {
 	char buf[MAX_PRINTF_BUFFER]; // resulting string limited to 128 chars
 
-	va_list args;
-	va_start (args, fmt);
 	#ifdef __AVR__
 	// progmem for AVR
-	vsnprintf_P(buf, sizeof(buf), (const char *)fmt, args);
+	vsnprintf_P(buf, sizeof(buf), (const char *)fmt, argp);
 	#else
 	// for the rest of the world
-	vsnprintf(buf, sizeof(buf), (const char *)fmt, args);
+	vsnprintf(buf, sizeof(buf), (const char *)fmt, argp);
 	#endif
-	va_end(args);
 	Serial.print(buf);
 	watchdogReset();
+}
+
+/* ===================================================================
+ * Function:    SerialPrintf
+ * Return:
+ * Arguments:	printf arguments
+ * Description: Serial output message
+ * ===================================================================*/
+void SerialPrintf(const __FlashStringHelper *fmt, ... )
+{
+	va_list args;
+	va_start (args, fmt);
+	vaSerialPrint(fmt, args);
+	va_end(args);
+}
+
+/* ===================================================================
+ * Function:    sec
+ * Return:
+ * Arguments:	Pointer to a unsigned short variable or NULL
+ * Description: Returns the number of sec system is up
+ *              If milli is not NULL, returns also ms frac
+ * ===================================================================*/
+unsigned long sec(uint16_t *milli)
+{
+	unsigned long t;
+	
+	/* max of millis() (unsigned long) ist 49 days 17:02:47.295 */
+	t = millis();
+
+	/* ms zurückliefern, falls Zeiger auf Variable vorhanden */
+	if ( milli != NULL ) {
+		*milli = (uint16_t)(t % 1000UL);
+	}
+	// t in Sek.
+	t /= 1000;
+	/* Benötigt jetzt nur noch 3 Byte:
+	 * 4294967295                  = 0xFFFFFFFF
+	 * 4294967295 / 1000 = 4294967 = 0x418937
+	 * So können wir die Tage aufmultiplizieren
+	 * Ein Überlauf findet nun erst in 134 Jahren statt */
+	return t + ((unsigned long)millisOverflow * 4294967L);
 }
 
 /* ===================================================================
@@ -91,43 +130,33 @@ void SerialPrintf(const __FlashStringHelper *fmt, ... )
  * ===================================================================*/
 void SerialTimePrintf(const __FlashStringHelper *fmt, ... )
 {
-	char buf[MAX_PRINTF_BUFFER]; // resulting string limited to 128 chars
-	uint32_t t;
-	uint16_t days;
+	uint32_t t, ot;
+	uint16_t days, milli;
 	uint8_t hours, minutes, seconds;
+	char timebuf[48];
+
+	t = ot = sec(&milli);
+	/* div_t div(int number, int denom) */
+	days = (uint16_t)(t / (24UL * 60UL * 60UL));
+	t -= (uint32_t)days * (24UL * 60UL * 60UL);
+	hours = (uint8_t)(t / (60UL * 60UL));
+	t -= (uint32_t)hours * (60UL * 60UL);
+	minutes = (uint8_t)(t / (60UL));
+	t -= (uint32_t)minutes * (60UL);
+	seconds = (uint8_t)t;
+
+	if ( days ) {
+		snprintf_P(timebuf, sizeof(timebuf), PSTR("%d day%s "), days, days==1?"":"s");
+		Serial.print(timebuf);
+	}
+	snprintf_P(timebuf, sizeof(timebuf), PSTR("%02d:%02d:%02d.%-3d (%ld%03d ms) "), hours, minutes, seconds, milli, ot, milli);
+	Serial.print(timebuf);
+
 
 	va_list args;
 	va_start (args, fmt);
-
-	t = millis();
-	/* div_t div(int number, int denom) */
-	days = (uint16_t)(t / (24L * 60L * 60L * 1000L));
-	t -= (uint32_t)days * (24L * 60L * 60L * 1000L);
-	hours = (uint8_t)(t / (60L * 60L * 1000L));
-	t -= (uint32_t)hours * (60L * 60L * 1000L);
-	minutes = (uint8_t)(t / (60L * 1000L));
-	t -= (uint32_t)minutes * (60L * 1000L);
-	seconds = (uint8_t)(t / 1000L);
-	t -= (uint32_t)seconds * 1000L;
-	if ( days ) {
-		sprintf_P(buf, PSTR("%d day%s, %02d:%02d:%02d.%03ld "), days, days==1?"":"s", hours, minutes, seconds, t);
-		Serial.print(buf);
-	}
-	else {
-		sprintf_P(buf, PSTR("%02d:%02d:%02d.%03ld "), hours, minutes, seconds, t);
-		Serial.print(buf);
-	}
-	#ifdef __AVR__
-	// progmem for AVR
-	vsnprintf_P(buf, sizeof(buf), (const char *)fmt, args);
-	#else
-	// for the rest of the world
-	vsnprintf(buf, sizeof(buf), (const char *)fmt, args);
-	#endif
+	vaSerialPrint(fmt, args);
 	va_end(args);
-
-	Serial.print(buf);
-	watchdogReset();
 }
 
 /* ===================================================================
@@ -140,21 +169,12 @@ void SerialTimePrintf(const __FlashStringHelper *fmt, ... )
 void sendStatus(const __FlashStringHelper *fmt, ... )
 {
 	if( eeprom.CmdSendStatus ) {
-		char buf[MAX_PRINTF_BUFFER]; // resulting string limited to 128 chars
-
 		va_list args;
 		va_start (args, fmt);
-		#ifdef __AVR__
-		// progmem for AVR
-		vsnprintf_P(buf, sizeof(buf), (const char *)fmt, args);
-		#else
-		// for the rest of the world
-		vsnprintf(buf, sizeof(buf), (const char *)fmt, args);
-		#endif
+		vaSerialPrint(fmt, args);
 		va_end(args);
-		Serial.print(buf);
+
 		Serial.print("\r\n");
-		watchdogReset();
 	}
 }
 
@@ -165,7 +185,7 @@ void sendStatus(const __FlashStringHelper *fmt, ... )
  * Arguments:
  * Description: Motor auf bestimmte Position schalten
  * ===================================================================*/
-void setMotorPosition(byte motorNum, MOTOR_TIMEOUT destPosition)
+void setMotorPosition(byte motorNum, MOTOR_TIMER destPosition)
 {
 	#ifdef DEBUG_OUTPUT_MOTOR
 	SerialTimePrintf(F("setMotorPosition- Motor %d current pos=%d, destPosition=%d\r\n"), motorNum+1, MotorPosition[motorNum], destPosition);

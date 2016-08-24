@@ -193,8 +193,9 @@ void cmdHelp()
 	}
 	else if ( strnicmp(arg, F("UP"),2)==0 ) {
 		Serial.print(F(
-			"UPTIME\r\n"
+			"UPTIME [h]\r\n"
 			"  Tell how long the system has been running\r\n"
+			"  If optional argument is given, operation hours will be set\r\n"
 			));
 	}
 	watchdogReset();
@@ -265,11 +266,21 @@ void cmdTerm(void)
 void cmdInfo()
 {
 	printProgramInfo(false);
+	cmdUptime();
 }
 
 void cmdUptime()
 {
+	char *arg;
+	
+	arg = SCmd.next();
+	if (arg != NULL) {
+		eeprom.OperatingHours=atol(arg);
+		eepromWriteVars();
+	}
+	SerialPrintf(    F("Uptime:    "));
 	SerialTimePrintf(F("\r\n"));
+	SerialPrintf(F("Operating: %ld h\r\n"), eeprom.OperatingHours);
 }
 
 void cmdFS20()
@@ -459,7 +470,7 @@ void cmdMotor()
 						cmdError(F("Parameter out of range (0-100)"));
 					}
 					else {
-						setMotorPosition(motor, (MOTOR_TIMEOUT)((long)(eeprom.MaxRuntime[motor] / TIMER_MS) * (long)percent / 100L));
+						setMotorPosition(motor, (MOTOR_TIMER)((long)(eeprom.MaxRuntime[motor] / TIMER_MS) * (long)percent / 100L));
 						cmdOK();
 					}
 				}
@@ -806,7 +817,6 @@ void cmdRainSensor()
 		}
 	}
 }
-
 
 void cmdStatus()
 {

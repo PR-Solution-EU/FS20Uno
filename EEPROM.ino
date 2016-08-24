@@ -127,6 +127,7 @@ void eepromInitVars()
 		eeprom.CmdSendStatus = DEFAULT_CMDSENDSTATUS;
 		eeprom.CmdEcho = DEFAULT_CMDECHO;
 		eeprom.CmdTerm = DEFAULT_CMDTERM;
+		eeprom.OperatingHours = 0;
 
 		eepromWriteVars();
 
@@ -153,7 +154,7 @@ void eepromInitVars()
 	for(i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%ld"), i?",":"", eeprom.MaxRuntime[i]);
 	}
-	SerialTimePrintf(F("\r\n"));
+	SerialPrintf(F("\r\n"));
 	SerialTimePrintf(F("EEPROM -   eeprom.MotorName:     "));
 	for(i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%s"), i?",":"", (char *)eeprom.MotorName[i]);
@@ -169,6 +170,7 @@ void eepromInitVars()
 	SerialTimePrintf(F("EEPROM -   eeprom.CmdSendStatus: %s\r\n"), eeprom.CmdSendStatus?"yes":"no");
 	SerialTimePrintf(F("EEPROM -   eeprom.CmdEcho:       %s\r\n"), eeprom.CmdEcho?"yes":"no");
 	SerialTimePrintf(F("EEPROM -   eeprom.CmdTerm:       %s\r\n"), eeprom.CmdTerm=='\r'?"CR":"LF");
+	SerialTimePrintf(F("EEPROM -   eeprom.OperatingHours:%ld\r\n"), eeprom.OperatingHours);
 	#endif
 }
 

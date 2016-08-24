@@ -187,11 +187,15 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"		// Programmname
-#define VERSION "3.30"			// Programmversion
+#define VERSION "3.31"			// Programmversion
 #include "REVISION.h"			// Build (wird von git geändert)
 #define DATAVERSION 123			// Kann verwendet werden, um Defaults
 								// zu schreiben
 
+/* Die nächste Zeile auskommentieren, um den millis()-Überlauf
+ * zu testen. millis() startet dann mit TEST_MILLIS_TIMER ms
+ * vor dem 1 Überlauf (max 49 Tage 17:02:47.295) */
+//#define TEST_MILLIS_TIMER	30000L
 
 // define next macros to output debug prints
 #undef DEBUG_OUTPUT
@@ -199,7 +203,7 @@
 #undef DEBUG_RUNTIME			// enable runtime debugging
 #undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
-#undef DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
+#define DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
 #undef DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
 #undef DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
 #undef DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
@@ -229,6 +233,12 @@
 	#define DBG_MPC 			11			// Debug PIN = D11
 	#define DBG_TIMER	 		10			// Debug PIN = D10
 #endif
+
+
+// Uptime
+volatile unsigned int millisOverflow = 0;
+unsigned long prevMillis = 0;
+unsigned long savedOperationTime = 0;
 
 
 // Interrup soft enable flags
@@ -282,17 +292,17 @@ volatile char debWallButton[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 volatile MOTOR_CTRL    MotorCtrl[MAX_MOTORS]	= {MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF};
 
 /* Enthält Timeout Zähler. Wenn Zähler 0 wird, dann Motor Aus. */
-volatile MOTOR_TIMEOUT MotorTimeout[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
+volatile MOTOR_TIMER MotorTimeout[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 
 /* Enthält aktuelle Motorposition */
-volatile MOTOR_TIMEOUT MotorPosition[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
+volatile MOTOR_TIMER MotorPosition[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 
-/* Enthält gewünschte Motorposition bzw NO_MOTOR_POSITION, falls inaktiv */
-volatile MOTOR_TIMEOUT destMotorPosition[MAX_MOTORS] = {NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION};
+/* Enthält gewünschte Motorposition bzw NO_POSITION, falls inaktiv */
+volatile MOTOR_TIMER destMotorPosition[MAX_MOTORS] = {NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION};
 
 /* Enthält Motorposition von Fenstern vor Regenbeginn */
-volatile MOTOR_TIMEOUT resumeMotorPosition[MAX_MOTORS] = {NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION,NO_MOTOR_POSITION};
-volatile WORD resumeDelay = UINT16_MAX;
+volatile MOTOR_TIMER resumeMotorPosition[MAX_MOTORS] = {NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION};
+volatile WORD resumeDelay = NO_POSITION;
 
 /* Zeitzähler für Auto-Learn Funktion: 
  * Enthält die Zeit, wie lange die Wandtaste gedrückt wurde */
@@ -300,6 +310,7 @@ TIMER WallButtonTimer[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 
 /* SM8 Tastensteuerung "gedrückt"-Zeit */
 volatile SM8_TIMEOUT   SM8Timeout[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
 
 
 /* Regensensor */
@@ -318,7 +329,7 @@ struct EEPROM {
 	MOTORBITS	MTypeBitmask;				// Motortyp Bitmask
 	volatile DWORD MaxRuntime[MAX_MOTORS];	// Maximale Motorlaufzeit in ms
 	char 		MotorName[MAX_MOTORS][21];	// Motornamen
-	volatile MOTOR_TIMEOUT MotorPosition[MAX_MOTORS];// Letzte Motorposition
+	volatile MOTOR_TIMER MotorPosition[MAX_MOTORS];// Letzte Motorposition
 	byte 		Rain;						// Regenfunktionen (s. define)
 	#define RAIN_BIT_AUTO	(1<<0)
 	#define RAIN_BIT_ENABLE	(1<<1)
@@ -327,6 +338,7 @@ struct EEPROM {
 	bool 		CmdEcho;					// Cmd interface echo
 	char 		CmdTerm;					// Cmd interface terminator
 	bool 		CmdSendStatus;				// Sende autom. Statusänderung
+	DWORD		OperatingHours;				// Betriebsstunden
 } eeprom;
 
 
@@ -357,8 +369,18 @@ void printRuntime(const __FlashStringHelper *funcName, unsigned long starttime)
  * Description: setup function runs once
  *              when you press reset or power the board
  * ===================================================================*/
+#ifdef TEST_MILLIS_TIMER
+extern unsigned long timer0_millis;
+#endif
 void setup()
 {
+	#ifdef TEST_MILLIS_TIMER
+    cli(); //halt the interrupts
+    //timer0_millis =  UINT32_MAX - TEST_MILLIS_TIMER; //change the value of the register
+    timer0_millis =  (3600L-30L)*1000L;
+    sei(); //re-enable the interrupts
+    #endif
+
 	DEBUG_RUNTIME_START(msSetup);
 
 	// indicate setup started
@@ -495,6 +517,9 @@ void setup()
 	extISREnabled   = true;
 	timerISREnabled = true;
 
+	prevMillis = millis();
+
+
 	// Fertig signalisieren
 	digitalWrite(STATUS_LED, LOW);
 
@@ -502,6 +527,10 @@ void setup()
 	SerialTimePrintf(F("setup - Setup done, starting main loop()\r\n"));
 #endif
 	DEBUG_RUNTIME_END("setup()",msSetup);
+
+	// Manual settings of single EEPROM vars
+	//~ eeprom.OperatingHours = 0;
+	//~ eepromWriteVars();
 }
 
 /* ===================================================================
@@ -561,7 +590,14 @@ void timerISR()
 		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	// debugging
 		#endif
 
-		if ( resumeDelay!=UINT16_MAX && resumeDelay>0 ) {
+		// Prüfe millis() timer overflow
+		if( millis() < prevMillis ) {
+			millisOverflow++;
+			prevMillis = millis();
+		}
+
+		// Delay für Regensensor RESUME
+		if ( resumeDelay!=NO_POSITION && resumeDelay>0 ) {
 			resumeDelay--;
 		}
 
@@ -610,13 +646,13 @@ void timerISR()
 					}
 				}
 				// Falls Motor Zielposition gesetzt
-				if ( destMotorPosition[i] != NO_MOTOR_POSITION ) {
+				if ( destMotorPosition[i] != NO_POSITION ) {
 					// Wenn Motor Zielposition erreicht
 					if ( MotorPosition[i] == destMotorPosition[i] ) {
 						// Motor AUS
 						MotorCtrl[i] = MOTOR_OFF;
 						// Zielposition löschen
-						destMotorPosition[i] = NO_MOTOR_POSITION;
+						destMotorPosition[i] = NO_POSITION;
 					}
 				}
 				
@@ -777,25 +813,12 @@ void debugPrintMotorStatus(bool from)
 void clrSM8Status(void)
 {
 	// Read current value from input MPC
-	curSM8Status = expanderReadWord(MPC_SM8STATUS, GPIO);
-#ifdef DEBUG_OUTPUT_SETUP
-	SerialTimePrintf(F("setup - expanderReadWord(MPC_SM8STATUS, GPIO)=%08X\r\n"), curSM8Status);
-#endif
+	curSM8Status  = expanderReadWord(MPC_SM8STATUS, GPIO);
 	curWallButton = expanderReadWord(MPC_WALLBUTTON, GPIO);
-#ifdef DEBUG_OUTPUT_SETUP
-	SerialTimePrintf(F("setup - expanderReadWord(MPC_WALLBUTTON, GPIO)=%08X\r\n"), curWallButton);
-#endif
 
 	for(byte channel=0; channel<IOBITS_CNT; channel++) {
-#ifdef DEBUG_OUTPUT_SETUP
-		SerialTimePrintf(F("setup - curSM8Status bit %d is %d\r\n"), channel, bitRead(curSM8Status, channel));
-#endif
 		if( bitRead(curSM8Status, channel) ) {
-#ifdef DEBUG_OUTPUT_SETUP
-			SerialTimePrintf(F("setup - Reset FS20 key %d\r\n"), channel);
-#endif
 			bitClear(valSM8Button, channel);
-			expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
 		}
 	}
 	expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
@@ -807,7 +830,6 @@ void clrSM8Status(void)
 		}
 	}
 	expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
-
 }
 
 
@@ -972,9 +994,8 @@ void ctrlWallButton(void)
 	static IOBITS tmpWallButton  = IOBITS_ZERO;
 
 	/* Wall Button Output */
-	static IOBITS WallButton;
+	       IOBITS WallButton;
 	static IOBITS prevWallButton = IOBITS_ZERO;
-	static IOBITS WallButtonLocked = IOBITS_ZERO;
 
 	if ( (tmpWallButton != curWallButton) ) {
 		/* Lese Wandtaster
@@ -1046,24 +1067,16 @@ void ctrlWallButton(void)
 				// Pegel Öffnen und Schliessen = 1:
 				if ( bitRead(WallButton, i) != 0 && bitRead(WallButton, i + MAX_MOTORS) != 0 ) {
 					setMotorDirection(i, MOTOR_OFF);
-					bitSet(WallButtonLocked, i);
-					bitSet(WallButtonLocked, i + MAX_MOTORS);
-				}
-				// Pegel Öffnen und Schliessen = 0:
-				if ( bitRead(WallButton, i) == 0 && bitRead(WallButton, i + MAX_MOTORS) == 0 ) {
-					bitClear(WallButtonLocked, i);
-					bitClear(WallButtonLocked, i + MAX_MOTORS);
 				}
 				watchdogReset();
 			}
 
 			#ifdef DEBUG_OUTPUT_WALLBUTTON
-			//~ SerialTimePrintf(F("ctrlWallButton  - ----------------------------------------\r\n"));
-			//~ SerialTimePrintf(F("ctrlWallButton  - prevWallButton:   0x%04x\r\n"), prevWallButton);
-			//~ SerialTimePrintf(F("ctrlWallButton  - WallButton:       0x%04x\r\n"), WallButton);
-			//~ SerialTimePrintf(F("ctrlWallButton  - WallButtonSlope:  0x%04x\r\n"), WallButtonSlope);
-			//~ SerialTimePrintf(F("ctrlWallButton  - WallButtonChange: 0x%04x\r\n"), WallButtonChange);
-			//~ SerialTimePrintf(F("ctrlWallButton  - WallButtonLocked: 0x%04x\r\n"), WallButtonLocked);
+			SerialTimePrintf(F("ctrlWallButton  - ----------------------------------------\r\n"));
+			SerialTimePrintf(F("ctrlWallButton  - prevWallButton:   0x%04x\r\n"), prevWallButton);
+			SerialTimePrintf(F("ctrlWallButton  - WallButton:       0x%04x\r\n"), WallButton);
+			SerialTimePrintf(F("ctrlWallButton  - WallButtonSlope:  0x%04x\r\n"), WallButtonSlope);
+			SerialTimePrintf(F("ctrlWallButton  - WallButtonChange: 0x%04x\r\n"), WallButtonChange);
 			#endif
 
 			prevWallButton = curWallButton;
@@ -1192,52 +1205,52 @@ void ctrlMotorRelais(void)
 			//targetStep[0] = curTarget & 0b11;
 
 			switch (curTarget) {
-			case 0b0000:
-				break;
-			case 0b0001:
-				break;
-			case 0b0010:
-				break;
-			case 0b0011:
-				targetStep[1] = 0b01;
-				targetSteps = 1;
-				break;
-			case 0b0100:
-				break;
-			case 0b0101:
-				break;
-			case 0b0110:
-				targetStep[1] = 0b00;
-				targetSteps = 1;
-				break;
-			case 0b0111:
-				break;
-			case 0b1000:
-				break;
-			case 0b1001:
-				targetStep[1] = 0b00;
-				targetSteps = 1;
-				break;
-			case 0b1010:
-				break;
-			case 0b1011:
-				targetStep[2] = 0b00;
-				targetStep[1] = 0b01;
-				targetSteps = 2;
-				break;
-			case 0b1100:
-				targetStep[1] = 0b01;
-				targetSteps = 1;
-				break;
-			case 0b1101:
-				break;
-			case 0b1110:
-				targetStep[2] = 0b01;
-				targetStep[1] = 0b00;
-				targetSteps = 2;
-				break;
-			case 0b1111:
-				break;
+				case 0b0000:
+					break;
+				case 0b0001:
+					break;
+				case 0b0010:
+					break;
+				case 0b0011:
+					targetStep[1] = 0b01;
+					targetSteps = 1;
+					break;
+				case 0b0100:
+					break;
+				case 0b0101:
+					break;
+				case 0b0110:
+					targetStep[1] = 0b00;
+					targetSteps = 1;
+					break;
+				case 0b0111:
+					break;
+				case 0b1000:
+					break;
+				case 0b1001:
+					targetStep[1] = 0b00;
+					targetSteps = 1;
+					break;
+				case 0b1010:
+					break;
+				case 0b1011:
+					targetStep[2] = 0b00;
+					targetStep[1] = 0b01;
+					targetSteps = 2;
+					break;
+				case 0b1100:
+					targetStep[1] = 0b01;
+					targetSteps = 1;
+					break;
+				case 0b1101:
+					break;
+				case 0b1110:
+					targetStep[2] = 0b01;
+					targetStep[1] = 0b00;
+					targetSteps = 2;
+					break;
+				case 0b1111:
+					break;
 			}
 			#ifdef DEBUG_OUTPUT_MOTOR_DETAILS
 			SerialTimePrintf(F("ctrlMotorRelais -   Motor %d, curTarget 0x%02X, Steps %d\r\n"), i, curTarget, targetSteps);
@@ -1375,6 +1388,9 @@ void ctrlMotorRelais(void)
  * Arguments:
  * Description: Kontrolle der Regensensor Eingänge
  * ===================================================================*/
+#ifdef DEBUG_OUTPUT_RAIN
+const char dbgCtrlRainSensor[] PROGMEM = "ctrlRainSensor  - ";
+#endif
 void ctrlRainSensor(void)
 {
 	static bool firstRun = true;
@@ -1402,8 +1418,8 @@ void ctrlRainSensor(void)
 	// AUTO Modus aktivieren, wenn Enable-Eingang sich ändert
 	if( prevRainEnableInput != sensRainEnable ) {
 		#ifdef DEBUG_OUTPUT_RAIN
-		SerialTimePrintf(F("ctrlRainSensor  - sensRainEnable      = %d\r\n"), sensRainEnable);
-		SerialTimePrintf(F("ctrlRainSensor  - prevRainEnableInput = %d\r\n"), prevRainEnableInput);
+		SerialTimePrintf(F("%SsensRainEnable      = %d\r\n"), dbgCtrlRainSensor, sensRainEnable);
+		SerialTimePrintf(F("%SprevRainEnableInput = %d\r\n"), dbgCtrlRainSensor, prevRainEnableInput);
 		#endif
 		bitSet(eeprom.Rain, RAIN_BIT_AUTO);
 		eepromWriteVars();
@@ -1432,19 +1448,19 @@ void ctrlRainSensor(void)
 	strMode = bitRead(eeprom.Rain, RAIN_BIT_AUTO)!=0?"AUTO":"MANUAL";
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable ) {
 		#ifdef DEBUG_OUTPUT_RAIN
-		SerialTimePrintf(F("ctrlRainSensor  - ----------------------------------------\r\n"));
-		SerialTimePrintf(F("ctrlRainSensor  - digitalRead(%d): %d\r\n"), RAIN_INPUT, digitalRead(RAIN_INPUT));
-		SerialTimePrintf(F("ctrlRainSensor  - digitalRead(%d): %d\r\n"), RAIN_ENABLE, digitalRead(RAIN_ENABLE));
-		SerialTimePrintf(F("ctrlRainSensor  - RainMode:   %s\r\n"), strMode);
-		SerialTimePrintf(F("ctrlRainSensor  - RainEnable: %d\r\n"), RainEnable);
-		SerialTimePrintf(F("ctrlRainSensor  - RainInput:  %d\r\n"), RainInput);
+		SerialTimePrintf(F("%S----------------------------------------\r\n"), dbgCtrlRainSensor);
+		SerialTimePrintf(F("%SdigitalRead(%d): %d\r\n"), dbgCtrlRainSensor, RAIN_INPUT, digitalRead(RAIN_INPUT));
+		SerialTimePrintf(F("%SdigitalRead(%d): %d\r\n"), dbgCtrlRainSensor, RAIN_ENABLE, digitalRead(RAIN_ENABLE));
+		SerialTimePrintf(F("%SRainMode:   %s\r\n"), dbgCtrlRainSensor, strMode);
+		SerialTimePrintf(F("%SRainEnable: %d\r\n"), dbgCtrlRainSensor, RainEnable);
+		SerialTimePrintf(F("%SRainInput:  %d\r\n"), dbgCtrlRainSensor, RainInput);
 		#endif
 		if ( RainEnable ) {
 			if ( RainInput ) {
 				byte i;
 
 				#ifdef DEBUG_OUTPUT_RAIN
-				SerialTimePrintf(F("ctrlRainSensor  - Rain enabled, wet\r\n"));
+				SerialTimePrintf(F("%SRain enabled, wet\r\n"), dbgCtrlRainSensor);
 				#endif
 				
 				for (i = 0; i < MAX_MOTORS; i++) {
@@ -1453,13 +1469,13 @@ void ctrlRainSensor(void)
 							&& getMotorDirection(i)==MOTOR_OFF
 							&& MotorPosition[i]!=0 ) {
 							#ifdef DEBUG_OUTPUT_MOTOR
-							SerialTimePrintf(F("ctrlRainSensor  - Remember window %d position %d\r\n"), i, );
+							SerialTimePrintf(F("%SRemember window %d position %d\r\n"), dbgCtrlRainSensor, i, );
 							#endif
 							resumeMotorPosition[i] = MotorPosition[i];
 						}
 						if ( getMotorDirection(i)!=MOTOR_CLOSE && getMotorDirection(i)!=MOTOR_CLOSE_DELAYED) {
 							#ifdef DEBUG_OUTPUT_MOTOR
-							SerialTimePrintf(F("ctrlRainSensor  - Close window %d\r\n"), i);
+							SerialTimePrintf(F("%SClose window %d\r\n"), dbgCtrlRainSensor, i);
 							#endif
 							setMotorDirection(i, MOTOR_CLOSE);
 						}
@@ -1471,7 +1487,7 @@ void ctrlRainSensor(void)
 			}
 			else {
 				#ifdef DEBUG_OUTPUT_RAIN
-				SerialTimePrintf(F("ctrlRainSensor  - Rain enabled, dry\r\n"));
+				SerialTimePrintf(F("%SRain enabled, dry\r\n"), dbgCtrlRainSensor);
 				#endif
 				if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
 					resumeDelay = (WORD)((unsigned long)eeprom.RainResumeTime * 1000L / TIMER_MS);
@@ -1485,13 +1501,13 @@ void ctrlRainSensor(void)
 		else {
 			if ( RainInput ) {
 				#ifdef DEBUG_OUTPUT_RAIN
-				SerialTimePrintf(F("ctrlRainSensor  - Rain disabled, wet\r\n"));
+				SerialTimePrintf(F("%SRain disabled, wet\r\n"), dbgCtrlRainSensor);
 				#endif
 				sendStatus(F("05 RAIN MODE=%s DISABLED WET"), strMode);
 			}
 			else {
 				#ifdef DEBUG_OUTPUT_RAIN
-				SerialTimePrintf(F("ctrlRainSensor  - Rain disabled, dry\r\n"));
+				SerialTimePrintf(F("%SRain disabled, dry\r\n"), dbgCtrlRainSensor);
 				#endif
 				sendStatus(F("05 RAIN %s DISABLED DRY"), strMode);
 			}
@@ -1504,21 +1520,21 @@ void ctrlRainSensor(void)
 	
 	if ( resumeDelay==0 ) {
 		#ifdef DEBUG_OUTPUT_RAIN
-		SerialTimePrintf(F("ctrlRainSensor  - Resume delay expired\r\n"));
+		SerialTimePrintf(F("%SResume delay expired\r\n"), dbgCtrlRainSensor);
 		#endif
 		for (byte i = 0; i < MAX_MOTORS; i++) {
 			if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME) 
 				&& getMotorType(i)==WINDOW 
 				&& getMotorDirection(i)==MOTOR_OFF
-				&& resumeMotorPosition[i]!=NO_MOTOR_POSITION ) {
+				&& resumeMotorPosition[i]!=NO_POSITION ) {
 					#ifdef DEBUG_OUTPUT_RAIN
-					SerialTimePrintf(F("ctrlRainSensor  - Resume motor %d to pos %d\r\n"), i+1, resumeMotorPosition[i]);
+					SerialTimePrintf(F("%SResume motor %d to pos %d\r\n"), dbgCtrlRainSensor, i+1, resumeMotorPosition[i]);
 					#endif
 					setMotorPosition(i, resumeMotorPosition[i]);
-					resumeMotorPosition[i] = NO_MOTOR_POSITION;
+					resumeMotorPosition[i] = NO_POSITION;
 			}
 		}
-		resumeDelay = UINT16_MAX;
+		resumeDelay = NO_POSITION;
 	}
 }
 
@@ -1586,6 +1602,8 @@ void blinkLED(void)
  * ===================================================================*/
 void loop()
 {
+	unsigned long opHour;
+	
 	// MPC Interrupt-Behandlung außerhalb extISR
 	handleMPCInt();
 	watchdogReset();
@@ -1623,4 +1641,11 @@ void loop()
 	// Process serial command interface
 	processSerialCommand();
 	watchdogReset();
+	
+	opHour = sec(NULL);
+	if ( ((opHour % 3600L) == 0) && (savedOperationTime!=opHour) ) {
+		eeprom.OperatingHours++;
+		eepromWriteVars();
+		savedOperationTime = opHour;
+	}
 }
