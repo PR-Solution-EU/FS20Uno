@@ -10,8 +10,8 @@ void expanderWriteWord(const byte address, const byte reg, const unsigned int da
 {
 	Wire.beginTransmission((const byte)(0x20|address));
 	Wire.write(reg);
-	Wire.write( (byte)(data & 0xff) );  		// port A
-	Wire.write( (byte)((data>>8) & 0xff) ); 	// port B
+	Wire.write( lowByte(data) ); 	// port A
+	Wire.write( highByte(data) ); 	// port B
 	Wire.endTransmission();
 }
 

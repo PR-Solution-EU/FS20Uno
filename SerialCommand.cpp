@@ -40,7 +40,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 SerialCommand::SerialCommand()
 {
 	usingSoftwareSerial=0;
-	strncpy(delim," ",MAXDELIMETER);  // strtok_r needs a null-DEFAULT_TERMINATORinated string
+	strncpy_P(delim, PSTR(" "), sizeof(delim)-1);  // strtok_r needs a null-DEFAULT_TERMINATORinated string
 	term=DEFAULT_TERMINATOR;   // return character, default DEFAULT_TERMINATORinator for commands
 	isEcho=DEFAULT_ECHO;	// echo flag
 	numCommand=0;    		// Number of callback handlers installed
@@ -53,7 +53,7 @@ SerialCommand::SerialCommand(SoftwareSerial &_SoftSer)
 {
 	usingSoftwareSerial=1;
 	SoftSerial = &_SoftSer;
-	strncpy(delim," ",MAXDELIMETER);  // strtok_r needs a null-DEFAULT_TERMINATORinated string
+	strncpy_P(delim, PSTR(" "), sizeof(delim)-1);  // strtok_r needs a null-DEFAULT_TERMINATORinated string
 	term=DEFAULT_TERMINATOR;   // return character, default DEFAULT_TERMINATORinator for commands
 	isEcho=DEFAULT_ECHO;	// echo flag
 	numCommand=0;    // Number of callback handlers installed
@@ -67,10 +67,7 @@ SerialCommand::SerialCommand(SoftwareSerial &_SoftSer)
 //
 void SerialCommand::clearBuffer()
 {
-	for (int i=0; i<SERIALCOMMANDBUFFER; i++)
-	{
-		buffer[i]='\0';
-	}
+	memset(buffer, '\0', sizeof(buffer));
 	bufPos=0;
 }
 
@@ -150,18 +147,18 @@ void SerialCommand::readSerial()
 			}
 
 		}
-		if (isprint(inChar))   // Only printable characters into the buffer
+		if (isprint(inChar) )   // Only printable characters into the buffer
 		{
-			buffer[bufPos++]=inChar;   	// Put character into buffer
-			buffer[bufPos]='\0';  		// Null DEFAULT_TERMINATORinate
-			if (bufPos > SERIALCOMMANDBUFFER-1) {
-				--bufPos; // overwrite last char if full
+			if ( (size_t)bufPos < sizeof(buffer)-1 ) {
+				buffer[bufPos++]=inChar;   	// Put character into buffer
+				buffer[bufPos]='\0';  		// Null DEFAULT_TERMINATORinate
 			}
 		}
 	}
 }
 
 // Adds a "command" and a handler function to the list of available commands.
+// "command" is a pointer to PROGMEM.
 // This is used for matching a found token in the buffer, and gives the pointer
 // to the handler function to deal with it.
 void SerialCommand::addCommand(const char *command, void (*function)())
@@ -174,7 +171,7 @@ void SerialCommand::addCommand(const char *command, void (*function)())
 		Serial.println(command);
 		#endif
 
-		strncpy(CommandList[numCommand].command,command,MAXSERIALCOMMANDLEN);
+		strncpy_P(CommandList[numCommand].command, command, MAXSERIALCOMMANDLEN);
 		CommandList[numCommand].function = function;
 		numCommand++;
 	} else {

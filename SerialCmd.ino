@@ -3,28 +3,29 @@
  * ===================================================================*/
 SerialCommand SCmd;   		// SerialCommand object
 
+
 void setupSerialCommand(void)
 {
 	// Setup callbacks for SerialCommand commands
-	SCmd.addCommand("?",cmdHelp);
-	SCmd.addCommand("HELP",cmdHelp);
-	SCmd.addCommand("INFO",cmdInfo);
-	SCmd.addCommand("ECHO",cmdEcho);
-	SCmd.addCommand("TERM",cmdTerm);
-	SCmd.addCommand("UPTIME",cmdUptime);
-	SCmd.addCommand("FS20",cmdFS20);
-	SCmd.addCommand("BUTTON",cmdWallButton);
-	SCmd.addCommand("PUSHBUTTON",cmdWallButton);
-	SCmd.addCommand("WALLBUTTON",cmdWallButton);
-	SCmd.addCommand("MOTOR",cmdMotor);
-	SCmd.addCommand("MOTORNAME",cmdName);
-	SCmd.addCommand("MOTORTIME",cmdRuntime);
-	SCmd.addCommand("MOTORTYPE",cmdType);
-	SCmd.addCommand("RAINSENSOR",cmdRainSensor);
-	SCmd.addCommand("RAIN",cmdRainSensor);
-	SCmd.addCommand("STATUS",cmdStatus);
-	SCmd.addCommand("LED",cmdLed);
-	SCmd.addCommand("FACTORYRESET",cmdFactoryReset);
+	SCmd.addCommand(PSTR("?"),cmdHelp);
+	SCmd.addCommand(PSTR("HELP"),cmdHelp);
+	SCmd.addCommand(PSTR("INFO"),cmdInfo);
+	SCmd.addCommand(PSTR("ECHO"),cmdEcho);
+	SCmd.addCommand(PSTR("TERM"),cmdTerm);
+	SCmd.addCommand(PSTR("UPTIME"),cmdUptime);
+	SCmd.addCommand(PSTR("FS20"),cmdFS20);
+	SCmd.addCommand(PSTR("BUTTON"),cmdWallButton);
+	SCmd.addCommand(PSTR("PUSHBUTTON"),cmdWallButton);
+	SCmd.addCommand(PSTR("WALLBUTTON"),cmdWallButton);
+	SCmd.addCommand(PSTR("MOTOR"),cmdMotor);
+	SCmd.addCommand(PSTR("MOTORNAME"),cmdName);
+	SCmd.addCommand(PSTR("MOTORTIME"),cmdRuntime);
+	SCmd.addCommand(PSTR("MOTORTYPE"),cmdType);
+	SCmd.addCommand(PSTR("RAINSENSOR"),cmdRainSensor);
+	SCmd.addCommand(PSTR("RAIN"),cmdRainSensor);
+	SCmd.addCommand(PSTR("STATUS"),cmdStatus);
+	SCmd.addCommand(PSTR("LED"),cmdLed);
+	SCmd.addCommand(PSTR("FACTORYRESET"),cmdFactoryReset);
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
 	SCmd.setEcho(eeprom.CmdEcho);
 	SCmd.setTerm(eeprom.CmdTerm);
@@ -211,12 +212,10 @@ void cmdEcho(void)
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintf(F("ECHO "));
-		SerialPrintf(eeprom.CmdEcho?F("ON"):F("OFF"));
-		SerialPrintf(F("\r\n"));
+		SerialPrintf(F("ECHO %S\r\n"),eeprom.CmdEcho?fstrON:fstrOFF);
 		cmdOK();
 	}
-	else if ( strnicmp(arg, F("ON"),2)==0 ) {
+	else if ( strnicmp(arg, fstrON,2)==0 ) {
 		eeprom.CmdEcho = true;
 		SCmd.setEcho(eeprom.CmdEcho);
 		eepromWriteVars();
@@ -229,7 +228,7 @@ void cmdEcho(void)
 		cmdOK();
 	}
 	else {
-		cmdError(F("Unknown parameter (use 'ON' or 'OFF')"));
+		cmdErrorParameter(F("'ON' or 'OFF'"));
 	}
 }
 
@@ -241,9 +240,7 @@ void cmdTerm(void)
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintf(F("TERM "));
-		SerialPrintf(eeprom.CmdTerm=='\r'?F("CR"):F("LF"));
-		SerialPrintf(F("\r\n"));
+		SerialPrintf(F("TERM %S\r\n"),eeprom.CmdTerm=='\r'?F("CR"):F("LF"));
 		cmdOK();
 	}
 	else if ( strnicmp(arg, F("CR"),2)==0 ) {
@@ -259,7 +256,7 @@ void cmdTerm(void)
 		cmdOK();
 	}
 	else {
-		cmdError(F("Unknown parameter (use 'CR' or 'LF')"));
+		cmdErrorParameter(F("'CR' or 'LF'"));
 	}
 }
 
@@ -278,7 +275,7 @@ void cmdUptime()
 		eeprom.OperatingHours=atol(arg);
 		eepromWriteVars();
 	}
-	SerialPrintf(    F("Uptime:    "));
+	SerialPrintf(F("Uptime:    "));
 	SerialTimePrintf(F("\r\n"));
 	SerialPrintf(F("Operating: %ld h\r\n"), eeprom.OperatingHours);
 }
@@ -297,9 +294,7 @@ void cmdFS20()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(channel=0; channel<IOBITS_CNT; channel++) {
-			SerialPrintf(F("FS20 CH%02d "), channel+1);
-			SerialPrintf(bitRead(curSM8Status, channel)?F("ON"):F("OFF"));
-			SerialPrintf(F("\r\n"));
+			SerialPrintf(F("FS20 CH%02d %S\r\n"), channel+1, bitRead(curSM8Status, channel)?fstrON:fstrOFF);
 			watchdogReset();
 		}
 		cmdOK();
@@ -315,7 +310,7 @@ void cmdFS20()
 			arg = SCmd.next();
 			if (arg != NULL) {
 				// ON|OFF entered?
-				if      ( strnicmp(arg, F("ON"),2)==0 ) {
+				if      ( strnicmp(arg, fstrON,2)==0 ) {
 					if( !bitRead(curSM8Status, channel) ) {
 						bitClear(valSM8Button, channel);
 					}
@@ -345,13 +340,11 @@ void cmdFS20()
 					cmdOK();
 				}
 				else {
-					cmdError(F("Unknown parameter (use 'ON', 'OFF' or 'PRG')"));
+					cmdErrorParameter(F("'ON', 'OFF' or 'PRG'"));
 				}
 			}
 			else {
-				SerialPrintf(F("FS20 CH%02d "), channel+1);
-				SerialPrintf(bitRead(curSM8Status, channel)?F("ON"):F("OFF"));
-				SerialPrintf(F("\r\n"));
+				SerialPrintf(F("FS20 CH%02d %S\r\n"), channel+1,bitRead(curSM8Status, channel)?fstrON:fstrOFF);
 				cmdOK();
 			}
 		}
@@ -370,9 +363,7 @@ void cmdWallButton()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(button=0; button<IOBITS_CNT; button++) {
-			SerialPrintf(F("PB%02d "), button+1);
-			SerialPrintf(bitRead(curWallButton, button)?F("ON"):F("OFF"));
-			SerialPrintf(F("\r\n"));
+			SerialPrintf(F("PB%02d %S\r\n"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
 			watchdogReset();
 		}
 		cmdOK();
@@ -388,7 +379,7 @@ void cmdWallButton()
 			arg = SCmd.next();
 			if (arg != NULL) {
 				// ON|OFF entered?
-				if      ( strnicmp(arg, F("ON"),2)==0 ) {
+				if      ( strnicmp(arg, fstrON,2)==0 ) {
 					bitSet(curWallButton, button);
 					cmdOK();
 				}
@@ -397,13 +388,11 @@ void cmdWallButton()
 					cmdOK();
 				}
 				else {
-					cmdError(F("Unknown parameter (use 'ON' or 'OFF')"));
+					cmdErrorParameter(F("'ON' or 'OFF'"));
 				}
 			}
 			else {
-				SerialPrintf(F("PB%02d "), button+1);
-				SerialPrintf(bitRead(curWallButton, button)?F("ON"):F("OFF"));
-				SerialPrintf(F("\r\n"));
+				SerialPrintf(F("PB%02d %S\r\n"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
 				cmdOK();
 			}
 		}
@@ -534,11 +523,11 @@ void cmdMotorPrintStatus(int motor)
 	if( runTimePercent>100 ) {
 		runTimePercent=100;
 	}
-	SerialPrintf(F("M%02d %-7s %3d%% %-7s (%s)\r\n")
+	SerialPrintf(F("M%02d %-7S %3d%% %-7S (%s)\r\n")
 				,motor+1
-				,runTimePercent==0?"CLOSE":(runTimePercent==100?"OPEN":"BETWEEN")
+				,runTimePercent==0?F("CLOSE"):(runTimePercent==100?F("OPEN"):F("BETWEEN"))
 				,runTimePercent
-				,getMotorDirection(motor)==MOTOR_OFF?"OFF":(getMotorDirection(motor)>=MOTOR_OPEN)?"OPENING":"CLOSING"
+				,getMotorDirection(motor)==MOTOR_OFF?F("OFF"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OPENING"):F("CLOSING")
 				,(char *)eeprom.MotorName[motor]);
 	watchdogReset();
 }
@@ -684,7 +673,7 @@ void cmdType()
 					cmdOK();
 				}
 				else {
-					cmdError(F("Unknown parameter (use 'WINDOW' or 'JALOUSIE'"));
+					cmdErrorParameter(F("'WINDOW' or 'JALOUSIE'"));
 				}
 			}
 			else {
@@ -696,7 +685,7 @@ void cmdType()
 }
 void cmdTypePrintStatus(int motor)
 {
-	SerialPrintf(F("M%02d %-8s (%s)\r\n"), motor+1, getMotorType(motor)==WINDOW ? "WINDOW" : "JALOUSIE", (char *)eeprom.MotorName[motor]);
+	SerialPrintf(F("M%02d %-8s (%S)\r\n"), motor+1, getMotorType(motor)==WINDOW ? F("WINDOW") : F("JALOUSIE"), (char *)eeprom.MotorName[motor]);
 	watchdogReset();
 }
 
@@ -731,41 +720,21 @@ void cmdRainSensor()
 		Rainsensor status:  Dry|Raining
 		*/
 
-		SerialPrintf(F("Sensor monitoring:  "));
 		if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
 			sensorEnabled = (debEnable.read() == RAIN_ENABLE_AKTIV);
 		}
 		else {
 			sensorEnabled = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
 		}
-		SerialPrintf(sensorEnabled?F("Enabled"):F("Disabled"));
-		SerialPrintf(F(" reading from "));
-		SerialPrintf(bitRead(eeprom.Rain, RAIN_BIT_AUTO)?F("input"):F("setting"));
-		SerialPrintf(F("\r\n"));
-
-		SerialPrintf(F("Rainsensor input:   "));
-		SerialPrintf((debInput.read()==RAIN_INPUT_AKTIV)?F("Raining"):F("Dry"));
-		SerialPrintf(F("\r\n"));
-		
-		SerialPrintf(F("Rainsensor setting: "));
-		SerialPrintf(softRainInput?F("Raining"):F("Dry"));
-		SerialPrintf(F("\r\n"));
-
-		SerialPrintf(F("Window position:    "));
-		SerialPrintf(bitRead(eeprom.Rain, RAIN_BIT_RESUME)?F("Resume"):F("Forget"));
-		if( bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
-			SerialPrintf(F(" (%d sec delay)"), eeprom.RainResumeTime);
-		}
-		SerialPrintf(F("\r\n"));
-
-		SerialPrintf(F("Rainsensor status:  "));
-		SerialPrintf( sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? F("Raining") : F("Dry") );
-		SerialPrintf(F("\r\n"));
-
+		SerialPrintf(F("Sensor monitoring:  %S  reading from %S\r\n"),sensorEnabled?F("Enabled"):F("Disabled"),bitRead(eeprom.Rain, RAIN_BIT_AUTO)?F("input"):F("setting"));
+		SerialPrintf(F("Rainsensor input:   %S\r\n"), (debInput.read()==RAIN_INPUT_AKTIV)?F("Raining"):F("Dry"));
+		SerialPrintf(F("Rainsensor setting: %S\r\n"), softRainInput?F("Raining"):F("Dry"));
+		SerialPrintf(F("Window position:    %S, delay: %d sec\r\n"), bitRead(eeprom.Rain, RAIN_BIT_RESUME)?F("Resume"):F("Forget"), eeprom.RainResumeTime);
+		SerialPrintf(F("Rainsensor status:  %S\r\n"), sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? F("Raining") : F("Dry"));
 		cmdOK();
 	}
 	else {
-		if ( strnicmp(arg, F("ON"),2)==0 ) {
+		if ( strnicmp(arg, fstrON,2)==0 ) {
 			softRainInput = true;
 			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
 			cmd = true;
@@ -813,7 +782,7 @@ void cmdRainSensor()
 			cmdOK();
 		}
 		else {
-			cmdError(F("Unknown parameter (use 'ENABLE', 'DISABLE', 'AUTO', 'ON' or 'OFF'"));
+			cmdErrorParameter(F("'ENABLE', 'DISABLE', 'AUTO', 'ON' or 'OFF'"));
 		}
 	}
 }
@@ -832,7 +801,7 @@ void cmdStatus()
 		cmdOK();
 	}
 	else {
-		if ( strnicmp(arg, F("ON"),2)==0 ) {
+		if ( strnicmp(arg, fstrON,2)==0 ) {
 			eeprom.CmdSendStatus = true;
 			eepromWriteVars();
 			cmdOK();
@@ -843,7 +812,7 @@ void cmdStatus()
 			cmdOK();
 		}
 		else {
-			cmdError(F("Unknown parameter (use 'ON' or 'OFF'"));
+			cmdErrorParameter(F("'ON' or 'OFF'"));
 		}
 	}
 }
@@ -873,7 +842,7 @@ void cmdLed()
 		Interval=(WORD)atoi(argInterval);
 		Flash=(WORD)atoi(argFlash);
 		if ( Interval<Flash ) {
-			cmdError(F("Wrong arguments, flash time must be greater or equal interval time"));
+			cmdError(F("Wrong option, flash must be >= interval time"));
 		}
 		else {
 			eeprom.BlinkInterval = Interval;
@@ -906,6 +875,13 @@ void cmdError(String err)
 {
 	SerialPrintf(F("ERROR: "));
 	Serial.println(err);
+}
+
+void cmdErrorParameter(String err)
+{
+	SerialPrintf(F("ERROR: Unknown option (use "));
+	Serial.print(err);
+	Serial.println(")");
 }
 
 // This gets set as the default handler, and gets called when no other command matches.

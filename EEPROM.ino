@@ -100,7 +100,6 @@ void eepromInitVars()
 	// Vergleiche kalkulierte CRC32 mit gespeicherter CRC32
 	dataCRC = eepromCalcCRC();
 	EEPROM.get(EEPROM_ADDR_CRC32, eepromCRC);
-
 	#ifdef DEBUG_OUTPUT_EEPROM
 	//Print the result of calling eepromCRC()
 	SerialTimePrintf(F("EEPROM - values CRC32: 0x%08lx\r\n"), dataCRC);
@@ -111,26 +110,24 @@ void eepromInitVars()
 		#ifdef DEBUG_OUTPUT_EEPROM
 		SerialTimePrintf(F("EEPROM - CRC32 not matching, set defaults...\r\n"));
 		#endif
-
 		eeprom.BlinkInterval = LED_BLINK_INTERVAL;
-		eeprom.BlinkLen = LED_BLINK_LEN;
-		eeprom.MTypeBitmask = MTYPE_BITMASK;
+		eeprom.BlinkLen      = LED_BLINK_LEN;
+		eeprom.MTypeBitmask  = MTYPE_BITMASK;
 		for(i=0; i<MAX_MOTORS; i++) {
 			eeprom.MaxRuntime[i] = bitRead(MTYPE_BITMASK,i)!=0?MOTOR_WINDOW_MAXRUNTIME:MOTOR_JALOUSIE_MAXRUNTIME;
 			sprintf_P((char *)eeprom.MotorName[i], PSTR("MOTOR %02d"), i);
 			// Annahme: Fenster sind geschlossen, Jalousien offen
 			eeprom.MotorPosition[i] = getMotorType(i)==WINDOW ? 0 : (eeprom.MaxRuntime[i]/TIMER_MS);
 		}
-		bitSet(eeprom.Rain, RAIN_BIT_AUTO);
+		bitSet(eeprom.Rain,   RAIN_BIT_AUTO);
 		bitClear(eeprom.Rain, RAIN_BIT_ENABLE);
 		eeprom.RainResumeTime = DEFAULT_RAINRESUMETIME;
-		eeprom.CmdSendStatus = DEFAULT_CMDSENDSTATUS;
-		eeprom.CmdEcho = DEFAULT_CMDECHO;
-		eeprom.CmdTerm = DEFAULT_CMDTERM;
+		eeprom.CmdSendStatus  = DEFAULT_CMDSENDSTATUS;
+		eeprom.CmdEcho        = DEFAULT_CMDECHO;
+		eeprom.CmdTerm        = DEFAULT_CMDTERM;
 		eeprom.OperatingHours = 0;
 
 		eepromWriteVars();
-
 	}
 	#ifdef DEBUG_OUTPUT_EEPROM
 	else {

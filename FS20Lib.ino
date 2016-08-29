@@ -18,7 +18,7 @@
 void printProgramInfo(bool copyright)
 {
 	SerialPrintf(F("\r\n%s v%s (build %s)\r\n"), PROGRAM, VERSION, REVISION);
-	SerialPrintf(F("compiled on %s %s (GnuC%s %s)\r\n"), __DATE__, __TIME__, __GNUG__?"++ ":" ", __VERSION__);
+	SerialPrintf(F("compiled on %s %s (GnuC%S %s)\r\n"), __DATE__, __TIME__, __GNUG__?F("++ "):F(" "), __VERSION__);
 	SerialPrintf(F("using avr library %s (%s)\r\n"),  __AVR_LIBC_VERSION_STRING__, __AVR_LIBC_DATE_STRING__);
 	if( copyright ) {
 		SerialPrintf(F("(c) 2016 www.p-r-solution.de - Norbert Richter <n.richter@p-r-solution.de>\r\n"));
@@ -122,6 +122,37 @@ unsigned long sec(uint16_t *milli)
 	return t + ((unsigned long)millisOverflow * 4294967L);
 }
 
+
+/* ===================================================================
+ * Function:    SerialPrintUptime
+ * Return:
+ * Arguments:	
+ * Description: Print system uptime
+ * ===================================================================*/
+void SerialPrintUptime(void)
+{
+	uint32_t t, ot;
+	uint16_t days, milli;
+	uint8_t hours, minutes, seconds;
+	char timebuf[48];
+
+	t = ot = sec(&milli);
+	days    = (uint16_t)(t      / (24UL * 60UL * 60UL));
+	t      -= (uint32_t)days    * (24UL * 60UL * 60UL);
+	hours   = (uint8_t) (t      / (60UL * 60UL));
+	t      -= (uint32_t)hours   * (60UL * 60UL);
+	minutes = (uint8_t) (t      / (60UL));
+	t      -= (uint32_t)minutes * (60UL);
+	seconds = (uint8_t) t;
+
+	if ( days ) {
+		snprintf_P(timebuf, sizeof(timebuf), PSTR("%d day%S "), days, days==1?F(""):F("s"));
+		Serial.print(timebuf);
+	}
+	snprintf_P(timebuf, sizeof(timebuf), PSTR("%02d:%02d:%02d.%-3d (%ld%03d ms) "), hours, minutes, seconds, milli, ot, milli);
+	Serial.print(timebuf);
+}
+
 /* ===================================================================
  * Function:    SerialTimePrintf
  * Return:
@@ -130,28 +161,7 @@ unsigned long sec(uint16_t *milli)
  * ===================================================================*/
 void SerialTimePrintf(const __FlashStringHelper *fmt, ... )
 {
-	uint32_t t, ot;
-	uint16_t days, milli;
-	uint8_t hours, minutes, seconds;
-	char timebuf[48];
-
-	t = ot = sec(&milli);
-	/* div_t div(int number, int denom) */
-	days = (uint16_t)(t / (24UL * 60UL * 60UL));
-	t -= (uint32_t)days * (24UL * 60UL * 60UL);
-	hours = (uint8_t)(t / (60UL * 60UL));
-	t -= (uint32_t)hours * (60UL * 60UL);
-	minutes = (uint8_t)(t / (60UL));
-	t -= (uint32_t)minutes * (60UL);
-	seconds = (uint8_t)t;
-
-	if ( days ) {
-		snprintf_P(timebuf, sizeof(timebuf), PSTR("%d day%s "), days, days==1?"":"s");
-		Serial.print(timebuf);
-	}
-	snprintf_P(timebuf, sizeof(timebuf), PSTR("%02d:%02d:%02d.%-3d (%ld%03d ms) "), hours, minutes, seconds, milli, ot, milli);
-	Serial.print(timebuf);
-
+	SerialPrintUptime();
 
 	va_list args;
 	va_start (args, fmt);
@@ -208,25 +218,26 @@ void setMotorPosition(byte motorNum, MOTOR_TIMER destPosition)
 void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 {
 	if ( motorNum < MAX_MOTORS ) {
+		byte m=motorNum+1;
 		// Neue Richtung: Öffnen
 		if ( newDirection >= MOTOR_OPEN ) {
 			// Motor läuft auf Schliessen
 			if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor auf Öffnen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN_DELAYED;
-				sendStatus(F("01 M%i OPENING DELAYED"), motorNum+1);
+				sendStatus(F("01 M%i OPENING DELAYED"), m);
 			}
 			// Motor läuft auf Öffnen
 			else if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sendStatus(F("01 M%i OFF"), motorNum+1);
+				sendStatus(F("01 M%i OFF"), m);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf öffnen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN;
-				sendStatus(F("01 M%i OPENING"), motorNum+1);
+				sendStatus(F("01 M%i OPENING"), m);
 			}
 		}
 		// Neue Richtung: Schliessen
@@ -235,26 +246,26 @@ void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor auf Schliessen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE_DELAYED;
-				sendStatus(F("01 M%i CLOSING DELAYED"), motorNum+1);
+				sendStatus(F("01 M%i CLOSING DELAYED"), m);
 			}
 			// Motor läuft auf Schliessen
 			else if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sendStatus(F("01 M%i OFF"), motorNum+1);
+				sendStatus(F("01 M%i OFF"), m);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf Schliessen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE;
-				sendStatus(F("01 M%i CLOSING"), motorNum+1);
+				sendStatus(F("01 M%i CLOSING"), m);
 			}
 		}
 		// Neue Richtung: AUS
 		else {
 			// Motor AUS
 			MotorCtrl[motorNum] = MOTOR_OFF;
-			sendStatus(F("01 M%i OFF"), motorNum+1);
+			sendStatus(F("01 M%i OFF"), m);
 		}
 	}
 }
@@ -311,5 +322,10 @@ void setMotorType(byte motorNum, mtype mType)
  * ===================================================================*/
 mtype getMotorType(byte motorNum)
 {
-	return bitRead(eeprom.MTypeBitmask, motorNum) ? WINDOW : JALOUSIE;
+	if ( bitRead(eeprom.MTypeBitmask, motorNum) ) {
+		return WINDOW;
+	}
+	else {
+		return JALOUSIE;
+	}
 }

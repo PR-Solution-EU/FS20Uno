@@ -187,7 +187,7 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"		// Programmname
-#define VERSION "3.31"			// Programmversion
+#define VERSION "3.32"			// Programmversion
 #include "REVISION.h"			// Build (wird von git geändert)
 #define DATAVERSION 123			// Kann verwendet werden, um Defaults
 								// zu schreiben
@@ -203,7 +203,7 @@
 #undef DEBUG_RUNTIME			// enable runtime debugging
 #undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
-#define DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
+#undef DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
 #undef DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
 #undef DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
 #undef DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
@@ -355,7 +355,9 @@ struct EEPROM {
 void printRuntime(const __FlashStringHelper *funcName, unsigned long starttime)
 {
 	unsigned long duration = micros() - starttime;
-	SerialTimePrintf(F("RUNTIME - "));
+
+	SerialPrintUptime();
+	SerialPrintf(F("RUNTIME - "));
 	Serial.print(funcName);
 	SerialPrintf(F(" duration: %ld.%03ld ms\r\n"), duration / 1000L, duration % 1000L);
 }
@@ -727,9 +729,9 @@ void handleMPCInt()
 			#ifdef DEBUG_PINS
 			digitalWrite(DBG_MPC, HIGH);	// debugging
 			#endif
-			irqSM8Status = expanderReadWord(MPC_SM8STATUS, INTCAP);
+			irqSM8Status = expanderReadWord(MPC_SM8STATUS, GPIO);
 			for (i = 0; i < IOBITS_CNT; i++) {
-				if ( (curSM8Status & (1 << i)) != (irqSM8Status & (1 << i)) ) {
+				if ( bitRead(curSM8Status,i) != bitRead(irqSM8Status,i) ) {
 					debSM8Status[i] = SM8_DEBOUNCE_TIME / TIMER_MS;
 				}
 			}
@@ -744,7 +746,6 @@ void handleMPCInt()
 			#ifdef DEBUG_PINS
 			digitalWrite(DBG_MPC, HIGH);	// debugging
 			#endif
-			// irqWallButton = expanderReadWord(MPC_WALLBUTTON, INTCAP);
 			irqWallButton = expanderReadWord(MPC_WALLBUTTON, GPIO);
 			#ifdef DEBUG_OUTPUT_WALLBUTTON
 			SerialTimePrintf(F("handleMPCInt    - IRQ - irqWallButton: 0x%04x\r\n"), irqWallButton);
@@ -895,7 +896,7 @@ void ctrlSM8Status(void)
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(SM8StatusChange, i) ) {
-					sendStatus(F("02 FS20 OUTPUT %2d %s"), i+1, bitRead(curSM8Status,i)?"ON":"OFF");
+					sendStatus(F("02 FS20 OUTPUT %2d %S"), i+1, bitRead(curSM8Status,i)?fstrON:fstrOFF);
 				}
 				watchdogReset();
 			}
@@ -1026,7 +1027,7 @@ void ctrlWallButton(void)
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(WallButtonChange, i) ) {
-					sendStatus(F("04 PB %2d %s"), i+1, bitRead(curWallButton,i)?"ON":"OFF");
+					sendStatus(F("04 PB %2d %S"), i+1, bitRead(curWallButton,i)?fstrON:fstrOFF);
 					if ( bitRead(curWallButton,i) ) {
 						WallButtonTimer[i % MAX_MOTORS] = millis();
 					}
@@ -1110,7 +1111,7 @@ void ctrlSM8Button(void)
 
 		for (i = 0; i < IOBITS_CNT; i++) {
 			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) ) {
-				sendStatus(F("03 FS20 KEY  %2d %s"), i+1, bitRead(valSM8Button,i)?"OFF":"ON");
+				sendStatus(F("03 FS20 KEY  %2d %S"), i+1, bitRead(valSM8Button,i)?fstrOFF:fstrON);
 			}
 
 			// SM8 Taste Timeout setzen, falls Tastenausgang gerade aktiviert wurde
@@ -1171,8 +1172,8 @@ void ctrlMotorRelais(void)
 		preMotorRelais[2] = valMotorRelais;
 		preMotorRelais[3] = valMotorRelais;
 
-		/* Tabelle (M=Motorbit, D=Directionbit, S=Schritte)
-		 * Ist Soll Schritte
+		/* Tabelle (M=Motorbit, D=Directionbit, S=Steps)
+		 * Ist Soll Steps
 		 * MD  MD   MD          S MC MD
 		 * 00  00   -        -  0 00 00
 		 * 00  01   01       -  1 00 01
@@ -1189,9 +1190,7 @@ void ctrlMotorRelais(void)
 		 * 11  00   01 00    x  2 10 10
 		 * 11  01   01       -  1 10 11
 		 * 11  10   01 00 10 x  3 11 00
-		 * 11  11   -        -  0 11 11
-		 *
-		 */
+		 * 11  11   -        -  0 11 11	 */
 		// Jeden Motor einzeln testen
 		for(i=0; i<MAX_MOTORS; i++) {
 			curTarget = 0;
@@ -1199,10 +1198,8 @@ void ctrlMotorRelais(void)
 			bitWrite(curTarget, 2, bitRead(tmpMotorRelais, i+MAX_MOTORS));
 			bitWrite(curTarget, 1, bitRead(valMotorRelais, i));
 			bitWrite(curTarget, 0, bitRead(valMotorRelais, i+MAX_MOTORS));
-			// Letzter Schritt (Relais Endzustand) wird immer
-			// ausgegeben
+			// Letzter Schritt (Relais Endzustand) wird immer ausgegeben
 			targetSteps = 0;
-			//targetStep[0] = curTarget & 0b11;
 
 			switch (curTarget) {
 				case 0b0000:
@@ -1445,7 +1442,12 @@ void ctrlRainSensor(void)
 		firstRun = false;
 	}
 
-	strMode = bitRead(eeprom.Rain, RAIN_BIT_AUTO)!=0?"AUTO":"MANUAL";
+	if ( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
+		strMode = "AUTO";
+	}
+	else {
+		strMode = "MANUAL";
+	}
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable ) {
 		#ifdef DEBUG_OUTPUT_RAIN
 		SerialTimePrintf(F("%S----------------------------------------\r\n"), dbgCtrlRainSensor);
