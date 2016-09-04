@@ -726,7 +726,9 @@ void cmdRainSensor()
 		else {
 			sensorEnabled = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
 		}
-		SerialPrintf(F("Sensor monitoring:  %S  reading from %S\r\n"),sensorEnabled?F("Enabled"):F("Disabled"),bitRead(eeprom.Rain, RAIN_BIT_AUTO)?F("input"):F("setting"));
+		SerialPrintf(F("Sensor monitoring:  %S  reading from %S\r\n")
+				,sensorEnabled?F("Enabled"):F("Disabled")
+				,bitRead(eeprom.Rain, RAIN_BIT_AUTO)?F("input"):F("setting"));
 		SerialPrintf(F("Rainsensor input:   %S\r\n"), (debInput.read()==RAIN_INPUT_AKTIV)?F("Raining"):F("Dry"));
 		SerialPrintf(F("Rainsensor setting: %S\r\n"), softRainInput?F("Raining"):F("Dry"));
 		SerialPrintf(F("Window position:    %S, delay: %d sec\r\n"), bitRead(eeprom.Rain, RAIN_BIT_RESUME)?F("Resume"):F("Forget"), eeprom.RainResumeTime);
@@ -774,6 +776,10 @@ void cmdRainSensor()
 			}
 		}
 		else if ( strnicmp(arg, F("FO"),2)==0 ) {
+			// Clear resumeMotorPosition[]
+			for(size_t i=0; i<(sizeof(resumeMotorPosition)/sizeof(resumeMotorPosition[0])); i++) {
+				resumeMotorPosition[i] = NO_POSITION;
+			}
 			bitClear(eeprom.Rain, RAIN_BIT_RESUME);
 			cmd = true;
 		}

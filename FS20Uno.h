@@ -130,7 +130,6 @@ typedef unsigned long	TIMER;
 #define DEFAULT_CMDECHO				false
 #define DEFAULT_CMDTERM				'\r'
 
-// TODO: MASK and BITS are not correct for all MAX_MOTORS values
 #if MAX_MOTORS<=4
 	#define IOBITS_ZERO		0x00
 	#define IOBITS_MASK		0xFF
@@ -180,9 +179,8 @@ typedef char MOTOR_CTRL;
 	typedef DWORD SM8_TIMEOUT;
 #endif
 
-#define NO_POSITION MAX_MOTOR_TIMER
-#define NO_POSITION MAX_MOTOR_TIMER
-
+#define NO_POSITION 			MAX_MOTOR_TIMER
+#define NO_RESUME_DELAY 		MAX_MOTOR_TIMER
 
 
 const char fstrON[]  PROGMEM = "ON";

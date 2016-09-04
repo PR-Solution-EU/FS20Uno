@@ -187,7 +187,7 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"		// Programmname
-#define VERSION "3.32"			// Programmversion
+#define VERSION "3.33"			// Programmversion
 #include "REVISION.h"			// Build (wird von git geändert)
 #define DATAVERSION 123			// Kann verwendet werden, um Defaults
 								// zu schreiben
@@ -302,7 +302,7 @@ volatile MOTOR_TIMER destMotorPosition[MAX_MOTORS] = {NO_POSITION,NO_POSITION,NO
 
 /* Enthält Motorposition von Fenstern vor Regenbeginn */
 volatile MOTOR_TIMER resumeMotorPosition[MAX_MOTORS] = {NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION};
-volatile WORD resumeDelay = NO_POSITION;
+volatile WORD resumeDelay = NO_RESUME_DELAY;
 
 /* Zeitzähler für Auto-Learn Funktion: 
  * Enthält die Zeit, wie lange die Wandtaste gedrückt wurde */
@@ -599,7 +599,7 @@ void timerISR()
 		}
 
 		// Delay für Regensensor RESUME
-		if ( resumeDelay!=NO_POSITION && resumeDelay>0 ) {
+		if ( resumeDelay!=NO_RESUME_DELAY && resumeDelay>0 ) {
 			resumeDelay--;
 		}
 
@@ -1536,7 +1536,7 @@ void ctrlRainSensor(void)
 					resumeMotorPosition[i] = NO_POSITION;
 			}
 		}
-		resumeDelay = NO_POSITION;
+		resumeDelay = NO_RESUME_DELAY;
 	}
 }
 
