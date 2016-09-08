@@ -187,7 +187,7 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"		// Programmname
-#define VERSION "3.33"			// Programmversion
+#define VERSION "3.34"			// Programmversion
 #include "REVISION.h"			// Build (wird von git geändert)
 #define DATAVERSION 123			// Kann verwendet werden, um Defaults
 								// zu schreiben
@@ -335,9 +335,9 @@ struct EEPROM {
 	#define RAIN_BIT_ENABLE	(1<<1)
 	#define RAIN_BIT_RESUME	(1<<2)
 	WORD 		RainResumeTime;				// Wiederherstellungsverzögerung
-	bool 		CmdEcho;					// Cmd interface echo
-	char 		CmdTerm;					// Cmd interface terminator
-	bool 		CmdSendStatus;				// Sende autom. Statusänderung
+	bool 		Echo;						// Kommando-Schnittstelle Echo
+	char 		Term;						// Kommando-Schnittstelle Terminator
+	bool 		SendStatus;					// Sende autom. Statusänderung
 	DWORD		OperatingHours;				// Betriebsstunden
 } eeprom;
 
@@ -391,7 +391,21 @@ void setup()
 
 	Serial.begin(SERIAL_BAUDRATE);
 
-	printProgramInfo(true);
+	// Lese EEPROM Programmvariablen
+	eepromInitVars();
+
+	// Initalisiere andere Programmvariablen
+	initVars();
+
+	// Initalisere Kommando-Interface
+	setupSerialCommand();
+
+	if( eeprom.SendStatus ) {
+		sendStatus(SYS, F("%s %s.%s"), PROGRAM, VERSION, REVISION);
+	}
+	else {
+		printProgramInfo(true);
+	}
 
 	#ifdef DEBUG_OUTPUT
 	SerialTimePrintf(F("setup - Debug output enabled\r\n"));
@@ -472,16 +486,6 @@ void setup()
 	digitalWrite(MPC_INT_INPUT, HIGH);	// enable pull-up as we have made
 									// the interrupt pins open drain
 
-	// Lese EEPROM Programmvariablen
-	eepromInitVars();
-
-	// Initalisiere andere Programmvariablen
-	initVars();
-
-	// Initalisere Kommando-Interface
-	setupSerialCommand();
-
-
 	// Interrupts abschalten
 	noInterrupts();
 	extISREnabled = false;
@@ -521,7 +525,6 @@ void setup()
 
 	prevMillis = millis();
 
-
 	// Fertig signalisieren
 	digitalWrite(STATUS_LED, LOW);
 
@@ -533,6 +536,8 @@ void setup()
 	// Manual settings of single EEPROM vars
 	//~ eeprom.OperatingHours = 0;
 	//~ eepromWriteVars();
+
+	sendStatus(SYS, F("START"));
 }
 
 /* ===================================================================
@@ -896,7 +901,7 @@ void ctrlSM8Status(void)
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(SM8StatusChange, i) ) {
-					sendStatus(F("02 FS20 OUTPUT %2d %S"), i+1, bitRead(curSM8Status,i)?fstrON:fstrOFF);
+					sendStatus(FS20IN, F("%02d %S"), i+1, bitRead(curSM8Status,i)?fstrON:fstrOFF);
 				}
 				watchdogReset();
 			}
@@ -1027,7 +1032,7 @@ void ctrlWallButton(void)
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(WallButtonChange, i) ) {
-					sendStatus(F("04 PB %2d %S"), i+1, bitRead(curWallButton,i)?fstrON:fstrOFF);
+					sendStatus(PUSHBUTTON, F("%02d %S"), i+1, bitRead(curWallButton,i)?fstrON:fstrOFF);
 					if ( bitRead(curWallButton,i) ) {
 						WallButtonTimer[i % MAX_MOTORS] = millis();
 					}
@@ -1048,7 +1053,7 @@ void ctrlWallButton(void)
 							#ifdef DEBUG_OUTPUT_WALLBUTTON
 							SerialTimePrintf(F("ctrlWallButton  - Setting new timeout for motor %d: %ld ms\r\n"), i % MAX_MOTORS, maxTime);
 							#endif
-							sendStatus(F("01 M%i TIMEOUT=%ld"), (i % MAX_MOTORS)+1, maxTime);
+							sendStatus(MOTOR, F("%02d TIMEOUT %ld"), (i % MAX_MOTORS)+1, maxTime);
 							eeprom.MaxRuntime[i % MAX_MOTORS] = maxTime;
 							eepromWriteVars();
 						}
@@ -1111,7 +1116,7 @@ void ctrlSM8Button(void)
 
 		for (i = 0; i < IOBITS_CNT; i++) {
 			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) ) {
-				sendStatus(F("03 FS20 KEY  %2d %S"), i+1, bitRead(valSM8Button,i)?fstrOFF:fstrON);
+				sendStatus(FS20OUT, F("%2d %S"), i+1, bitRead(valSM8Button,i)?fstrOFF:fstrON);
 			}
 
 			// SM8 Taste Timeout setzen, falls Tastenausgang gerade aktiviert wurde
@@ -1483,7 +1488,7 @@ void ctrlRainSensor(void)
 						}
 					}
 				}
-				sendStatus(F("05 RAIN %s ENABLED WET"), strMode);
+				sendStatus(RAIN, F("%s ENABLED WET"), strMode);
 				isRaining = true;
 				digitalWrite(STATUS_LED, HIGH);
 			}
@@ -1495,7 +1500,7 @@ void ctrlRainSensor(void)
 					resumeDelay = (WORD)((unsigned long)eeprom.RainResumeTime * 1000L / TIMER_MS);
 				}
 				
-				sendStatus(F("05 RAIN %s ENABLED DRY"), strMode);
+				sendStatus(RAIN, F("%s ENABLED DRY"), strMode);
 				isRaining = false;
 				digitalWrite(STATUS_LED, LOW);
 			}
@@ -1505,13 +1510,13 @@ void ctrlRainSensor(void)
 				#ifdef DEBUG_OUTPUT_RAIN
 				SerialTimePrintf(F("%SRain disabled, wet\r\n"), dbgCtrlRainSensor);
 				#endif
-				sendStatus(F("05 RAIN MODE=%s DISABLED WET"), strMode);
+				sendStatus(RAIN, F("%s DISABLED WET"), strMode);
 			}
 			else {
 				#ifdef DEBUG_OUTPUT_RAIN
 				SerialTimePrintf(F("%SRain disabled, dry\r\n"), dbgCtrlRainSensor);
 				#endif
-				sendStatus(F("05 RAIN %s DISABLED DRY"), strMode);
+				sendStatus(RAIN, F("%s DISABLED DRY"), strMode);
 			}
 			isRaining = false;
 			digitalWrite(STATUS_LED, LOW);
@@ -1595,6 +1600,24 @@ void blinkLED(void)
 	}
 }
 
+/* ===================================================================
+ * Function:    operatonHours()
+ * Return:
+ * Arguments:
+ * Description: Merkt sich die Betriebsstunden im EEPROM
+ * ===================================================================*/
+void operatonHours(void)
+{
+	static unsigned long opHour;
+
+	opHour = sec(NULL);
+	if ( ((opHour % 3600L) == 0) && (savedOperationTime!=opHour) ) {
+		eeprom.OperatingHours++;
+		eepromWriteVars();
+		savedOperationTime = opHour;
+		sendStatus(SYS, F("RUNNING %d h"), eeprom.OperatingHours);
+	}
+}
 
 /* ===================================================================
  * Function:    loop()
@@ -1604,8 +1627,6 @@ void blinkLED(void)
  * ===================================================================*/
 void loop()
 {
-	unsigned long opHour;
-	
 	// MPC Interrupt-Behandlung außerhalb extISR
 	handleMPCInt();
 	watchdogReset();
@@ -1632,7 +1653,7 @@ void loop()
 	ctrlRainSensor();
 	watchdogReset();
 
-	// Live timer und watchdog handling
+	// Lebenszeichen (watchdog bedienen, debug output)
 	beAlive();
 	watchdogReset();
 
@@ -1640,14 +1661,11 @@ void loop()
 	blinkLED();
 	watchdogReset();
 
-	// Process serial command interface
+	// Serielles User-Interface bedienen
 	processSerialCommand();
 	watchdogReset();
-	
-	opHour = sec(NULL);
-	if ( ((opHour % 3600L) == 0) && (savedOperationTime!=opHour) ) {
-		eeprom.OperatingHours++;
-		eepromWriteVars();
-		savedOperationTime = opHour;
-	}
+
+	// Merkt sich die Betriebsstunden im EEPROM
+	operatonHours();
+	watchdogReset();
 }

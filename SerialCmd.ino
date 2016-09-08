@@ -10,8 +10,8 @@ void setupSerialCommand(void)
 	SCmd.addCommand(PSTR("?"),cmdHelp);
 	SCmd.addCommand(PSTR("HELP"),cmdHelp);
 	SCmd.addCommand(PSTR("INFO"),cmdInfo);
-	SCmd.addCommand(PSTR("ECHO"),cmdEcho);
-	SCmd.addCommand(PSTR("TERM"),cmdTerm);
+	SCmd.addCommand(PSTR("ECHO"),Echo);
+	SCmd.addCommand(PSTR("TERM"),Term);
 	SCmd.addCommand(PSTR("UPTIME"),cmdUptime);
 	SCmd.addCommand(PSTR("FS20"),cmdFS20);
 	SCmd.addCommand(PSTR("BUTTON"),cmdWallButton);
@@ -27,8 +27,8 @@ void setupSerialCommand(void)
 	SCmd.addCommand(PSTR("LED"),cmdLed);
 	SCmd.addCommand(PSTR("FACTORYRESET"),cmdFactoryReset);
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
-	SCmd.setEcho(eeprom.CmdEcho);
-	SCmd.setTerm(eeprom.CmdTerm);
+	SCmd.setEcho(eeprom.Echo);
+	SCmd.setTerm(eeprom.Term);
 }
 
 void processSerialCommand(void)
@@ -123,6 +123,7 @@ void cmdHelp()
 			"         TCLOSE    Toogle CLOSE direction\r\n"
 			"         TOOGLE    Toogle direction\r\n"
 			"         GOTO <p>  Goto position <p> (in %, 0-100)\r\n"
+			"         <p>       Goto position <p> (in %, 0-100)\r\n"
 			"         OFF       Stop motor\r\n"
 			"         SYNC      Set motor in a default defined state\r\n"
 			"         STATUS    Return the current status\r\n"
@@ -204,7 +205,7 @@ void cmdHelp()
 	Serial.print(F("\r\n"));
 }
 
-void cmdEcho(void)
+void Echo(void)
 {
 //~ "    ECHO [ON|OFF]\r\n"
 //~ "        Set/Get echo on or off\r\n"
@@ -212,18 +213,18 @@ void cmdEcho(void)
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintf(F("ECHO %S\r\n"),eeprom.CmdEcho?fstrON:fstrOFF);
+		SerialPrintf(F("ECHO %S\r\n"),eeprom.Echo?fstrON:fstrOFF);
 		cmdOK();
 	}
 	else if ( strnicmp(arg, fstrON,2)==0 ) {
-		eeprom.CmdEcho = true;
-		SCmd.setEcho(eeprom.CmdEcho);
+		eeprom.Echo = true;
+		SCmd.setEcho(eeprom.Echo);
 		eepromWriteVars();
 		cmdOK();
 	}
 	else if ( strnicmp(arg, F("OF"),2)==0 ) {
-		eeprom.CmdEcho = false;
-		SCmd.setEcho(eeprom.CmdEcho);
+		eeprom.Echo = false;
+		SCmd.setEcho(eeprom.Echo);
 		eepromWriteVars();
 		cmdOK();
 	}
@@ -232,7 +233,7 @@ void cmdEcho(void)
 	}
 }
 
-void cmdTerm(void)
+void Term(void)
 {
 //~ "    TERM [CR|LF]\r\n"
 //~ "        Set/Get command terminator\r\n"
@@ -240,18 +241,18 @@ void cmdTerm(void)
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintf(F("TERM %S\r\n"),eeprom.CmdTerm=='\r'?F("CR"):F("LF"));
+		SerialPrintf(F("TERM %S\r\n"),eeprom.Term=='\r'?F("CR"):F("LF"));
 		cmdOK();
 	}
 	else if ( strnicmp(arg, F("CR"),2)==0 ) {
-		eeprom.CmdTerm = '\r';
-		SCmd.setTerm(eeprom.CmdTerm);
+		eeprom.Term = '\r';
+		SCmd.setTerm(eeprom.Term);
 		eepromWriteVars();
 		cmdOK();
 	}
 	else if ( strnicmp(arg, F("OF"),2)==0 ) {
-		eeprom.CmdTerm = '\n';
-		SCmd.setTerm(eeprom.CmdTerm);
+		eeprom.Term = '\n';
+		SCmd.setTerm(eeprom.Term);
 		eepromWriteVars();
 		cmdOK();
 	}
@@ -412,6 +413,7 @@ void cmdMotor()
 //~ "              TCLOSE   - toogle CLOSE direction\r\n"
 //~ "              TOOGLE   - toogle direction\r\n"
 //~ "              GOTO <p> - goto <p> percent\r\n"
+//~ "              <p>      - Goto position <p> (in %, 0-100)\r\n"
 //~ "              OFF      - stop motor\r\n"
 //~ "              SYNC     - set motor in a default defined state\r\n"
 //~ "              STATUS   - return the current status\r\n"
@@ -500,6 +502,10 @@ void cmdMotor()
 					else {
 						setMotorDirection(motor, MOTOR_OPEN);
 					}
+					cmdOK();
+				}
+				else if ( (atoi(arg)>=0 && atoi(arg)<=100) ) {
+					setMotorPosition(motor, (MOTOR_TIMER)((long)(eeprom.MaxRuntime[motor] / TIMER_MS) * (long)atoi(arg) / 100L));
 					cmdOK();
 				}
 				else {
@@ -803,17 +809,17 @@ void cmdStatus()
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintf(eeprom.CmdSendStatus?F("ON\r\n"):F("OFF\r\n"));
+		SerialPrintf(eeprom.SendStatus?F("ON\r\n"):F("OFF\r\n"));
 		cmdOK();
 	}
 	else {
 		if ( strnicmp(arg, fstrON,2)==0 ) {
-			eeprom.CmdSendStatus = true;
+			eeprom.SendStatus = true;
 			eepromWriteVars();
 			cmdOK();
 		}
 		else if ( strnicmp(arg, F("OF"),2)==0 ) {
-			eeprom.CmdSendStatus = false;
+			eeprom.SendStatus = false;
 			eepromWriteVars();
 			cmdOK();
 		}

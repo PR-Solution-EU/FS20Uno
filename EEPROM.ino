@@ -122,9 +122,9 @@ void eepromInitVars()
 		bitSet(eeprom.Rain,   RAIN_BIT_AUTO);
 		bitClear(eeprom.Rain, RAIN_BIT_ENABLE);
 		eeprom.RainResumeTime = DEFAULT_RAINRESUMETIME;
-		eeprom.CmdSendStatus  = DEFAULT_CMDSENDSTATUS;
-		eeprom.CmdEcho        = DEFAULT_CMDECHO;
-		eeprom.CmdTerm        = DEFAULT_CMDTERM;
+		eeprom.SendStatus  = DEFAULT_SendStatus;
+		eeprom.Echo        = DEFAULT_Echo;
+		eeprom.Term        = DEFAULT_Term;
 		eeprom.OperatingHours = 0;
 
 		eepromWriteVars();
@@ -164,9 +164,9 @@ void eepromInitVars()
 	SerialPrintf(F("\r\n"));
 	SerialTimePrintf(F("EEPROM -   eeprom.Rain:          0x%02x\r\n"), eeprom.Rain);
 	SerialTimePrintf(F("EEPROM -   eeprom.RainResumeTime:%d\r\n"), eeprom.RainResumeTime);
-	SerialTimePrintf(F("EEPROM -   eeprom.CmdSendStatus: %s\r\n"), eeprom.CmdSendStatus?"yes":"no");
-	SerialTimePrintf(F("EEPROM -   eeprom.CmdEcho:       %s\r\n"), eeprom.CmdEcho?"yes":"no");
-	SerialTimePrintf(F("EEPROM -   eeprom.CmdTerm:       %s\r\n"), eeprom.CmdTerm=='\r'?"CR":"LF");
+	SerialTimePrintf(F("EEPROM -   eeprom.SendStatus: %s\r\n"), eeprom.SendStatus?"yes":"no");
+	SerialTimePrintf(F("EEPROM -   eeprom.Echo:       %s\r\n"), eeprom.Echo?"yes":"no");
+	SerialTimePrintf(F("EEPROM -   eeprom.Term:       %s\r\n"), eeprom.Term=='\r'?"CR":"LF");
 	SerialTimePrintf(F("EEPROM -   eeprom.OperatingHours:%ld\r\n"), eeprom.OperatingHours);
 	#endif
 }

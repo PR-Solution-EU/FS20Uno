@@ -174,17 +174,57 @@ void SerialTimePrintf(const __FlashStringHelper *fmt, ... )
  * Return:
  * Arguments:	str - Statusmeldung, die ausgegeben werden soll
  * Description: Statusmeldungen via RS232 senden, falls
- *              Statusmeldungen 'enabled'
+ *              Statusmeldungen 'enabled'.
+ *              Format: t type status
+ *                t       Status Typ Nr
+ *                        0: Systemmeldung
+ *                        1: Motormeldungen
+ *                        2: FS20 Ausgang Meldungen
+ *                        3: FS20 Eingang Meldungen
+ *                        4: Wandtaster Meldungen
+ *                        5: Regensensor Meldungen
+ *                type    Status Typ in Textform
+ *                        0: SYS
+ *                        1: MOTOR 01..xx
+ *                        2: FS20OUT 01..xx
+ *                        3: FS20IN 01..xx
+ *                        4: PUSHBUTTON 01..xx
+ *                        5: RAIN
+ *                status  0: FS20Uno version|START|RUNNING xx h
+ *                        1: TIMEOUT xx|OPENING [DELAYED]|CLOSING [DELAYED]|OFF 
+ *                        2: ON|OFF
+ *                        3: ON|OFF
+ *                        4: ON|OFF
+ *                        5: AUTO|MANUAL ENABLED|DISABLED DRY|WET
  * ===================================================================*/
-void sendStatus(const __FlashStringHelper *fmt, ... )
+void sendStatus(statusType type, const __FlashStringHelper *fmt, ... )
 {
-	if( eeprom.CmdSendStatus ) {
+	if( eeprom.SendStatus ) {
+		switch (type) {
+		case SYS:
+			Serial.print(F("0 SYS "));
+			break;
+		case MOTOR:
+			Serial.print(F("1 MOTOR "));
+			break;
+		case FS20OUT:
+			Serial.print(F("2 FS20OUT "));
+			break;
+		case FS20IN:
+			Serial.print(F("3 FS20IN "));
+			break;
+		case PUSHBUTTON:
+			Serial.print(F("4 PUSHBUTTON "));
+			break;
+		case RAIN:
+			Serial.print(F("5 RAIN "));
+			break;
+		}
 		va_list args;
 		va_start (args, fmt);
 		vaSerialPrint(fmt, args);
 		va_end(args);
-
-		Serial.print("\r\n");
+		Serial.print(F("\r\n"));
 	}
 }
 
@@ -225,19 +265,19 @@ void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor auf Öffnen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN_DELAYED;
-				sendStatus(F("01 M%i OPENING DELAYED"), m);
+				sendStatus(MOTOR, F("%02d OPENING DELAYED"), m);
 			}
 			// Motor läuft auf Öffnen
 			else if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sendStatus(F("01 M%i OFF"), m);
+				sendStatus(MOTOR, F("%02d OFF"), m);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf öffnen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN;
-				sendStatus(F("01 M%i OPENING"), m);
+				sendStatus(MOTOR, F("%02d OPENING"), m);
 			}
 		}
 		// Neue Richtung: Schliessen
@@ -246,26 +286,26 @@ void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor auf Schliessen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE_DELAYED;
-				sendStatus(F("01 M%i CLOSING DELAYED"), m);
+				sendStatus(MOTOR, F("%02d CLOSING DELAYED"), m);
 			}
 			// Motor läuft auf Schliessen
 			else if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sendStatus(F("01 M%i OFF"), m);
+				sendStatus(MOTOR, F("%02d OFF"), m);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf Schliessen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE;
-				sendStatus(F("01 M%i CLOSING"), m);
+				sendStatus(MOTOR, F("%02d CLOSING"), m);
 			}
 		}
 		// Neue Richtung: AUS
 		else {
 			// Motor AUS
 			MotorCtrl[motorNum] = MOTOR_OFF;
-			sendStatus(F("01 M%i OFF"), m);
+			sendStatus(MOTOR, F("%02d OFF"), m);
 		}
 	}
 }

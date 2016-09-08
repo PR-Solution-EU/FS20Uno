@@ -126,9 +126,9 @@ typedef unsigned long	TIMER;
  * falls RAIN RESUME aktiv */
 #define DEFAULT_RAINRESUMETIME		30
 
-#define DEFAULT_CMDSENDSTATUS		false
-#define DEFAULT_CMDECHO				false
-#define DEFAULT_CMDTERM				'\r'
+#define DEFAULT_SendStatus		false
+#define DEFAULT_Echo				false
+#define DEFAULT_Term				'\r'
 
 #if MAX_MOTORS<=4
 	#define IOBITS_ZERO		0x00
@@ -185,3 +185,15 @@ typedef char MOTOR_CTRL;
 
 const char fstrON[]  PROGMEM = "ON";
 const char fstrOFF[] PROGMEM = "OFF";
+
+
+// Status Typen
+enum statusType
+{
+	SYS = 0,
+	MOTOR = 1,
+	FS20OUT = 2,
+	FS20IN = 3,
+	PUSHBUTTON = 4,
+	RAIN = 5
+} STATUSTYPE;
