@@ -5,6 +5,11 @@
 #define MAX_PRINTF_BUFFER	160
 #define strnicmp(str1, str2, n) strncasecmp_P(str1, (const char *)str2, n)
 
+void printCRLF()
+{
+	Serial.println();
+}
+
 /* *******************************************************************
  * HIGH-LEVEL Functions
  * ********************************************************************/
@@ -17,11 +22,12 @@
  * ===================================================================*/
 void printProgramInfo(bool copyright)
 {
-	SerialPrintf(F("\r\n%s v%s (build %s)\r\n"), PROGRAM, VERSION, REVISION);
-	SerialPrintf(F("compiled on %s %s (GnuC%S %s)\r\n"), __DATE__, __TIME__, __GNUG__?F("++ "):F(" "), __VERSION__);
-	SerialPrintf(F("using avr library %s (%s)\r\n"),  __AVR_LIBC_VERSION_STRING__, __AVR_LIBC_DATE_STRING__);
+	Serial.println();
+	SerialPrintfln(F("%s v%s (build %s)"), PROGRAM, VERSION, REVISION);
+	SerialPrintfln(F("compiled on %s %s (GnuC%S %s)"), __DATE__, __TIME__, __GNUG__?F("++ "):F(" "), __VERSION__);
+	SerialPrintfln(F("using avr library %s (%s)"),  __AVR_LIBC_VERSION_STRING__, __AVR_LIBC_DATE_STRING__);
 	if( copyright ) {
-		SerialPrintf(F("(c) 2016 www.p-r-solution.de - Norbert Richter <n.richter@p-r-solution.de>\r\n"));
+		SerialPrintfln(F("(c) 2016 www.p-r-solution.de - Norbert Richter <n.richter@p-r-solution.de>"));
 	}
 	watchdogReset();
 }
@@ -40,7 +46,7 @@ void watchdogInit(void)
 	Watchdog.enable(WATCHDOG_TIME);
 	#else
 	int countdownMS = Watchdog.enable(WATCHDOG_TIME);
-	SerialTimePrintf(F("setup - Enabled the watchdog with max countdown of %d ms\r\n"), countdownMS);
+	SerialTimePrintfln(F("setup - Enabled the watchdog with max countdown of %d ms"), countdownMS);
 	#endif
 	#endif
 
@@ -60,7 +66,7 @@ void watchdogReset(void)
 }
 
 /* ===================================================================
- * Function:    SerialPrintf
+ * Function:    vaSerialPrint
  * Return:
  * Arguments:	printf arguments
  * Description: Serial output message
@@ -92,6 +98,21 @@ void SerialPrintf(const __FlashStringHelper *fmt, ... )
 	va_start (args, fmt);
 	vaSerialPrint(fmt, args);
 	va_end(args);
+}
+
+/* ===================================================================
+ * Function:    SerialPrintfln
+ * Return:
+ * Arguments:	printf arguments
+ * Description: Serial output message with new line
+ * ===================================================================*/
+void SerialPrintfln(const __FlashStringHelper *fmt, ... )
+{
+	va_list args;
+	va_start (args, fmt);
+	vaSerialPrint(fmt, args);
+	va_end(args);
+	printCRLF();
 }
 
 /* ===================================================================
@@ -170,6 +191,23 @@ void SerialTimePrintf(const __FlashStringHelper *fmt, ... )
 }
 
 /* ===================================================================
+ * Function:    SerialTimePrintfln
+ * Return:
+ * Arguments:	printf arguments
+ * Description: Serial output message with timestamp and newline
+ * ===================================================================*/
+void SerialTimePrintfln(const __FlashStringHelper *fmt, ... )
+{
+	SerialPrintUptime();
+
+	va_list args;
+	va_start (args, fmt);
+	vaSerialPrint(fmt, args);
+	va_end(args);
+	printCRLF();
+}
+
+/* ===================================================================
  * Function:    sendStatus
  * Return:
  * Arguments:	str - Statusmeldung, die ausgegeben werden soll
@@ -224,7 +262,7 @@ void sendStatus(statusType type, const __FlashStringHelper *fmt, ... )
 		va_start (args, fmt);
 		vaSerialPrint(fmt, args);
 		va_end(args);
-		Serial.print(F("\r\n"));
+		printCRLF();
 	}
 }
 
@@ -238,7 +276,7 @@ void sendStatus(statusType type, const __FlashStringHelper *fmt, ... )
 void setMotorPosition(byte motorNum, MOTOR_TIMER destPosition)
 {
 	#ifdef DEBUG_OUTPUT_MOTOR
-	SerialTimePrintf(F("setMotorPosition- Motor %d current pos=%d, destPosition=%d\r\n"), motorNum+1, MotorPosition[motorNum], destPosition);
+	SerialTimePrintfln(F("setMotorPosition- Motor %d current pos=%d, destPosition=%d"), motorNum+1, MotorPosition[motorNum], destPosition);
 	#endif
 	destMotorPosition[motorNum] = destPosition;
 	if ( destMotorPosition[motorNum] > MotorPosition[motorNum] ) {

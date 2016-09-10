@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "WProgram.h"
 #endif
 
+#include "FS20Lib.h"
 #include "SerialCommand.h"
 
 
@@ -109,7 +110,7 @@ void SerialCommand::readSerial()
 		}
 		if (inChar==term) {     // Check for the DEFAULT_TERMINATORinator (default '\r') meaning end of command
 			if ( isEcho ) {
-				Serial.print(F("\r\n"));   // Echo back to serial stream
+				Serial.println();   // Echo back to serial stream
 			}
 			#ifdef SERIALCOMMANDDEBUG
 			Serial.print(F("Received: "));

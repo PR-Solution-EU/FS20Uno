@@ -40,7 +40,7 @@ unsigned long eepromCalcCRC(void)
 	}
 	DEBUG_RUNTIME_END("eepromCalcCRC()",mseepromCalcCRC);
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM - eepromCalcCRC() returns 0x%08lx\r\n"), crc);
+	SerialTimePrintfln(F("EEPROM - eepromCalcCRC() returns 0x%08lx"), crc);
 	#endif
 	return crc;
 }
@@ -69,7 +69,7 @@ unsigned long CalcCRC(byte *addr, size_t size)
 	}
 	DEBUG_RUNTIME_END("CalcCRC()",msCalcCRC);
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM - CalcCRC(%p, %ld) returns 0x%08lx\r\n"), addr, (unsigned long)size, crc);
+	SerialTimePrintfln(F("EEPROM - CalcCRC(%p, %ld) returns 0x%08lx"), addr, (unsigned long)size, crc);
 	#endif
 	return crc;
 }
@@ -100,19 +100,20 @@ void eepromInitVars()
 	// Vergleiche kalkulierte CRC32 mit gespeicherter CRC32
 	dataCRC = eepromCalcCRC();
 	EEPROM.get(EEPROM_ADDR_CRC32, eepromCRC);
+
 	#ifdef DEBUG_OUTPUT_EEPROM
 	//Print the result of calling eepromCRC()
-	SerialTimePrintf(F("EEPROM - values CRC32: 0x%08lx\r\n"), dataCRC);
-	SerialTimePrintf(F("EEPROM - stored CRC32: 0x%08lx\r\n"), eepromCRC);
+	SerialTimePrintfln(F("EEPROM - values CRC32: 0x%08lx"), dataCRC);
+	SerialTimePrintfln(F("EEPROM - stored CRC32: 0x%08lx"), eepromCRC);
 	#endif
 
 	if ( dataCRC != eepromCRC ) {
 		#ifdef DEBUG_OUTPUT_EEPROM
-		SerialTimePrintf(F("EEPROM - CRC32 not matching, set defaults...\r\n"));
+		SerialTimePrintfln(F("EEPROM - CRC32 not matching, set defaults..."));
 		#endif
-		eeprom.BlinkInterval = LED_BLINK_INTERVAL;
-		eeprom.BlinkLen      = LED_BLINK_LEN;
-		eeprom.MTypeBitmask  = MTYPE_BITMASK;
+		eeprom.BlinkInterval 	= LED_BLINK_INTERVAL;
+		eeprom.BlinkLen      	= LED_BLINK_LEN;
+		eeprom.MTypeBitmask  	= MTYPE_BITMASK;
 		for(i=0; i<MAX_MOTORS; i++) {
 			eeprom.MaxRuntime[i] = bitRead(MTYPE_BITMASK,i)!=0?MOTOR_WINDOW_MAXRUNTIME:MOTOR_JALOUSIE_MAXRUNTIME;
 			sprintf_P((char *)eeprom.MotorName[i], PSTR("MOTOR %02d"), i);
@@ -121,53 +122,53 @@ void eepromInitVars()
 		}
 		bitSet(eeprom.Rain,   RAIN_BIT_AUTO);
 		bitClear(eeprom.Rain, RAIN_BIT_ENABLE);
-		eeprom.RainResumeTime = DEFAULT_RAINRESUMETIME;
-		eeprom.SendStatus  = DEFAULT_SendStatus;
-		eeprom.Echo        = DEFAULT_Echo;
-		eeprom.Term        = DEFAULT_Term;
-		eeprom.OperatingHours = 0;
+		eeprom.RainResumeTime 	= DEFAULT_RAINRESUMETIME;
+		eeprom.SendStatus  		= DEFAULT_SendStatus;
+		eeprom.Echo        		= DEFAULT_Echo;
+		eeprom.Term        		= DEFAULT_Term;
+		eeprom.OperatingHours 	= 0;
 
 		eepromWriteVars();
 	}
 	#ifdef DEBUG_OUTPUT_EEPROM
 	else {
-		SerialTimePrintf(F("EEPROM - CRC232 is valid\r\n"));
+		SerialTimePrintfln(F("EEPROM - CRC232 is valid"));
 	}
 	#endif
 
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM - read defaults...\r\n"));
+	SerialTimePrintfln(F("EEPROM - read defaults..."));
 	#endif
 	DEBUG_RUNTIME_START(mseepromReadDefaults);
 	EEPROM.get(EEPROM_ADDR_EEPROMDATA, eeprom);
 	DEBUG_RUNTIME_END("eepromInitVars() read defaults",mseepromReadDefaults);
 	
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM - values:\r\n"));
-	SerialTimePrintf(F("EEPROM -   eeprom.BlinkInterval: %d\r\n"),     eeprom.BlinkInterval);
-	SerialTimePrintf(F("EEPROM -   eeprom.BlinkLen:      %d\r\n"),     eeprom.BlinkLen);
-	SerialTimePrintf(F("EEPROM -   eeprom.MTypeBitmask:  0x%02x\r\n"), eeprom.MTypeBitmask);
-	SerialTimePrintf(F("EEPROM -   eeprom.MaxRuntime:    "));
+	SerialTimePrintfln(F("EEPROM - values:"));
+	SerialTimePrintfln(F("EEPROM -   eeprom.BlinkInterval: %d"),     eeprom.BlinkInterval);
+	SerialTimePrintfln(F("EEPROM -   eeprom.BlinkLen:      %d"),     eeprom.BlinkLen);
+	SerialTimePrintfln(F("EEPROM -   eeprom.MTypeBitmask:  0x%02x"), eeprom.MTypeBitmask);
+	SerialTimePrintf  (F("EEPROM -   eeprom.MaxRuntime:    "));
 	for(i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%ld"), i?",":"", eeprom.MaxRuntime[i]);
 	}
-	SerialPrintf(F("\r\n"));
-	SerialTimePrintf(F("EEPROM -   eeprom.MotorName:     "));
+	printCRLF();
+	SerialTimePrintf  (F("EEPROM -   eeprom.MotorName:     "));
 	for(i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%s"), i?",":"", (char *)eeprom.MotorName[i]);
 	}
-	SerialPrintf(F("\r\n"));
-	SerialTimePrintf(F("EEPROM -   eeprom.MotorPosition: "));
+	printCRLF();
+	SerialTimePrintf  (F("EEPROM -   eeprom.MotorPosition: "));
 	for(i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%d"), i?",":"", eeprom.MotorPosition[i]);
 	}
-	SerialPrintf(F("\r\n"));
-	SerialTimePrintf(F("EEPROM -   eeprom.Rain:          0x%02x\r\n"), eeprom.Rain);
-	SerialTimePrintf(F("EEPROM -   eeprom.RainResumeTime:%d\r\n"), eeprom.RainResumeTime);
-	SerialTimePrintf(F("EEPROM -   eeprom.SendStatus: %s\r\n"), eeprom.SendStatus?"yes":"no");
-	SerialTimePrintf(F("EEPROM -   eeprom.Echo:       %s\r\n"), eeprom.Echo?"yes":"no");
-	SerialTimePrintf(F("EEPROM -   eeprom.Term:       %s\r\n"), eeprom.Term=='\r'?"CR":"LF");
-	SerialTimePrintf(F("EEPROM -   eeprom.OperatingHours:%ld\r\n"), eeprom.OperatingHours);
+	printCRLF();
+	SerialTimePrintfln(F("EEPROM -   eeprom.Rain:          0x%02x"), eeprom.Rain);
+	SerialTimePrintfln(F("EEPROM -   eeprom.RainResumeTime:%d"), eeprom.RainResumeTime);
+	SerialTimePrintfln(F("EEPROM -   eeprom.SendStatus: %s"), eeprom.SendStatus?"yes":"no");
+	SerialTimePrintfln(F("EEPROM -   eeprom.Echo:       %s"), eeprom.Echo?"yes":"no");
+	SerialTimePrintfln(F("EEPROM -   eeprom.Term:       %s"), eeprom.Term=='\r'?"CR":"LF");
+	SerialTimePrintfln(F("EEPROM -   eeprom.OperatingHours:%ld"), eeprom.OperatingHours);
 	#endif
 }
 
@@ -191,14 +192,14 @@ void eepromWriteVars(void)
 	EEPROM.get(EEPROM_ADDR_CRC32, eepromCRC);
 
 	#ifdef DEBUG_OUTPUT_EEPROM
-	SerialTimePrintf(F("EEPROM - prevEEPROMDataCRC32: 0x%08lx\r\n"), prevEEPROMDataCRC32);
-	SerialTimePrintf(F("EEPROM - curEEPROMDataCRC32:  0x%08lx\r\n"), curEEPROMDataCRC32);
-	SerialTimePrintf(F("EEPROM - eepromCRC:           0x%08lx\r\n"), eepromCRC);
+	SerialTimePrintfln(F("EEPROM - prevEEPROMDataCRC32: 0x%08lx"), prevEEPROMDataCRC32);
+	SerialTimePrintfln(F("EEPROM - curEEPROMDataCRC32:  0x%08lx"), curEEPROMDataCRC32);
+	SerialTimePrintfln(F("EEPROM - eepromCRC:           0x%08lx"), eepromCRC);
 	#endif
 
 	if( curEEPROMDataCRC32 != prevEEPROMDataCRC32 ) {
 		#ifdef DEBUG_OUTPUT_EEPROM
-		SerialTimePrintf(F("EEPROM - Data changed, write EEPROM data\r\n"));
+		SerialTimePrintfln(F("EEPROM - Data changed, write EEPROM data"));
 		#endif
 		// Write new EEPROM data
 		EEPROM.put(EEPROM_ADDR_EEPROMDATA, eeprom);
@@ -207,7 +208,7 @@ void eepromWriteVars(void)
 		eepromCRC = eepromCalcCRC();
 		EEPROM.put(EEPROM_ADDR_CRC32, eepromCRC);
 		#ifdef DEBUG_OUTPUT_EEPROM
-		SerialTimePrintf(F("EEPROM - eepromCRC:           0x%08lx\r\n"), eepromCRC);
+		SerialTimePrintfln(F("EEPROM - eepromCRC:           0x%08lx"), eepromCRC);
 		#endif
 
 		prevEEPROMDataCRC32 = curEEPROMDataCRC32;

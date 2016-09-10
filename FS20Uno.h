@@ -182,11 +182,6 @@ typedef char MOTOR_CTRL;
 #define NO_POSITION 			MAX_MOTOR_TIMER
 #define NO_RESUME_DELAY 		MAX_MOTOR_TIMER
 
-
-const char fstrON[]  PROGMEM = "ON";
-const char fstrOFF[] PROGMEM = "OFF";
-
-
 // Status Typen
 enum statusType
 {

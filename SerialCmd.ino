@@ -39,170 +39,207 @@ void processSerialCommand(void)
 
 void cmdHelp()
 {
-	char *arg;
+	Serial.print(F(
+		"Command List\r\n"
+		"-------------\r\n"
+		"ECHO [ON|OFF]\r\n"
+		"\tLocal echo\r\n"
+		"FACTORYRESET\r\n"
+		"\tSet factory defaults\r\n"
+		"FS20 [<ch> [ON|OFF|PRG]]\r\n"
+		"\tFS20 control\r\n"
+		"HELP\r\n"
+		"\tThis help\r\n"
+		"INFO\r\n"
+		"\tProgram version\r\n"
+		"LED [<interval> <flash>]\r\n"
+		"\tLED blinking\r\n"
+		"MOTOR [<m> [[T]OPEN|[T]CLOSE|TOOGLE|GOTO <pos>|<pos>|OFF|SYNC|STATUS]\r\n"
+		"\tMotor control\r\n"
+		"MOTORNAME [<m> [<name>]\r\n"
+		"\tMotor names\r\n"
+		"MOTORTIME [<m> [<runtime>]\r\n"
+		"\tMotor runtime\r\n"
+		"MOTORTYPE [<m> [WINDOW|JALOUSIE]\r\n"
+		"\tMotor type\r\n"
+		"RAIN, RAINSENSOR [AUTO|ENABLE|DISABLE|ON|OFF|RESUME <delay>|FORGET]\r\n"
+		"\tRain sensor function\r\n"
+		"BUTTON, PUSHBUTTON, WALLBUTTON [<b> [ON|OFF]]\r\n"
+		"\tWall pushbutton status\r\n"
+		"STATUS [ON|OFF]\r\n"
+		"\tStatus messages\r\n"
+		"TERM [CR|LF]\r\n"
+		"\tCommand terminator\r\n"
+		"UPTIME [h]\r\n"
+		"\tSystem uptime\r\n"
+		"\r\n"
+		));
+	//~ char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		Serial.print(F(
-			"Command List\r\n"
-			"----------------------------------------------------------------------\r\n"
-			"ECHO          Set/Get echo on or off\r\n"
-			"FACTORYRESET  Set system values to factory defaults\r\n"
-			"FS20          Set/Get FS20 control\r\n"
-			"HELP          Get command help\r\n"
-			"INFO          Get program version\r\n"
-			"LED           Set/Get LED alive blinking parameter\r\n"
-			"MOTOR         Set/Get motor control\r\n"
-			"MOTORNAME     Set/Get motor names\r\n"
-			"MOTORTIME     Set/Get motor runtime\r\n"
-			"MOTORTYPE     Set/Get motor type\r\n"
-			"RAINSENSOR    Set/Get Rain sensor function\r\n"
-			"PUSHBUTTON    Set/Get wall pushbutton status\r\n"
-			"STATUS        Set/Get autosend status messages\r\n"
-			"TERM          Set/Get command terminator\r\n"
-			"UPTIME        Get system uptime\r\n"
-			"\r\n"
-			"To get current values use the command without any parameter.\r\n"
-			"To set values use command with parameters.\r\n"
-			"\r\n"
-			"For command parameter details use 'HELP <command>', e.g. HELP INFO\r\n"
-			"\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("EC"),2)==0 ) {
-		Serial.print(F(
-			"ECHO [ON|OFF]\r\n"
-			"  Set/Get command interface echo on or off\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("FA"),2)==0 ) {
-		Serial.print(F(
-			"FACTORYRESET\r\n"
-			"  Reset all values to factory defaults\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("FS"),2)==0 ) {
-		Serial.print(F(
-			"FS20 [<ch> [ON|OFF|PRG]]\r\n"
-			"  Set/Get FS20 receiver channel\r\n"
-			"     <ch>     FS20 channel number [1..c]\r\n"
-			"     ON       switch channel <ch> ON\r\n"
-			"     OFF      switch channel <ch> OFF\r\n"
-			"     PRG      switch channel <ch> into programming mode\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("HE"),2)==0 ) {
-		Serial.print(F(
-			"HELP, ?\r\n"
-			"  List all commands\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("IN"),2)==0 ) {
-		Serial.print(F(
-			"INFO\r\n"
-			"  Get info about system\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("LE"),2)==0 ) {
-		Serial.print(F(
-			"LED [<int> <flash>]\r\n"
-			"  Set/Get LED alive blinking parameter\r\n"
-			"     int       LED blinkinterval in ms\r\n"
-			"     flash     LED flash duration in ms\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("MOTOR"),5)==0 ) {
-		Serial.print(F(
-			"MOTOR [<m> [<cmd> [<param>]]\r\n"
-			"  Set/Get motor status\r\n"
-			"     <m>      Motor number [1..m]\r\n"
-			"     <cmd>    can be\r\n"
-			"         OPEN      Motor in OPEN direction\r\n"
-			"         CLOSE     Motor in CLOSE direction\r\n"
-			"         TOPEN     Toogle OPEN direction\r\n"
-			"         TCLOSE    Toogle CLOSE direction\r\n"
-			"         TOOGLE    Toogle direction\r\n"
-			"         GOTO <p>  Goto position <p> (in %, 0-100)\r\n"
-			"         <p>       Goto position <p> (in %, 0-100)\r\n"
-			"         OFF       Stop motor\r\n"
-			"         SYNC      Set motor in a default defined state\r\n"
-			"         STATUS    Return the current status\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("MOTORNA"),7)==0 ) {
-		Serial.print(F(
-			"MOTORNAME [<m> [<name>]\r\n"
-			"  Set/Get motor name\r\n"
-			"     <m>      Motor number [1..m]\r\n"
-			"     <name    Motor name\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("MOTORTI"),7)==0 ) {
-		Serial.print(F(
-			"MOTORTIME [<m> [<sec>]\r\n"
-			"  Set/Get motor maximum runtime\r\n"
-			"     <m>      Motor number [1..m]\r\n"
-			"     <sec>    Maximum runtime for this motor (in sec)\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("MOTORTY"),7)==0 ) {
-		Serial.print(F(
-			"MOTORTYPE [<m> [<cmd>]\r\n"
-			"  Set/Get motor type\r\n"
-			"     <m>      Motor number [1..m]\r\n"
-			"     <cmd>    can be WINDOW or JALOUSIE\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("RA"),2)==0 ) {
-		Serial.print(F(
-			"RAIN, RAINSENSOR [<cmd>]\r\n"
-			"  Set/Get rain sensor\r\n"
-			"     <cmd>    can be\r\n"
-			"       AUTO        Rain detection and detection enabled from input signals\r\n"
-			"       ENABLE      Enable rain detection, disables AUTO\r\n"
-			"       DISABLE     Disable rain detection, disables AUTO\r\n"
-			"       ON          Raining, disables AUTO\r\n"
-			"       OFF         No raining, disables AUTO\r\n"
-			"       RESUME <s>  Resume window position after rain was gone\r\n"
-			"                   <s> is the delay in sec after rain was gone before resume starr\r\n"
-			"                   and before resume starts.\r\n"
-			"       FORGET      Do not remember window position, keep it close\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("PU"),2)==0 ) {
-		Serial.print(F(
-			"BUTTON, PUSHBUTTON, WALLBUTTON [<b> [ON|OFF]]\r\n"
-			"  Set/Get wall pushbutton status\r\n"
-			"     <b>      Wall button number [1..m]\r\n"
-			"     ON|OFF   set new value\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("ST"),2)==0 ) {
-		Serial.print(F(
-			"STATUS [ON|OFF]\r\n"
-			"  Set/Get autosend system status message\r\n"
-			"     ON        Status messages enabled\r\n"
-			"               Automatically send status messages when system status changes\r\n"
-			"     OFF       Status messages disabled\r\n"
-			"               No messages are send on system status changes\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("TE"),2)==0 ) {
-		Serial.print(F(
-			"TERM [CR|LF]\r\n"
-			"  Set/Get command terminator\r\n"
-			));
-	}
-	else if ( strnicmp(arg, F("UP"),2)==0 ) {
-		Serial.print(F(
-			"UPTIME [h]\r\n"
-			"  Tell how long the system has been running\r\n"
-			"  If optional argument is given, operation hours will be set\r\n"
-			));
-	}
+	//~ arg = SCmd.next();
+	//~ if (arg == NULL) {
+		//~ Serial.print(F(
+			//~ "Command List\r\n"
+			//~ "-------------\r\n"
+			//~ "ECHO         Local echo\r\n"
+			//~ "FACTORYRESET Set factory defaults\r\n"
+			//~ "FS20         FS20 control\r\n"
+			//~ "HELP         Command help\r\n"
+			//~ "INFO         Program version\r\n"
+			//~ "LED          LED alive blinking parameter\r\n"
+			//~ "MOTOR        Motor control\r\n"
+			//~ "MOTORNAME    Motor names\r\n"
+			//~ "MOTORTIME    Motor runtime\r\n"
+			//~ "MOTORTYPE    Motor type\r\n"
+			//~ "RAINSENSOR   Rain sensor function\r\n"
+			//~ "PUSHBUTTON   Wall pushbutton status\r\n"
+			//~ "STATUS       Status messages\r\n"
+			//~ "TERM         Command terminator\r\n"
+			//~ "UPTIME       System uptime\r\n"
+			//~ "\r\n"
+			//~ "Get value: Use cmd without parameter\r\n"
+			//~ "Set value: Use cmd with parameters.\r\n"
+			//~ "\r\n"
+			//~ "For cmd details use 'HELP <cmd>' (e.g. HELP INFO)\r\n"
+			//~ "\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("EC"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "ECHO [ON|OFF]\r\n"
+			//~ "\tSwitch echo on or off\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("FA"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "FACTORYRESET\r\n"
+			//~ "\tSet factory defaults\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("FS"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "FS20 [<ch> [ON|OFF|PRG]]\r\n"
+			//~ "\tFS20 receiver channel\r\n"
+			//~ "\t\t<ch> FS20 channel number [1..c]\r\n"
+			//~ "\t\tON   switch channel <ch> ON\r\n"
+			//~ "\t\tOFF  switch channel <ch> OFF\r\n"
+			//~ "\t\tPRG  switch channel <ch> into programming mode\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("HE"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "HELP, ?\r\n"
+			//~ "\tPrint help\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("IN"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "INFO\r\n"
+			//~ "\tDisplay system info\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("LE"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "LED [<int> <flash>]\r\n"
+			//~ "\tLED alive blinking parameter\r\n"
+			//~ "\t\tint   blinkinterval in ms\r\n"
+			//~ "\t\tflash flash duration in ms\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("MOTOR"),5)==0 ) {
+		//~ Serial.print(F(
+			//~ "MOTOR [<m> [<cmd> [<param>]]\r\n"
+			//~ "\tSet/Get motor status\r\n"
+			//~ "\t\t<m>      Motor number [1..m]\r\n"
+			//~ "\t\t<cmd>    can be\r\n"
+			//~ "\t\t\tOPEN     Motor in OPEN direction\r\n"
+			//~ "\t\t\tCLOSE    Motor in CLOSE direction\r\n"
+			//~ "\t\t\tTOPEN    Toogle OPEN direction\r\n"
+			//~ "\t\t\tTCLOSE   Toogle CLOSE direction\r\n"
+			//~ "\t\t\tTOOGLE   Toogle direction\r\n"
+			//~ "\t\t\tGOTO <p> Goto position <p> (in %, 0-100)\r\n"
+			//~ "\t\t\t<p>      Goto position <p> (in %, 0-100)\r\n"
+			//~ "\t\t\tOFF      Stop motor\r\n"
+			//~ "\t\t\tSYNC     Set motor in a default defined state\r\n"
+			//~ "\t\t\tSTATUS   Return the current status\r\n"
+			//~ ));
+			
+	//~ }
+	//~ else if ( strnicmp(arg, F("MOTORNA"),7)==0 ) {
+		//~ Serial.print(F(
+			//~ "MOTORNAME [<m> [<name>]\r\n"
+			//~ "\tSet/Get motor name\r\n"
+			//~ "\t\t<m>   Motor number [1..m]\r\n"
+			//~ "\t\t<name Motor name\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("MOTORTI"),7)==0 ) {
+		//~ Serial.print(F(
+			//~ "MOTORTIME [<m> [<sec>]\r\n"
+			//~ "\tSet/Get motor maximum runtime\r\n"
+			//~ "\t\t<m>   Motor number [1..m]\r\n"
+			//~ "\t\t<sec> Maximum runtime for this motor (in sec)\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("MOTORTY"),7)==0 ) {
+		//~ Serial.print(F(
+			//~ "MOTORTYPE [<m> [<cmd>]\r\n"
+			//~ "\tSet/Get motor type\r\n"
+			//~ "\t\t<m>   Motor number [1..m]\r\n"
+			//~ "\t\t<cmd> can be WINDOW or JALOUSIE\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("RA"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "RAIN, RAINSENSOR [<cmd>]\r\n"
+			//~ "\tSet/Get rain sensor\r\n"
+			//~ "\t\t<cmd>    can be\r\n"
+			//~ "\t\t\tAUTO       Rain detection enabled from input signals\r\n"
+			//~ "\t\t\tENABLE     Enable rain detection\r\n"
+			//~ "\t\t\tDISABLE    Disable rain detection\r\n"
+			//~ "\t\t\tON         Rain\r\n"
+			//~ "\t\t\tOFF        Dry\r\n"
+			//~ "\t\t\tRESUME <s> Resume window position after rain was gone\r\n"
+			//~ "\t\t\t           <s> is the delay (sec) before resume starts\r\n"
+			//~ "\t\t\tFORGET     Don not resume, keep windows closed\r\n"
+			//~ "ENABLE, DISABLE, ON, OFF disables AUTO"
+			//~ ));
+			
+	//~ }
+	//~ else if ( strnicmp(arg, F("PU"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "BUTTON, PUSHBUTTON, WALLBUTTON [<b> [ON|OFF]]\r\n"
+			//~ "\tSet/Get wall pushbutton status\r\n"
+			//~ "\t\t<b>    Wall button number [1..m]\r\n"
+			//~ "\t\tON|OFF set new value\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("ST"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "STATUS [ON|OFF]\r\n"
+			//~ "\tSystem status message\r\n"
+			//~ "\t\tON  Status messages enabled\r\n"
+			//~ "\t\t\t  Automatically send status messages when system status changes\r\n"
+			//~ "\t\tOFF Status messages disabled\r\n"
+			//~ "\t\t\t  No messages are send on system status changes\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("TE"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "TERM [CR|LF]\r\n"
+			//~ "\tCommand terminator\r\n"
+			//~ ));
+	//~ }
+	//~ else if ( strnicmp(arg, F("UP"),2)==0 ) {
+		//~ Serial.print(F(
+			//~ "UPTIME [h]\r\n"
+			//~ "\tDisplay system uptime\r\n"
+			//~ "\tIf <h> is given, operation hours will be set to <h>\r\n"
+			//~ ));
+	//~ }
 	watchdogReset();
 	
-	Serial.print(F("\r\n"));
+	printCRLF();
 }
 
 void Echo(void)
@@ -213,7 +250,7 @@ void Echo(void)
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintf(F("ECHO %S\r\n"),eeprom.Echo?fstrON:fstrOFF);
+		SerialPrintfln(F("ECHO %S"),eeprom.Echo?fstrON:fstrOFF);
 		cmdOK();
 	}
 	else if ( strnicmp(arg, fstrON,2)==0 ) {
@@ -241,7 +278,7 @@ void Term(void)
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintf(F("TERM %S\r\n"),eeprom.Term=='\r'?F("CR"):F("LF"));
+		SerialPrintfln(F("TERM %S"),eeprom.Term=='\r'?F("CR"):F("LF"));
 		cmdOK();
 	}
 	else if ( strnicmp(arg, F("CR"),2)==0 ) {
@@ -276,9 +313,9 @@ void cmdUptime()
 		eeprom.OperatingHours=atol(arg);
 		eepromWriteVars();
 	}
-	SerialPrintf(F("Uptime:    "));
-	SerialTimePrintf(F("\r\n"));
-	SerialPrintf(F("Operating: %ld h\r\n"), eeprom.OperatingHours);
+	Serial.print(F("Uptime:    "));
+	SerialPrintUptime();;
+	SerialPrintfln(F("Operating: %ld h"), eeprom.OperatingHours);
 }
 
 void cmdFS20()
@@ -295,7 +332,7 @@ void cmdFS20()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(channel=0; channel<IOBITS_CNT; channel++) {
-			SerialPrintf(F("FS20 CH%02d %S\r\n"), channel+1, bitRead(curSM8Status, channel)?fstrON:fstrOFF);
+			SerialPrintfln(F("FS20 CH%02d %S"), channel+1, bitRead(curSM8Status, channel)?fstrON:fstrOFF);
 			watchdogReset();
 		}
 		cmdOK();
@@ -337,7 +374,7 @@ void cmdFS20()
 					bitSet(SM8StatusIgnore, channel);
 					bitClear(valSM8Button, channel);
 					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
-					SerialPrintf(F("\r\nChannel %d now in programming mode\r\n"), channel+1);
+					SerialPrintfln(F("\r\nChannel %d now in programming mode"), channel+1);
 					cmdOK();
 				}
 				else {
@@ -345,7 +382,7 @@ void cmdFS20()
 				}
 			}
 			else {
-				SerialPrintf(F("FS20 CH%02d %S\r\n"), channel+1,bitRead(curSM8Status, channel)?fstrON:fstrOFF);
+				SerialPrintfln(F("FS20 CH%02d %S"), channel+1,bitRead(curSM8Status, channel)?fstrON:fstrOFF);
 				cmdOK();
 			}
 		}
@@ -364,7 +401,7 @@ void cmdWallButton()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(button=0; button<IOBITS_CNT; button++) {
-			SerialPrintf(F("PB%02d %S\r\n"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
+			SerialPrintfln(F("PB%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
 			watchdogReset();
 		}
 		cmdOK();
@@ -393,7 +430,7 @@ void cmdWallButton()
 				}
 			}
 			else {
-				SerialPrintf(F("PB%02d %S\r\n"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
+				SerialPrintfln(F("PB%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
 				cmdOK();
 			}
 		}
@@ -529,7 +566,7 @@ void cmdMotorPrintStatus(int motor)
 	if( runTimePercent>100 ) {
 		runTimePercent=100;
 	}
-	SerialPrintf(F("M%02d %-7S %3d%% %-7S (%s)\r\n")
+	SerialPrintfln(F("M%02d %-7S %3d%% %-7S (%s)")
 				,motor+1
 				,runTimePercent==0?F("CLOSE"):(runTimePercent==100?F("OPEN"):F("BETWEEN"))
 				,runTimePercent
@@ -587,7 +624,7 @@ void cmdRuntime()
 }
 void cmdRuntimePrintStatus(int motor)
 {
-	SerialPrintf(F("M%02d %d.%03d (%s)\r\n")
+	SerialPrintfln(F("M%02d %d.%03d (%s)")
 				,(int)(motor+1)
 				,(int)(eeprom.MaxRuntime[motor] / 1000)
 				,(int)(eeprom.MaxRuntime[motor] % 1000)
@@ -621,9 +658,9 @@ void cmdName()
 			arg = SCmd.next();
 			if (arg != NULL) {
 				#ifdef DEBUG_OUTPUT
-				SerialTimePrintf(F("cmdName arg=%s\r\n"), arg);
-				SerialTimePrintf(F("cmdName sizeof(eeprom.MotorName[motor])=%d\r\n"), sizeof(eeprom.MotorName[motor]) );
-				SerialTimePrintf(F("cmdName &eeprom.MotorName[motor]=%p\r\n"), &eeprom.MotorName[motor] );
+				SerialTimePrintfln(F("cmdName arg=%s"), arg);
+				SerialTimePrintfln(F("cmdName sizeof(eeprom.MotorName[motor])=%d"), sizeof(eeprom.MotorName[motor]) );
+				SerialTimePrintfln(F("cmdName &eeprom.MotorName[motor]=%p"), &eeprom.MotorName[motor] );
 				#endif
 				strncpy((char *)&eeprom.MotorName[motor], arg, sizeof(eeprom.MotorName[motor])-1);
 				eeprom.MotorName[motor][sizeof(eeprom.MotorName[motor])-1]='\0';
@@ -639,7 +676,7 @@ void cmdName()
 }
 void cmdNamePrintStatus(int motor)
 {
-	SerialPrintf(F("M%02d %s\r\n"), motor+1, (char *)eeprom.MotorName[motor]);
+	SerialPrintfln(F("M%02d %s"), motor+1, (char *)eeprom.MotorName[motor]);
 	watchdogReset();
 }
 
@@ -691,7 +728,7 @@ void cmdType()
 }
 void cmdTypePrintStatus(int motor)
 {
-	SerialPrintf(F("M%02d %-8s (%S)\r\n"), motor+1, getMotorType(motor)==WINDOW ? F("WINDOW") : F("JALOUSIE"), (char *)eeprom.MotorName[motor]);
+	SerialPrintfln(F("M%02d %-8s (%S)"), motor+1, getMotorType(motor)==WINDOW ? F("WINDOW") : F("JALOUSIE"), (char *)eeprom.MotorName[motor]);
 	watchdogReset();
 }
 
@@ -732,13 +769,13 @@ void cmdRainSensor()
 		else {
 			sensorEnabled = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
 		}
-		SerialPrintf(F("Sensor monitoring:  %S  reading from %S\r\n")
+		SerialPrintfln(F("Sensor monitoring:  %S  reading from %S")
 				,sensorEnabled?F("Enabled"):F("Disabled")
 				,bitRead(eeprom.Rain, RAIN_BIT_AUTO)?F("input"):F("setting"));
-		SerialPrintf(F("Rainsensor input:   %S\r\n"), (debInput.read()==RAIN_INPUT_AKTIV)?F("Raining"):F("Dry"));
-		SerialPrintf(F("Rainsensor setting: %S\r\n"), softRainInput?F("Raining"):F("Dry"));
-		SerialPrintf(F("Window position:    %S, delay: %d sec\r\n"), bitRead(eeprom.Rain, RAIN_BIT_RESUME)?F("Resume"):F("Forget"), eeprom.RainResumeTime);
-		SerialPrintf(F("Rainsensor status:  %S\r\n"), sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? F("Raining") : F("Dry"));
+		SerialPrintfln(F("Rainsensor input:   %S"), (debInput.read()==RAIN_INPUT_AKTIV)?F("Raining"):F("Dry"));
+		SerialPrintfln(F("Rainsensor setting: %S"), softRainInput?F("Raining"):F("Dry"));
+		SerialPrintfln(F("Window position:    %S, delay: %d sec"), bitRead(eeprom.Rain, RAIN_BIT_RESUME)?F("Resume"):F("Forget"), eeprom.RainResumeTime);
+		SerialPrintfln(F("Rainsensor status:  %S"), sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? F("Raining") : F("Dry"));
 		cmdOK();
 	}
 	else {
@@ -846,8 +883,8 @@ void cmdLed()
 	argInterval = SCmd.next();
 	argFlash = SCmd.next();
 	if (argInterval == NULL) {
-		SerialPrintf(F("Interval %d ms\r\n"), eeprom.BlinkInterval);
-		SerialPrintf(F("Flash %d ms\r\n"), eeprom.BlinkLen);
+		SerialPrintfln(F("Interval %d ms"), eeprom.BlinkInterval);
+		SerialPrintfln(F("Flash %d ms"), eeprom.BlinkLen);
 		cmdOK();
 	}
 	else if ( argInterval != NULL && argFlash != NULL ) {
@@ -880,7 +917,7 @@ void cmdFactoryReset()
 
 void cmdOK(void)
 {
-	SerialPrintf(F("OK\r\n"));
+	SerialPrintfln(F("OK"));
 }
 
 void cmdError(String err)
@@ -899,5 +936,5 @@ void cmdErrorParameter(String err)
 // This gets set as the default handler, and gets called when no other command matches.
 void unrecognized()
 {
-	SerialPrintf(F("Unknown command, try HELP\r\n"));
+	SerialPrintfln(F("Unknown command, try HELP"));
 }
