@@ -354,7 +354,7 @@ void cmdInfo()
 {
 	printProgramInfo(false);
 	cmdUptime();
-	SerialPrintf(F("EEPROM CRC32: %08lx\r\n"), CalcCRC(RAMCRC, (byte *)&eeprom, sizeof(eeprom)));
+	SerialPrintfln(F("EEPROM CRC32: %08lx"), CalcCRC(RAMCRC, (byte *)&eeprom, sizeof(eeprom)));
 	cmdOK();
 }
 
@@ -370,7 +370,7 @@ void cmdUptime()
 	SerialPrintf(  F("Uptime:       "));
 	SerialPrintUptime();;
 	printCRLF();
-	SerialPrintfln(F("Operating:    %ld h\r\n"), eeprom.OperatingHours);
+	SerialPrintfln(F("Operating:    %ld h"), eeprom.OperatingHours);
 	cmdOK();
 }
 
@@ -953,8 +953,13 @@ void cmdFactoryReset()
 void cmdReset(void)
 {
 	cmdOK();
-	Watchdog.enable(250);
-	delay(1000);
+
+	SerialPrintf(F("Restart system in %d sec"), (WATCHDOG_TIME/1000));
+	for(byte d=0; d<(FS20_SM8_IN_PROGRAMMODE/1000); d++) {
+		Serial.print(F("."));
+		delay(1000);
+	}
+	while(true) {};
 }
 
 void Echo(void)
