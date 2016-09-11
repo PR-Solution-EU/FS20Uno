@@ -44,6 +44,9 @@
 // Anzahl der Motoren
 #define MAX_MOTORS					8
 
+// Länge der Motornamen
+#define MAX_NAMELEN					21
+
 // Timer2 Intervall in ms
 #define TIMER_MS					10
 
@@ -199,3 +202,5 @@ enum crcType
 	EEPROMCRC = 0,
 	RAMCRC = 1
 } CRCTYPE;
+
+extern unsigned long timer0_millis;

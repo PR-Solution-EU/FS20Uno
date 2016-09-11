@@ -201,7 +201,7 @@
  * Ansonsten (CMDHELP_LONG nicht definiert) wird mit HELP nur eine
  * Kurzhilfe ausgegeben, die Parameterbeschreibung muss dann in der
  * Hilfe oder im Programmtext nachgesehen werden. */
-#define CMDHELP_LONG
+#undef CMDHELP_LONG
 
 /* Die nächste Zeile auskommentieren, um den millis()-Überlauf
  * zu testen. millis() startet dann mit TEST_MILLIS_TIMER ms
@@ -347,7 +347,7 @@ struct EEPROM {
 	MOTORBITS	MTypeBitmask;				// Motortyp Bitmask
 	volatile DWORD MaxRuntime[MAX_MOTORS];	// Maximale Motorlaufzeit in ms
 	volatile DWORD OvertravelTime[MAX_MOTORS];	// Motor Nachlauflaufzeit in ms
-	char 		MotorName[MAX_MOTORS][21];	// Motornamen
+	char 		MotorName[MAX_MOTORS][MAX_NAMELEN];	// Motornamen
 	volatile MOTOR_TIMER MotorPosition[MAX_MOTORS];// Letzte Motorposition
 	byte 		Rain;						// Regenfunktionen (s. define)
 	#define RAIN_BIT_AUTO	(1<<0)
@@ -400,9 +400,6 @@ void printRuntime(const __FlashStringHelper *funcName, unsigned long starttime)
  * Description: setup function runs once
  *              when you press reset or power the board
  * ===================================================================*/
-#ifdef TEST_MILLIS_TIMER
-extern unsigned long timer0_millis;
-#endif
 void setup()
 {
 	Watchdog.disable();
@@ -1657,19 +1654,21 @@ void blinkLED(void)
 /* ===================================================================
  * Function:    operatonHours()
  * Return:
- * Arguments:
+ * Arguments:	millisSet true, if system timer was changed manually
  * Description: Merkt sich die Betriebsstunden im EEPROM
  * ===================================================================*/
-void operatonHours(void)
+void operatonHours(bool millisSet)
 {
 	static unsigned long opHour;
 
 	opHour = sec(NULL);
 	if ( ((opHour % 3600L) == 0) && (savedOperationTime!=opHour) ) {
-		eeprom.OperatingHours++;
-		eepromWriteVars();
+		if ( !millisSet ) {
+			eeprom.OperatingHours++;
+			eepromWriteVars();
+			sendStatus(false,SYSTEM, F("RUNNING %d h"), eeprom.OperatingHours);
+		}
 		savedOperationTime = opHour;
-		sendStatus(false,SYSTEM, F("RUNNING %d h"), eeprom.OperatingHours);
 	}
 
 	watchdogReset();
@@ -1716,5 +1715,5 @@ void loop()
 	processSerialCommand();
 
 	// Merkt sich die Betriebsstunden im EEPROM
-	operatonHours();
+	operatonHours(false);
 }

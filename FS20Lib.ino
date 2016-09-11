@@ -6,6 +6,15 @@
 #define strnicmp(str1, str2, n) strncasecmp_P(str1, (const char *)str2, n)
 
 
+void strReplaceChar(char *s, char find, char replace)
+{
+    while (*s != 0) {
+        if (*s == find)
+        *s = replace;
+        s++;
+    }
+}
+
 void printCRLF()
 {
 	Serial.println();

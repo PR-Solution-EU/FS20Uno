@@ -163,7 +163,7 @@ void cmdHelp()
 	}
 	else if ( strnicmp(arg, F("MOTOR"),5)==0 ) {
 		Serial.print(F(
-			"MOTOR [<m> [<cmd> [<param>]]\r\n"
+			"MOTOR [<m> [<cmd> [<p>]]\r\n"
 			"\tSet/Get motor status\r\n"
 			"\t\t<m>      Motor number [1..m]\r\n"
 			"\t\t<cmd>    can be\r\n"
@@ -248,9 +248,10 @@ void cmdHelp()
 	}
 	else if ( strnicmp(arg, F("UP"),2)==0 ) {
 		Serial.print(F(
-			"UPTIME [h]\r\n"
-			"\tDisplay system uptime\r\n"
-			"\tIf <h> is given, operation hours will be set to <h>\r\n"
+			"UPTIME [<uptime> [<h>]]\r\n"
+			"\tSystem uptime\r\n"
+			"\t<uptime> Set uptime (in ms since start)\r\n"
+			"\t<h>      Set operation hours (in h)\r\n"
 			));
 	}
 	else if ( strnicmp(arg, F("BA"),2)==0 ) {
@@ -281,7 +282,9 @@ void cmdHelp()
 
 void cmdBackup(void)
 {
-	SerialPrintf(F("BACKUP DATA SIZE %d Byte\r\n"), (int)sizeof(eeprom));
+	byte m;
+
+	SerialPrintf(F("Binary data (%d byte):\r\n"), (int)sizeof(eeprom));
 
 	for(size_t i=0; i<sizeof(eeprom)+4; i++) {
 		if ( (i % 16)==0 ) {
@@ -293,6 +296,53 @@ void cmdBackup(void)
 		}
 	}
 	printCRLF();
+	printCRLF();
+
+	// ECHO
+	SerialPrintf(F("ECHO %S\r\n"), eeprom.Echo?fstrON:fstrOFF);
+	// TERM
+	SerialPrintf(F("TERM %S\r\n"), eeprom.Term=='\r'?F("CR"):F("LF"));
+	// STATUS
+	SerialPrintf(F("STATUS %S\r\n"), eeprom.SendStatus?fstrON:fstrOFF);
+	// UPTIME
+	SerialPrintf(F("UPTIME %ld %ld\r\n"), millis(), eeprom.OperatingHours);
+	// LED
+	SerialPrintf(F("LED %d %d\r\n"), eeprom.BlinkInterval, eeprom.BlinkLen);
+	// RAIN
+//~ "       AUTO        Rain detection and detection enabled from input signals\r\n"
+//~ "       ENABLE      Enable rain detection, disables AUTO\r\n"
+//~ "       DISABLE     Disable rain detection, disables AUTO\r\n"
+//~ "       ON          Raining, disables AUTO\r\n"
+//~ "       OFF         No raining, disables AUTO\r\n"
+//~ "       RESUME <s>  Resume window position after rain was gone\r\n"
+//~ "                   <s> is the delay in sec after rain was gone before resume starr\r\n"
+//~ "                   and before resume starts.\r\n"
+//~ "       FORGET      Do not remember window position, keep it close\r\n"
+	//	SerialPrintf(F("RAIN %d %d\r\n"), eeprom.BlinkInterval, eeprom.BlinkLen);
+
+	// MOTORNAME
+	for(m=0; m<MAX_MOTORS; m++) {
+		char sName[MAX_NAMELEN];
+		
+		strcpy(sName, eeprom.MotorName[m]);
+		strReplaceChar(sName, ' ', '_');
+		SerialPrintf(F("MOTORNAME %d %s\r\n"), m+1, sName);
+	}
+	// MOTORTYPE
+	for(m=0; m<MAX_MOTORS; m++) {
+		SerialPrintf(F("MOTORTYPE %d %S\r\n"), m+1, bitRead(MTYPE_BITMASK,m)!=0?F("WIN"):F("JAL"));
+	}
+	// MOTORTIME
+	for(m=0; m<MAX_MOTORS; m++) {
+		SerialPrintf(F("MOTORTIME %d %d.%03d %d.%03d\r\n")
+			,m+1
+			,(int)(eeprom.MaxRuntime[m] / 1000)
+			,(int)(eeprom.MaxRuntime[m] % 1000)
+			,(int)(eeprom.OvertravelTime[m] / 1000)
+			,(int)(eeprom.OvertravelTime[m] % 1000)
+			);
+	}
+
 	cmdOK();
 }
 void cmdRestore(void)
@@ -361,12 +411,25 @@ void cmdInfo()
 
 void cmdUptime()
 {
+//~ "UPTIME [<uptime> [<h>]]\r\n"
+//~ "\tSystem uptime\r\n"
+//~ "\t<uptime> Set uptime (in ms since start)\r\n"
+//~ "\t<h>      Set operation hours (in h)\r\n"
 	char *arg;
 	
 	arg = SCmd.next();
 	if (arg != NULL) {
-		eeprom.OperatingHours=atol(arg);
-		eepromWriteVars();
+
+		cli(); //halt the interrupts
+		timer0_millis =  (unsigned long)atol(arg);
+		sei(); //re-enable the interrupts
+		operatonHours(true);
+
+		arg = SCmd.next();
+		if (arg != NULL) {
+			eeprom.OperatingHours=atol(arg);
+			eepromWriteVars();
+		}
 	}
 	SerialPrintf(  F("Uptime:       "));
 	SerialPrintUptime();;
@@ -589,12 +652,7 @@ void cmdMotor()
 					cmdOK();
 				}
 				else if ( strnicmp(arg, F("SY"),2)==0 ) {
-					if ( getMotorType(motor)==WINDOW ) {
-						setMotorDirection(motor, MOTOR_CLOSE);
-					}
-					else {
-						setMotorDirection(motor, MOTOR_OPEN);
-					}
+					setMotorDirection(motor, MOTOR_CLOSE);
 					cmdOK();
 				}
 				else if ( (atoi(arg)>=0 && atoi(arg)<=100) ) {
@@ -678,7 +736,7 @@ void cmdRuntime()
 }
 void cmdRuntimePrintStatus(int motor)
 {
-	SerialPrintfln(F("M%02d %d.%03d %d.%03d (%s)")
+	SerialPrintfln(F("MOTOR %02d %d.%03d %d.%03d (%s)")
 				,(int)(motor+1)
 				,(int)(eeprom.MaxRuntime[motor] / 1000)
 				,(int)(eeprom.MaxRuntime[motor] % 1000)
@@ -714,12 +772,17 @@ void cmdName()
 		else {
 			arg = SCmd.next();
 			if (arg != NULL) {
+				char sName[MAX_NAMELEN];
+
 				#ifdef DEBUG_OUTPUT
 				SerialTimePrintfln(F("cmdName arg=%s"), arg);
 				SerialTimePrintfln(F("cmdName sizeof(eeprom.MotorName[motor])=%d"), sizeof(eeprom.MotorName[motor]) );
 				SerialTimePrintfln(F("cmdName &eeprom.MotorName[motor]=%p"), &eeprom.MotorName[motor] );
 				#endif
-				strncpy((char *)&eeprom.MotorName[motor], arg, sizeof(eeprom.MotorName[motor])-1);
+
+				strncpy(sName, arg, sizeof(sName)-1);
+				strReplaceChar(sName, '_', ' ');
+				strcpy(eeprom.MotorName[motor], sName);
 				eeprom.MotorName[motor][sizeof(eeprom.MotorName[motor])-1]='\0';
 				eepromWriteVars();
 				cmdOK();
