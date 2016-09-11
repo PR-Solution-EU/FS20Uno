@@ -421,6 +421,7 @@ void setup()
 	digitalWrite(STATUS_LED, HIGH);
 
 	Serial.begin(SERIAL_BAUDRATE);
+	Serial.println();
 
 	// Lese EEPROM Programmvariablen
 	eepromInitVars();

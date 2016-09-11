@@ -23,7 +23,6 @@ void printCRLF()
  * ===================================================================*/
 void printProgramInfo(bool copyright)
 {
-	Serial.println();
 	SerialPrintfln(F("%s v%s (build %s)"), PROGRAM, VERSION, REVISION);
 	SerialPrintfln(F("compiled on %s %s (GnuC%S %s)"), __DATE__, __TIME__, __GNUG__?F("++ "):F(" "), __VERSION__);
 	SerialPrintfln(F("using avr library %s (%s)"),  __AVR_LIBC_VERSION_STRING__, __AVR_LIBC_DATE_STRING__);
