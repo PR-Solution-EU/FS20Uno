@@ -265,8 +265,49 @@ void sendStatus(statusType type, const __FlashStringHelper *fmt, ... )
 		va_end(args);
 		printCRLF();
 	}
+
+	watchdogReset();
 }
 
+/* ===================================================================
+ * Function:     sendMotorOffStatus
+ * Return:
+ * Arguments:
+ * Description:  Motor OFF Status aus IRQ senden
+ * ===================================================================*/
+void sendMotorOffStatus(void)
+{
+	for (byte i = 0; i < MAX_MOTORS; i++) {
+		if ( bitRead(sendStatusMOTOR_OFF, i) ) {
+			sendMotorStatus(i);
+			bitClear(sendStatusMOTOR_OFF, i);
+		}
+	}
+}
+
+/* ===================================================================
+ * Function:     sendMotorStatus
+ * Return:
+ * Arguments:
+ * Description:  Motor OFF Status aus IRQ senden
+ * ===================================================================*/
+void sendMotorStatus(int motor)
+{
+	byte runTimePercent = (byte)((long)MotorPosition[motor]*100L / (long)(eeprom.MaxRuntime[motor] / TIMER_MS));
+	
+	if( runTimePercent<1 && MotorPosition[motor]>0 ) {
+		runTimePercent=1;
+	}
+	if( runTimePercent>100 ) {
+		runTimePercent=100;
+	}
+	sendStatus(MOTOR,F("%02d %-7S %3d%% %-7S (%s)")
+				,motor+1
+				,runTimePercent==0?F("CLOSE"):(runTimePercent==100?F("OPEN"):F("BETWEEN"))
+				,runTimePercent
+				,getMotorDirection(motor)==MOTOR_OFF?F("OFF"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OPENING"):F("CLOSING")
+				,(char *)eeprom.MotorName[motor]);
+}
 
 /* ===================================================================
  * Function:    setMotorPosition
@@ -297,26 +338,26 @@ void setMotorPosition(byte motorNum, MOTOR_TIMER destPosition)
 void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 {
 	if ( motorNum < MAX_MOTORS ) {
-		byte m=motorNum+1;
+
 		// Neue Richtung: Öffnen
 		if ( newDirection >= MOTOR_OPEN ) {
 			// Motor läuft auf Schliessen
 			if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor auf Öffnen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN_DELAYED;
-				sendStatus(MOTOR, F("%02d OPENING DELAYED"), m);
+				sendMotorStatus(motorNum);
 			}
 			// Motor läuft auf Öffnen
 			else if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sendStatus(MOTOR, F("%02d OFF"), m);
+				sendMotorStatus(motorNum);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf öffnen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN;
-				sendStatus(MOTOR, F("%02d OPENING"), m);
+				sendMotorStatus(motorNum);
 			}
 		}
 		// Neue Richtung: Schliessen
@@ -325,26 +366,26 @@ void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor auf Schliessen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE_DELAYED;
-				sendStatus(MOTOR, F("%02d CLOSING DELAYED"), m);
+				sendMotorStatus(motorNum);
 			}
 			// Motor läuft auf Schliessen
 			else if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sendStatus(MOTOR, F("%02d OFF"), m);
+				sendMotorStatus(motorNum);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf Schliessen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE;
-				sendStatus(MOTOR, F("%02d CLOSING"), m);
+				sendMotorStatus(motorNum);
 			}
 		}
 		// Neue Richtung: AUS
 		else {
 			// Motor AUS
 			MotorCtrl[motorNum] = MOTOR_OFF;
-			sendStatus(MOTOR, F("%02d OFF"), m);
+			sendMotorStatus(motorNum);
 		}
 	}
 }

@@ -36,6 +36,7 @@ void setupSerialCommand(void)
 void processSerialCommand(void)
 {
 	SCmd.readSerial();     // We don't do much, just process serial commands
+	watchdogReset();
 }
 
 
@@ -377,7 +378,7 @@ void cmdFS20()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(channel=0; channel<IOBITS_CNT; channel++) {
-			SerialPrintfln(F("FS20 CH%02d %S"), channel+1, bitRead(curSM8Status, channel)?fstrON:fstrOFF);
+			sendStatus(FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
 			watchdogReset();
 		}
 		cmdOK();
@@ -427,7 +428,7 @@ void cmdFS20()
 				}
 			}
 			else {
-				SerialPrintfln(F("FS20 CH%02d %S"), channel+1,bitRead(curSM8Status, channel)?fstrON:fstrOFF);
+				sendStatus(FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
 				cmdOK();
 			}
 		}
@@ -446,8 +447,7 @@ void cmdWallButton()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(button=0; button<IOBITS_CNT; button++) {
-			SerialPrintfln(F("PB%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
-			watchdogReset();
+			sendStatus(PUSHBUTTON, F("%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
 		}
 		cmdOK();
 	}
@@ -475,7 +475,7 @@ void cmdWallButton()
 				}
 			}
 			else {
-				SerialPrintfln(F("PB%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
+				sendStatus(PUSHBUTTON, F("%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
 				cmdOK();
 			}
 		}
@@ -505,7 +505,7 @@ void cmdMotor()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			cmdMotorPrintStatus(motor);
+			sendMotorStatus(motor);
 		}
 		cmdOK();
 	}
@@ -595,29 +595,11 @@ void cmdMotor()
 				}
 			}
 			if (arg == NULL || strnicmp(arg, F("ST"),2)==0 ) {
-				cmdMotorPrintStatus(motor);
+				sendMotorStatus(motor);
 				cmdOK();
 			}
 		}
 	}
-}
-void cmdMotorPrintStatus(int motor)
-{
-	byte runTimePercent = (byte)((long)MotorPosition[motor]*100L / (long)(eeprom.MaxRuntime[motor] / TIMER_MS));
-	
-	if( runTimePercent<1 && MotorPosition[motor]>0 ) {
-		runTimePercent=1;
-	}
-	if( runTimePercent>100 ) {
-		runTimePercent=100;
-	}
-	SerialPrintfln(F("M%02d %-7S %3d%% %-7S (%s)")
-				,motor+1
-				,runTimePercent==0?F("CLOSE"):(runTimePercent==100?F("OPEN"):F("BETWEEN"))
-				,runTimePercent
-				,getMotorDirection(motor)==MOTOR_OFF?F("OFF"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OPENING"):F("CLOSING")
-				,(char *)eeprom.MotorName[motor]);
-	watchdogReset();
 }
 
 

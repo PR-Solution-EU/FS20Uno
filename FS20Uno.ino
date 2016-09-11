@@ -170,7 +170,6 @@
 
 /* ===================================================================
  * TODO:
- * - Fix: sendStatus Motor wird nicht gesendet, falls im IRQ geschaltet
  * - Motor Nachlaufzeit implementieren
  * - SerialCmd: LOGIN  (using password function on WIZ110SR)
  * ===================================================================*/
@@ -308,6 +307,8 @@ volatile char debWallButton[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
  *      1: Motor sofort schalten
  *     >1: Motor Delay in (abs(Wert) - 1) * 10 ms */
 volatile MOTOR_CTRL  MotorCtrl[MAX_MOTORS]	= {MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF};
+// Bitmask für Motoren, die im IRQ abgeschaltet wurden
+volatile MOTORBITS sendStatusMOTOR_OFF = 0;
 
 /* Enthält Timeout Zähler. Wenn Zähler 0 wird, dann Motor Aus. */
 volatile MOTOR_TIMER MotorTimeout[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
@@ -683,6 +684,9 @@ void timerISR()
 					// Wenn Motor Zielposition erreicht
 					if ( MotorPosition[i] == destMotorPosition[i] ) {
 						// Motor AUS
+						if ( MotorCtrl[i] != MOTOR_OFF ) {
+							bitSet(sendStatusMOTOR_OFF, i);
+						}
 						MotorCtrl[i] = MOTOR_OFF;
 						// Zielposition löschen
 						destMotorPosition[i] = NO_POSITION;
@@ -695,6 +699,9 @@ void timerISR()
 			if ( MotorTimeout[i] > 0 ) {
 				--MotorTimeout[i];
 				if ( MotorTimeout[i] == 0 ) {
+					if ( MotorCtrl[i] != MOTOR_OFF ) {
+						bitSet(sendStatusMOTOR_OFF, i);
+					}
 					MotorCtrl[i] = MOTOR_OFF;
 				}
 			}
@@ -799,6 +806,7 @@ void handleMPCInt()
 		//digitalWrite(DBG_INT, !digitalRead(DBG_INT));  		// debugging
 		#endif
 	}
+	watchdogReset();
 }
 
 
@@ -862,6 +870,8 @@ void clrSM8Status(void)
 		}
 	}
 	expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
+
+	watchdogReset();
 }
 
 
@@ -1013,6 +1023,8 @@ void ctrlSM8Status(void)
 
 		tmpSM8Status  = curSM8Status;
 	}
+
+	watchdogReset();
 }
 
 /* ===================================================================
@@ -1120,6 +1132,8 @@ void ctrlWallButton(void)
 
 		tmpWallButton = curWallButton;
 	}
+
+	watchdogReset();
 }
 
 /* ===================================================================
@@ -1157,6 +1171,8 @@ void ctrlSM8Button(void)
 
 		tmpSM8Button = valSM8Button;
 	}
+
+	watchdogReset();
 }
 
 /* ===================================================================
@@ -1408,6 +1424,8 @@ void ctrlMotorRelais(void)
 		SerialTimePrintfln(F("ctrlMotorRelais - Z   Timer waiting"));
 	}
 	#endif
+
+	watchdogReset();
 }
 
 /* ===================================================================
@@ -1569,6 +1587,8 @@ void ctrlRainSensor(void)
 		}
 		resumeDelay = NO_RESUME_DELAY;
 	}
+
+	watchdogReset();
 }
 
 
@@ -1624,6 +1644,8 @@ void blinkLED(void)
 			digitalWrite(STATUS_LED, isRaining?HIGH:LOW);
 		}
 	}
+
+	watchdogReset();
 }
 
 /* ===================================================================
@@ -1643,6 +1665,8 @@ void operatonHours(void)
 		savedOperationTime = opHour;
 		sendStatus(SYS, F("RUNNING %d h"), eeprom.OperatingHours);
 	}
+
+	watchdogReset();
 }
 
 /* ===================================================================
@@ -1655,43 +1679,36 @@ void loop()
 {
 	// MPC Interrupt-Behandlung außerhalb extISR
 	handleMPCInt();
-	watchdogReset();
 
 	// Auslesen der Eingangssignale von SM8
 	ctrlSM8Status();
-	watchdogReset();
 
 	// Auslesen der Wandtaster
 	// Wandtaster haben Vorrang vor SM8 Ausgänge,
 	// daher Auslesen nach SM8
 	ctrlWallButton();
-	watchdogReset();
 
 	// Kontrolle der Motor Ausgangssignale
 	ctrlMotorRelais();
-	watchdogReset();
 
 	// Kontrolle der SM8 Tastensteuerung
 	ctrlSM8Button();
-	watchdogReset();
 
 	// Regensensor abfragen
 	ctrlRainSensor();
-	watchdogReset();
+
+	// Motor OFF Status aus IRQ senden
+	sendMotorOffStatus();
 
 	// Lebenszeichen (watchdog bedienen, debug output)
 	beAlive();
-	watchdogReset();
 
 	// LED Blinken, um anzuzeigen, dass die Hauptschleife läuft
 	blinkLED();
-	watchdogReset();
 
 	// Serielles User-Interface bedienen
 	processSerialCommand();
-	watchdogReset();
 
 	// Merkt sich die Betriebsstunden im EEPROM
 	operatonHours();
-	watchdogReset();
 }
