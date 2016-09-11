@@ -223,7 +223,7 @@ void SerialTimePrintfln(const __FlashStringHelper *fmt, ... )
  *                        4: Wandtaster Meldungen
  *                        5: Regensensor Meldungen
  *                type    Status Typ in Textform
- *                        0: SYS
+ *                        0: SYSTEM
  *                        1: MOTOR 01..xx
  *                        2: FS20OUT 01..xx
  *                        3: FS20IN 01..xx
@@ -240,8 +240,8 @@ void sendStatus(statusType type, const __FlashStringHelper *fmt, ... )
 {
 	if( eeprom.SendStatus ) {
 		switch (type) {
-		case SYS:
-			Serial.print(F("0 SYS "));
+		case SYSTEM:
+			Serial.print(F("0 SYSTEM "));
 			break;
 		case MOTOR:
 			Serial.print(F("1 MOTOR "));

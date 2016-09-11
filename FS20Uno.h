@@ -185,7 +185,7 @@ typedef char MOTOR_CTRL;
 // Status Typen
 enum statusType
 {
-	SYS = 0,
+	SYSTEM = 0,
 	MOTOR = 1,
 	FS20OUT = 2,
 	FS20IN = 3,

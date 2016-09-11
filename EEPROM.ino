@@ -83,9 +83,18 @@ void eepromInitVars()
 		eeprom.BlinkInterval 	= LED_BLINK_INTERVAL;
 		eeprom.BlinkLen      	= LED_BLINK_LEN;
 		eeprom.MTypeBitmask  	= MTYPE_BITMASK;
+		byte window=1;
+		byte jalousie=1;
 		for(i=0; i<MAX_MOTORS; i++) {
 			eeprom.MaxRuntime[i] = bitRead(MTYPE_BITMASK,i)!=0?MOTOR_WINDOW_MAXRUNTIME:MOTOR_JALOUSIE_MAXRUNTIME;
-			sprintf_P((char *)eeprom.MotorName[i], PSTR("MOTOR %02d"), i);
+			if ( getMotorType(i)==WINDOW ) {
+				sprintf_P((char *)eeprom.MotorName[i], PSTR("Window %d"), window);
+				window++;
+			}
+			else {
+				sprintf_P((char *)eeprom.MotorName[i], PSTR("Jalousie %d"), jalousie);
+				jalousie++;
+			}
 			// Annahme: Fenster sind geschlossen, Jalousien offen
 			eeprom.MotorPosition[i] = getMotorType(i)==WINDOW ? 0 : (eeprom.MaxRuntime[i]/TIMER_MS);
 		}

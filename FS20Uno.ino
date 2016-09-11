@@ -432,7 +432,7 @@ void setup()
 	if( !eeprom.SendStatus ) {
 		printProgramInfo(true);
 	}
-	sendStatus(SYS, F("%s %s.%s"), PROGRAM, VERSION, REVISION);
+	sendStatus(SYSTEM, F("%s %s.%s"), PROGRAM, VERSION, REVISION);
 
 	#ifdef DEBUG_OUTPUT
 	SerialTimePrintfln(F("setup - Debug output enabled"));
@@ -564,7 +564,7 @@ void setup()
 	//~ eeprom.OperatingHours = 0;
 	//~ eepromWriteVars();
 
-	sendStatus(SYS, F("START"));
+	sendStatus(SYSTEM, F("START"));
 }
 
 /* ===================================================================
@@ -1663,7 +1663,7 @@ void operatonHours(void)
 		eeprom.OperatingHours++;
 		eepromWriteVars();
 		savedOperationTime = opHour;
-		sendStatus(SYS, F("RUNNING %d h"), eeprom.OperatingHours);
+		sendStatus(SYSTEM, F("RUNNING %d h"), eeprom.OperatingHours);
 	}
 
 	watchdogReset();
