@@ -121,7 +121,7 @@ void eepromInitVars()
 	DEBUG_RUNTIME_START(mseepromReadDefaults);
 	EEPROM.get(EEPROM_ADDR_EEPROMDATA, eeprom);
 	DEBUG_RUNTIME_END("eepromInitVars() read defaults",mseepromReadDefaults);
-	
+
 	#ifdef DEBUG_OUTPUT_EEPROM
 	SerialTimePrintfln(F("EEPROM - values:"));
 	SerialTimePrintfln(F("EEPROM -   eeprom.BlinkInterval: %d"),     eeprom.BlinkInterval);
@@ -163,7 +163,7 @@ void eepromWriteVars(void)
 	static unsigned long prevEEPROMDataCRC32 = 0;
 	unsigned long curEEPROMDataCRC32 = 0;
 	unsigned long eepromCRC;
-	
+
 	DEBUG_RUNTIME_START(mseepromWriteVars);
 	curEEPROMDataCRC32 = CalcCRC(RAMCRC, (byte *)&eeprom, sizeof(eeprom));
 	DEBUG_RUNTIME_END("eepromWriteVars()", mseepromWriteVars);

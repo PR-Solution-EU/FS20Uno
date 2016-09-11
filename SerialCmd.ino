@@ -67,7 +67,7 @@ void cmdHelp()
 		"\tMotor control\r\n"
 		"MOTORNAME [<m> [<name>]\r\n"
 		"\tMotor names\r\n"
-		"MOTORTIME [<m> [<runtime>]\r\n"
+		"MOTORTIME [<m> [<sec> [<overtravel>]]\r\n"
 		"\tMotor runtime\r\n"
 		"MOTORTYPE [<m> [WINDOW|JALOUSIE]\r\n"
 		"\tMotor type\r\n"
@@ -190,10 +190,11 @@ void cmdHelp()
 	}
 	else if ( strnicmp(arg, F("MOTORTI"),7)==0 ) {
 		Serial.print(F(
-			"MOTORTIME [<m> [<sec>]\r\n"
+			"MOTORTIME [<m> [<sec> [<overtravel>]]\r\n"
 			"\tSet/Get motor maximum runtime\r\n"
-			"\t\t<m>   Motor number [1..m]\r\n"
-			"\t\t<sec> Maximum runtime for this motor (in sec)\r\n"
+			"\t\t<m>          Motor number [1..m]\r\n"
+			"\t\t<sec>        Maximum runtime [s]\r\n"
+			"\t\t<overtravel> Overtravel time [s]\r\n"
 			));
 	}
 	else if ( strnicmp(arg, F("MOTORTY"),7)==0 ) {
@@ -615,10 +616,11 @@ void cmdMotor()
 
 void cmdRuntime()
 {
-//~ "    motortime [<m> [<sec>]\r\n"
-//~ "         Set/Get motor runtime\r\n"
-//~ "         <m>      Motor number [1..m]\r\n"
-//~ "         <sec>    Maximum runtime for this motor (in sec)\r\n"
+//~ "MOTORTIME [<m> [<sec> [<delay>]]\r\n"
+//~ "\tSet/Get motor maximum runtime\r\n"
+//~ "\t\t<m>     Motor number [1..m]\r\n"
+//~ "\t\t<sec>   Maximum runtime [s]\r\n"
+//~ "\t\t<delay> Overtravel time [s]\r\n"
 	int motor;
 	double runtime;
 	char *arg;
@@ -646,14 +648,29 @@ void cmdRuntime()
 			else {
 				// Set new runtime value
 				runtime = atof(arg);
-				if ( runtime<1.0 || runtime>(double)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
+				if ( runtime<=0.0 || runtime>(double)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
 					cmdError(F("Motor runtime out of range"));
 				}
 				else {
 					eeprom.MaxRuntime[motor] = (DWORD)(runtime*1000.0);
 					eepromWriteVars();
-					cmdRuntimePrintStatus(motor);
-					cmdOK();
+					arg = SCmd.next();
+					if (arg == NULL) {
+						cmdRuntimePrintStatus(motor);
+						cmdOK();
+					}
+					else {
+						runtime = atof(arg);
+						if ( runtime<0.0 || runtime>(double)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
+							cmdError(F("Motor overtravel time out of range"));
+						}
+						else {
+							eeprom.OvertravelTime[motor] = (DWORD)(runtime*1000.0);
+							eepromWriteVars();
+							cmdRuntimePrintStatus(motor);
+							cmdOK();
+						}
+					}
 				}
 			}
 		}
@@ -661,11 +678,14 @@ void cmdRuntime()
 }
 void cmdRuntimePrintStatus(int motor)
 {
-	SerialPrintfln(F("M%02d %d.%03d (%s)")
+	SerialPrintfln(F("M%02d %d.%03d %d.%03d (%s)")
 				,(int)(motor+1)
 				,(int)(eeprom.MaxRuntime[motor] / 1000)
 				,(int)(eeprom.MaxRuntime[motor] % 1000)
-				,(char *)eeprom.MotorName[motor]);
+				,(int)(eeprom.OvertravelTime[motor] / 1000)
+				,(int)(eeprom.OvertravelTime[motor] % 1000)
+				,(char *)eeprom.MotorName[motor]
+				);
 	watchdogReset();
 }
 

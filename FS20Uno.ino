@@ -157,7 +157,7 @@
  *     Hardwareeingänge wieder aktiviert werden. Die eingestellten
  *     Simulationswerte haben, solange sie nicht wieder verwendet
  *     werden, keine Bedeutung mehr.
- * 
+ *
  * - RAINSENSOR RESUME <s>/FORGET
  *     Bei Verwendung von RESUME werden alle Motoren vom Type "Fenster"
  *     nach Regenende automatisch auf ihre vorherige Position geöffnet.
@@ -170,7 +170,6 @@
 
 /* ===================================================================
  * TODO:
- * - Motor Nachlaufzeit implementieren
  * - SerialCmd: LOGIN  (using password function on WIZ110SR)
  * ===================================================================*/
 
@@ -189,9 +188,9 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"		// Programmname
-#define VERSION "3.35"			// Programmversion
+#define VERSION "3.36"			// Programmversion
 #include "REVISION.h"			// Build (wird von git geändert)
-#define DATAVERSION 123			// Kann verwendet werden, um Defaults
+#define DATAVERSION 124			// Kann verwendet werden, um Defaults
 								// zu schreiben
 
 /* Kommandoschnittstelle Hilfe Umfang
@@ -231,7 +230,7 @@
 #else
 	#undef DEBUG_PINS
 	#undef DEBUG_RUNTIME
-	#undef DEBUG_OUTPUT_SETUP	
+	#undef DEBUG_OUTPUT_SETUP
 	#undef DEBUG_OUTPUT_WATCHDOG
 	#undef DEBUG_OUTPUT_EEPROM
 	#undef DEBUG_OUTPUT_CMD_RESTORE
@@ -323,7 +322,7 @@ volatile MOTOR_TIMER destMotorPosition[MAX_MOTORS] = {NO_POSITION,NO_POSITION,NO
 volatile MOTOR_TIMER resumeMotorPosition[MAX_MOTORS] = {NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION};
 volatile WORD resumeDelay = NO_RESUME_DELAY;
 
-/* Zeitzähler für Auto-Learn Funktion: 
+/* Zeitzähler für Auto-Learn Funktion:
  * Enthält die Zeit, wie lange die Wandtaste gedrückt wurde */
 TIMER WallButtonTimer[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 
@@ -347,6 +346,7 @@ struct EEPROM {
 	WORD 		BlinkLen;					// Alive LED Blinkdauer
 	MOTORBITS	MTypeBitmask;				// Motortyp Bitmask
 	volatile DWORD MaxRuntime[MAX_MOTORS];	// Maximale Motorlaufzeit in ms
+	volatile DWORD OvertravelTime[MAX_MOTORS];	// Motor Nachlauflaufzeit in ms
 	char 		MotorName[MAX_MOTORS][21];	// Motornamen
 	volatile MOTOR_TIMER MotorPosition[MAX_MOTORS];// Letzte Motorposition
 	byte 		Rain;						// Regenfunktionen (s. define)
@@ -367,12 +367,12 @@ const char fstrOFF[] PROGMEM = "OFF";
 
 
 /* Laufzeitmessung */
-#ifdef DEBUG_RUNTIME 
+#ifdef DEBUG_RUNTIME
 	#define DEBUG_RUNTIME_START(val) unsigned long val = micros();
 	#define DEBUG_RUNTIME_END(funcName,val) printRuntime(F(funcName), val);
 #else
-	#define DEBUG_RUNTIME_START(val)	
-	#define DEBUG_RUNTIME_END(funcName,val)	
+	#define DEBUG_RUNTIME_START(val)
+	#define DEBUG_RUNTIME_END(funcName,val)
 #endif
 
 
@@ -579,7 +579,7 @@ void setup()
 void initVars()
 {
 	byte i;
-	
+
 	for(i=0; i<MAX_MOTORS; i++) {
 		MotorPosition[i] = eeprom.MotorPosition[i];
 	}
@@ -588,7 +588,7 @@ void initVars()
 	ledStatus = false;
 	ledTimer = millis() + eeprom.BlinkInterval;
 	runTimer = millis() + 500;
-	
+
 	sendStatusMOTOR_OFF = 0;
 }
 
@@ -667,7 +667,8 @@ void timerISR()
 
 		}
 
-		// MPC Motor bits steuern (das MPC Register wird außerhalb der ISR geschrieben)
+		// MPC Motor-Bits steuern
+		// (das MPC Register wird außerhalb der ISR geschrieben)
 		for (i = 0; i < MAX_MOTORS; i++) {
 			// Laufzeit messen
 			if ( bitRead(regMotorRelais, i) ) {
@@ -697,9 +698,9 @@ void timerISR()
 						destMotorPosition[i] = NO_POSITION;
 					}
 				}
-				
+
 			}
-		
+
 			// Motor Zeitablauf
 			if ( MotorTimeout[i] > 0 ) {
 				--MotorTimeout[i];
@@ -1372,7 +1373,7 @@ void ctrlMotorRelais(void)
 						#ifdef DEBUG_OUTPUT_MOTOR
 						SerialTimePrintfln(F("ctrlMotorRelais -     Set motor %d timeout to %d.%-d s"), i+1, eeprom.MaxRuntime[i] / 1000, eeprom.MaxRuntime[i] % 1000);
 						#endif
-						MotorTimeout[i] = eeprom.MaxRuntime[i] / TIMER_MS;
+						MotorTimeout[i] = (eeprom.MaxRuntime[i] / TIMER_MS) + (eeprom.OvertravelTime[i] / TIMER_MS);
 					}
 					// SM8 Ausgang für "Öffnen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Schliessen"
 					if ( bitRead(curSM8Status, i)
@@ -1486,7 +1487,7 @@ void ctrlRainSensor(void)
 		// Modus manuell, Enable/Disable vom Softwarestatus lesen
 		RainEnable = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
 	}
-	
+
 	// Regensensor ist aktiv, wenn Eingang aktiv oder Softeinstellung aktiv
 	RainInput  = (sensRainInput || softRainInput);
 
@@ -1518,10 +1519,10 @@ void ctrlRainSensor(void)
 				#ifdef DEBUG_OUTPUT_RAIN
 				SerialTimePrintfln(F("%SRain enabled, wet"), dbgCtrlRainSensor);
 				#endif
-				
+
 				for (i = 0; i < MAX_MOTORS; i++) {
 					if ( getMotorType(i)==WINDOW ) {
-						if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME) 
+						if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME)
 							&& getMotorDirection(i)==MOTOR_OFF
 							&& MotorPosition[i]!=0 ) {
 							#ifdef DEBUG_OUTPUT_MOTOR
@@ -1548,7 +1549,7 @@ void ctrlRainSensor(void)
 				if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
 					resumeDelay = (WORD)((unsigned long)eeprom.RainResumeTime * 1000L / TIMER_MS);
 				}
-				
+
 				sendStatus(false,RAIN, F("%s ENABLED DRY"), strMode);
 				isRaining = false;
 				digitalWrite(STATUS_LED, LOW);
@@ -1573,14 +1574,14 @@ void ctrlRainSensor(void)
 		prevRainEnable = RainEnable;
 		prevRainInput  = RainInput;
 	}
-	
+
 	if ( resumeDelay==0 ) {
 		#ifdef DEBUG_OUTPUT_RAIN
 		SerialTimePrintfln(F("%SResume delay expired"), dbgCtrlRainSensor);
 		#endif
 		for (byte i = 0; i < MAX_MOTORS; i++) {
-			if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME) 
-				&& getMotorType(i)==WINDOW 
+			if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME)
+				&& getMotorType(i)==WINDOW
 				&& getMotorDirection(i)==MOTOR_OFF
 				&& resumeMotorPosition[i]!=NO_POSITION ) {
 					#ifdef DEBUG_OUTPUT_RAIN

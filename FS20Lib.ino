@@ -36,7 +36,7 @@ void printProgramInfo(bool copyright)
 /* ===================================================================
  * Function:    watchdogInit
  * Return:
- * Arguments:	
+ * Arguments:
  * Description: Init watchdog
  * ===================================================================*/
 void watchdogInit(void)
@@ -55,7 +55,7 @@ void watchdogInit(void)
 /* ===================================================================
  * Function:    watchdogReset
  * Return:
- * Arguments:	
+ * Arguments:
  * Description: Reset watchdog
  * ===================================================================*/
 void watchdogReset(void)
@@ -125,7 +125,7 @@ void SerialPrintfln(const __FlashStringHelper *fmt, ... )
 unsigned long sec(uint16_t *milli)
 {
 	unsigned long t;
-	
+
 	/* max of millis() (unsigned long) ist 49 days 17:02:47.295 */
 	t = millis();
 
@@ -147,7 +147,7 @@ unsigned long sec(uint16_t *milli)
 /* ===================================================================
  * Function:    SerialPrintUptime
  * Return:
- * Arguments:	
+ * Arguments:
  * Description: Print system uptime
  * ===================================================================*/
 void SerialPrintUptime(void)
@@ -229,7 +229,7 @@ void SerialTimePrintfln(const __FlashStringHelper *fmt, ... )
  *                        4: PUSHBUTTON 01..xx
  *                        5: RAIN
  *                status  0: FS20Uno version|START|RUNNING xx h
- *                        1: TIMEOUT xx|OPENING [DELAYED]|CLOSING [DELAYED]|OFF 
+ *                        1: TIMEOUT xx|OPENING [DELAYED]|CLOSING [DELAYED]|OFF
  *                        2: ON|OFF
  *                        3: ON|OFF
  *                        4: ON|OFF
@@ -277,7 +277,7 @@ void sendStatus(bool send, statusType type, const __FlashStringHelper *fmt, ... 
 void sendMotorStatus(int motor)
 {
 	byte runTimePercent = (byte)((long)MotorPosition[motor]*100L / (long)(eeprom.MaxRuntime[motor] / TIMER_MS));
-	
+
 	if( runTimePercent<1 && MotorPosition[motor]>0 ) {
 		runTimePercent=1;
 	}
