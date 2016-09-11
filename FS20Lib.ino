@@ -5,6 +5,7 @@
 #define MAX_PRINTF_BUFFER	160
 #define strnicmp(str1, str2, n) strncasecmp_P(str1, (const char *)str2, n)
 
+
 void printCRLF()
 {
 	Serial.println();

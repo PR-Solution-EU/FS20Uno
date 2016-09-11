@@ -192,3 +192,10 @@ enum statusType
 	PUSHBUTTON = 4,
 	RAIN = 5
 } STATUSTYPE;
+
+// CRC Typen
+enum crcType
+{
+	EEPROMCRC = 0,
+	RAMCRC = 1
+} CRCTYPE;

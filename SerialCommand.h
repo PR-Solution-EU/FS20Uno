@@ -62,9 +62,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <string.h>
 
-#define SERIALCOMMANDBUFFER 40		// Len of the buffer which stores the received input
+#define SERIALCOMMANDBUFFER 64		// Len of the buffer which stores the received input
 #define MAXSERIALCOMMANDLEN 13		// max len of the command name
-#define MAXSERIALCOMMANDS	20		// max number of commands which can be defined
+#define MAXSERIALCOMMANDS	21		// max number of commands which can be defined
 #define MAXDELIMETER		3		// max. number of delimiters
 
 #define DEFAULT_TERMINATOR	'\r'
@@ -91,7 +91,7 @@ class SerialCommand
 		void addDefaultHandler(void (*function)());    // A handler to call when no valid command received.
 
 	private:
-		char inChar;          // A character read from the serial stream
+		char inChar;          				// A character read from the serial stream
 		char buffer[SERIALCOMMANDBUFFER];   // Buffer of stored characters while waiting for DEFAULT_TERMINATORinator character
 		int  bufPos;                        // Current position in the buffer
 		char delim[MAXDELIMETER];           // null-DEFAULT_TERMINATORinated list of character to be used as delimeters for tokenizing (default " ")

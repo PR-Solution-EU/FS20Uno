@@ -169,15 +169,14 @@
  * ===================================================================*/
 
 /* ===================================================================
- * Code size optimized
- * Help size optimized
  * TODO:
- * - SAVE/RESTORE implementieren
+ * - Fix: sendStatus Motor wird nicht gesendet, falls im IRQ geschaltet
  * - Motor Nachlaufzeit implementieren
  * - SerialCmd: LOGIN  (using password function on WIZ110SR)
  * ===================================================================*/
 
 #include <Arduino.h>
+#include <errno.h>
 #include <EEPROM.h>				// https://www.arduino.cc/en/Reference/EEPROM
 #include <Wire.h>				// https://www.arduino.cc/en/Reference/Wire
 #include <MsTimer2.h>			// http://playground.arduino.cc/Main/MsTimer2
@@ -191,10 +190,20 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"		// Programmname
-#define VERSION "3.34"			// Programmversion
+#define VERSION "3.35"			// Programmversion
 #include "REVISION.h"			// Build (wird von git geändert)
 #define DATAVERSION 123			// Kann verwendet werden, um Defaults
 								// zu schreiben
+
+/* Kommandoschnittstelle Hilfe Umfang
+ * Der umfangreiche Hilfetext benötigt viel Programmspeicher, daher kann
+ * man diesen mit Hilfe von CMDHELP_LONG definieren:
+ * Wenn CMDHELP_LONG definiert ist, gibt es neben HELP auch die
+ * Möglichkeit für HELP cmd für detailierte Infos über alle Parameter.
+ * Ansonsten (CMDHELP_LONG nicht definiert) wird mit HELP nur eine
+ * Kurzhilfe ausgegeben, die Parameterbeschreibung muss dann in der
+ * Hilfe oder im Programmtext nachgesehen werden. */
+#define CMDHELP_LONG
 
 /* Die nächste Zeile auskommentieren, um den millis()-Überlauf
  * zu testen. millis() startet dann mit TEST_MILLIS_TIMER ms
@@ -208,6 +217,7 @@
 #undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
 #undef DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
+#undef DEBUG_OUTPUT_CMD_RESTORE	// enable CMD RESTORE related outputs
 #undef DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
 #undef DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
 #undef DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
@@ -216,12 +226,16 @@
 #undef DEBUG_OUTPUT_RAIN		// enable rain sensor related output
 #undef DEBUG_OUTPUT_ALIVE		// enable program alive signal output
 
-#ifndef DEBUG_OUTPUT
+#ifdef DEBUG_OUTPUT
+	#undef WATCHDOG_ENABLED
+	#undef CMDHELP_LONG
+#else
 	#undef DEBUG_PINS
 	#undef DEBUG_RUNTIME
 	#undef DEBUG_OUTPUT_SETUP	
 	#undef DEBUG_OUTPUT_WATCHDOG
 	#undef DEBUG_OUTPUT_EEPROM
+	#undef DEBUG_OUTPUT_CMD_RESTORE
 	#undef DEBUG_OUTPUT_SM8STATUS
 	#undef DEBUG_OUTPUT_WALLBUTTON
 	#undef DEBUG_OUTPUT_SM8OUTPUT
@@ -229,9 +243,9 @@
 	#undef DEBUG_OUTPUT_MOTOR_DETAILS
 	#undef DEBUG_OUTPUT_RAIN
 	#undef DEBUG_OUTPUT_ALIVE
-
 	#define WATCHDOG_ENABLED
 #endif
+
 #ifdef DEBUG_PINS
 	#define DBG_INT 			12			// Debug PIN = D12
 	#define DBG_MPC 			11			// Debug PIN = D11
@@ -414,12 +428,10 @@ void setup()
 	// Initalisere Kommando-Interface
 	setupSerialCommand();
 
-	if( eeprom.SendStatus ) {
-		sendStatus(SYS, F("%s %s.%s"), PROGRAM, VERSION, REVISION);
-	}
-	else {
+	if( !eeprom.SendStatus ) {
 		printProgramInfo(true);
 	}
+	sendStatus(SYS, F("%s %s.%s"), PROGRAM, VERSION, REVISION);
 
 	#ifdef DEBUG_OUTPUT
 	SerialTimePrintfln(F("setup - Debug output enabled"));
