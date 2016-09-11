@@ -28,6 +28,7 @@ void setupSerialCommand(void)
 	SCmd.addCommand(PSTR("FACTORYRESET"),cmdFactoryReset);
 	SCmd.addCommand(PSTR("BACKUP"),cmdBackup);
 	SCmd.addCommand(PSTR("RESTORE"),cmdRestore);
+	SCmd.addCommand(PSTR("RESET"),cmdReset);
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
 	SCmd.setEcho(eeprom.Echo);
 	SCmd.setTerm(eeprom.Term);
@@ -46,16 +47,20 @@ void cmdHelp()
 	Serial.print(F(
 		"Command List\r\n"
 		"-------------\r\n"
-		"ECHO [ON|OFF]\r\n"
-		"\tLocal echo\r\n"
-		"FACTORYRESET\r\n"
-		"\tSet factory defaults\r\n"
-		"FS20 [<ch> [ON|OFF|PRG]]\r\n"
-		"\tFS20 control\r\n"
 		"HELP\r\n"
 		"\tThis help\r\n"
 		"INFO\r\n"
 		"\tProgram version\r\n"
+		"ECHO [ON|OFF]\r\n"
+		"\tLocal echo\r\n"
+		"TERM [CR|LF]\r\n"
+		"\tCommand terminator\r\n"
+		"STATUS [ON|OFF]\r\n"
+		"\tStatus messages\r\n"
+		"UPTIME [h]\r\n"
+		"\tSystem uptime\r\n"
+		"FS20 [<ch> [ON|OFF|PRG]]\r\n"
+		"\tFS20 control\r\n"
 		"LED [<interval> <flash>]\r\n"
 		"\tLED blinking\r\n"
 		"MOTOR [<m> [[T]OPEN|[T]CLOSE|TOOGLE|GOTO <pos>|<pos>|OFF|SYNC|STATUS]\r\n"
@@ -70,16 +75,14 @@ void cmdHelp()
 		"\tRain sensor function\r\n"
 		"BUTTON, PUSHBUTTON, WALLBUTTON [<b> [ON|OFF]]\r\n"
 		"\tWall pushbutton status\r\n"
-		"STATUS [ON|OFF]\r\n"
-		"\tStatus messages\r\n"
-		"TERM [CR|LF]\r\n"
-		"\tCommand terminator\r\n"
-		"UPTIME [h]\r\n"
-		"\tSystem uptime\r\n"
 		"BACKUP\r\n"
 		"\tOutput EEPROM data for backup\r\n"
 		"RESTORE <addr> <data>\r\n"
 		"\tWrite data into EEPROM\r\n"
+		"FACTORYRESET\r\n"
+		"\tSet factory defaults\r\n"
+		"RESET\r\n"
+		"\tRestart controller\r\n"
 		"\r\n"
 		));
 	#else
@@ -90,11 +93,13 @@ void cmdHelp()
 		Serial.print(F(
 			"Command List\r\n"
 			"-------------\r\n"
-			"ECHO         Local echo\r\n"
-			"FACTORYRESET Set factory defaults\r\n"
-			"FS20         FS20 control\r\n"
 			"HELP         Command help\r\n"
 			"INFO         Program version\r\n"
+			"ECHO         Local echo\r\n"
+			"TERM         Command terminator\r\n"
+			"STATUS       Status messages\r\n"
+			"UPTIME       System uptime\r\n"
+			"FS20         FS20 control\r\n"
 			"LED          LED alive blinking parameter\r\n"
 			"MOTOR        Motor control\r\n"
 			"MOTORNAME    Motor names\r\n"
@@ -102,11 +107,10 @@ void cmdHelp()
 			"MOTORTYPE    Motor type\r\n"
 			"RAINSENSOR   Rain sensor function\r\n"
 			"PUSHBUTTON   Wall pushbutton status\r\n"
-			"STATUS       Status messages\r\n"
-			"TERM         Command terminator\r\n"
-			"UPTIME       System uptime\r\n"
 			"BACKUP       Output EEPROM data for backup\r\n"
 			"RESTORE      Write data into EEPROM\r\n"
+			"FACTORYRESET Set factory defaults\r\n"
+			"RESET        Restart controller\r\n"
 			"\r\n"
 			"Get value: Use cmd without parameter\r\n"
 			"Set value: Use cmd with parameters.\r\n"
@@ -254,12 +258,18 @@ void cmdHelp()
 			"\tOutput EEPROM data for backup\r\n"
 			));
 	}
-	else if ( strnicmp(arg, F("RE"),2)==0 ) {
+	else if ( strnicmp(arg, F("RESTO"),5)==0 ) {
 		Serial.print(F(
 			"RESTORE <addr> <data>\r\n"
 			"\tWrite data into EEPROM (format see BACKUP)\r\n"
 			"\t\taddr  4 digit hex address for restoring data\r\n"
 			"\t\tdata  string of data to write\r\n"
+			));
+	}
+	else if ( strnicmp(arg, F("RESET"),5)==0 ) {
+		Serial.print(F(
+			"RESET\r\n"
+			"\tSoft restart the controller\r\n"
 			));
 	}
 	#endif
@@ -938,6 +948,13 @@ void cmdFactoryReset()
 	EEPROM.put(EEPROM_ADDR_CRC32, eepromCRC);
 	eepromInitVars();
 	cmdOK();
+}
+
+void cmdReset(void)
+{
+	cmdOK();
+	Watchdog.enable(250);
+	delay(1000);
 }
 
 void Echo(void)

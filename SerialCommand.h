@@ -64,7 +64,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define SERIALCOMMANDBUFFER 64		// Len of the buffer which stores the received input
 #define MAXSERIALCOMMANDLEN 13		// max len of the command name
-#define MAXSERIALCOMMANDS	21		// max number of commands which can be defined
+#define MAXSERIALCOMMANDS	22		// max number of commands which can be defined
 #define MAXDELIMETER		3		// max. number of delimiters
 
 #define DEFAULT_TERMINATOR	'\r'

@@ -405,6 +405,8 @@ extern unsigned long timer0_millis;
 #endif
 void setup()
 {
+	Watchdog.disable();
+
 	#ifdef TEST_MILLIS_TIMER
     cli(); //halt the interrupts
     //timer0_millis =  UINT32_MAX - TEST_MILLIS_TIMER; //change the value of the register
