@@ -378,7 +378,7 @@ void cmdFS20()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(channel=0; channel<IOBITS_CNT; channel++) {
-			sendStatus(FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
+			sendStatus(true,FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
 			watchdogReset();
 		}
 		cmdOK();
@@ -428,7 +428,7 @@ void cmdFS20()
 				}
 			}
 			else {
-				sendStatus(FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
+				sendStatus(true,FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
 				cmdOK();
 			}
 		}
@@ -447,7 +447,7 @@ void cmdWallButton()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(button=0; button<IOBITS_CNT; button++) {
-			sendStatus(PUSHBUTTON, F("%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
+			sendStatus(true,PUSHBUTTON, F("%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
 		}
 		cmdOK();
 	}
@@ -475,7 +475,7 @@ void cmdWallButton()
 				}
 			}
 			else {
-				sendStatus(PUSHBUTTON, F("%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
+				sendStatus(true,PUSHBUTTON, F("%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
 				cmdOK();
 			}
 		}

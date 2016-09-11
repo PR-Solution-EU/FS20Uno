@@ -236,9 +236,9 @@ void SerialTimePrintfln(const __FlashStringHelper *fmt, ... )
  *                        4: ON|OFF
  *                        5: AUTO|MANUAL ENABLED|DISABLED DRY|WET
  * ===================================================================*/
-void sendStatus(statusType type, const __FlashStringHelper *fmt, ... )
+void sendStatus(bool send, statusType type, const __FlashStringHelper *fmt, ... )
 {
-	if( eeprom.SendStatus ) {
+	if( send || eeprom.SendStatus ) {
 		switch (type) {
 		case SYSTEM:
 			Serial.print(F("0 SYSTEM "));
@@ -270,22 +270,6 @@ void sendStatus(statusType type, const __FlashStringHelper *fmt, ... )
 }
 
 /* ===================================================================
- * Function:     sendMotorOffStatus
- * Return:
- * Arguments:
- * Description:  Motor OFF Status aus IRQ senden
- * ===================================================================*/
-void sendMotorOffStatus(void)
-{
-	for (byte i = 0; i < MAX_MOTORS; i++) {
-		if ( bitRead(sendStatusMOTOR_OFF, i) ) {
-			sendMotorStatus(i);
-			bitClear(sendStatusMOTOR_OFF, i);
-		}
-	}
-}
-
-/* ===================================================================
  * Function:     sendMotorStatus
  * Return:
  * Arguments:
@@ -301,12 +285,28 @@ void sendMotorStatus(int motor)
 	if( runTimePercent>100 ) {
 		runTimePercent=100;
 	}
-	sendStatus(MOTOR,F("%02d %-7S %3d%% %-7S (%s)")
+	sendStatus(true,MOTOR,F("%02d %-7S %3d%% %-7S (%s)")
 				,motor+1
 				,runTimePercent==0?F("CLOSE"):(runTimePercent==100?F("OPEN"):F("BETWEEN"))
 				,runTimePercent
 				,getMotorDirection(motor)==MOTOR_OFF?F("OFF"):(getMotorDirection(motor)>=MOTOR_OPEN)?F("OPENING"):F("CLOSING")
 				,(char *)eeprom.MotorName[motor]);
+}
+
+/* ===================================================================
+ * Function:     sendMotorOffStatus
+ * Return:
+ * Arguments:
+ * Description:  Motor OFF Status aus IRQ senden
+ * ===================================================================*/
+void sendMotorOffStatus(void)
+{
+	for (byte i = 0; i < MAX_MOTORS; i++) {
+		if ( bitRead(sendStatusMOTOR_OFF, i) ) {
+			sendMotorStatus(i);
+			bitClear(sendStatusMOTOR_OFF, i);
+		}
+	}
 }
 
 /* ===================================================================

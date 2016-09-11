@@ -308,7 +308,7 @@ volatile char debWallButton[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
  *     >1: Motor Delay in (abs(Wert) - 1) * 10 ms */
 volatile MOTOR_CTRL  MotorCtrl[MAX_MOTORS]	= {MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF};
 // Bitmask für Motoren, die im IRQ abgeschaltet wurden
-volatile MOTORBITS sendStatusMOTOR_OFF = 0;
+volatile MOTORBITS sendStatusMOTOR_OFF;
 
 /* Enthält Timeout Zähler. Wenn Zähler 0 wird, dann Motor Aus. */
 volatile MOTOR_TIMER MotorTimeout[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
@@ -432,7 +432,7 @@ void setup()
 	if( !eeprom.SendStatus ) {
 		printProgramInfo(true);
 	}
-	sendStatus(SYSTEM, F("%s %s.%s"), PROGRAM, VERSION, REVISION);
+	sendStatus(false,SYSTEM, F("%s %s.%s"), PROGRAM, VERSION, REVISION);
 
 	#ifdef DEBUG_OUTPUT
 	SerialTimePrintfln(F("setup - Debug output enabled"));
@@ -564,7 +564,7 @@ void setup()
 	//~ eeprom.OperatingHours = 0;
 	//~ eepromWriteVars();
 
-	sendStatus(SYSTEM, F("START"));
+	sendStatus(false,SYSTEM, F("START"));
 }
 
 /* ===================================================================
@@ -585,6 +585,8 @@ void initVars()
 	ledStatus = false;
 	ledTimer = millis() + eeprom.BlinkInterval;
 	runTimer = millis() + 500;
+	
+	sendStatusMOTOR_OFF = 0;
 }
 
 
@@ -937,7 +939,7 @@ void ctrlSM8Status(void)
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(SM8StatusChange, i) ) {
-					sendStatus(FS20IN, F("%02d %S"), i+1, bitRead(curSM8Status,i)?fstrON:fstrOFF);
+					sendStatus(false,FS20IN, F("%02d %S"), i+1, bitRead(curSM8Status,i)?fstrON:fstrOFF);
 				}
 				watchdogReset();
 			}
@@ -1035,11 +1037,11 @@ void ctrlSM8Status(void)
  * ===================================================================*/
 void ctrlWallButton(void)
 {
-	static IOBITS tmpWallButton  = IOBITS_ZERO;
+	static IOBITS tmpWallButton  = ~IOBITS_ZERO;
 
 	/* Wall Button Output */
 	       IOBITS WallButton;
-	static IOBITS prevWallButton = IOBITS_ZERO;
+	static IOBITS prevWallButton = ~IOBITS_ZERO;
 
 	if ( (tmpWallButton != curWallButton) ) {
 		/* Lese Wandtaster
@@ -1070,7 +1072,7 @@ void ctrlWallButton(void)
 
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(WallButtonChange, i) ) {
-					sendStatus(PUSHBUTTON, F("%02d %S"), i+1, bitRead(curWallButton,i)?fstrON:fstrOFF);
+					sendStatus(false,PUSHBUTTON, F("%02d %S"), i+1, bitRead(curWallButton,i)?fstrON:fstrOFF);
 					if ( bitRead(curWallButton,i) ) {
 						WallButtonTimer[i % MAX_MOTORS] = millis();
 					}
@@ -1091,7 +1093,7 @@ void ctrlWallButton(void)
 							#ifdef DEBUG_OUTPUT_WALLBUTTON
 							SerialTimePrintfln(F("ctrlWallButton  - Setting new timeout for motor %d: %ld ms"), i % MAX_MOTORS, maxTime);
 							#endif
-							sendStatus(MOTOR, F("%02d TIMEOUT %ld"), (i % MAX_MOTORS)+1, maxTime);
+							sendStatus(false,MOTOR, F("%02d TIMEOUT %ld"), (i % MAX_MOTORS)+1, maxTime);
 							eeprom.MaxRuntime[i % MAX_MOTORS] = maxTime;
 							eepromWriteVars();
 						}
@@ -1156,7 +1158,7 @@ void ctrlSM8Button(void)
 
 		for (i = 0; i < IOBITS_CNT; i++) {
 			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) ) {
-				sendStatus(FS20OUT, F("%2d %S"), i+1, bitRead(valSM8Button,i)?fstrOFF:fstrON);
+				sendStatus(false,FS20OUT, F("%2d %S"), i+1, bitRead(valSM8Button,i)?fstrOFF:fstrON);
 			}
 
 			// SM8 Taste Timeout setzen, falls Tastenausgang gerade aktiviert wurde
@@ -1532,7 +1534,7 @@ void ctrlRainSensor(void)
 						}
 					}
 				}
-				sendStatus(RAIN, F("%s ENABLED WET"), strMode);
+				sendStatus(false,RAIN, F("%s ENABLED WET"), strMode);
 				isRaining = true;
 				digitalWrite(STATUS_LED, HIGH);
 			}
@@ -1544,7 +1546,7 @@ void ctrlRainSensor(void)
 					resumeDelay = (WORD)((unsigned long)eeprom.RainResumeTime * 1000L / TIMER_MS);
 				}
 				
-				sendStatus(RAIN, F("%s ENABLED DRY"), strMode);
+				sendStatus(false,RAIN, F("%s ENABLED DRY"), strMode);
 				isRaining = false;
 				digitalWrite(STATUS_LED, LOW);
 			}
@@ -1554,13 +1556,13 @@ void ctrlRainSensor(void)
 				#ifdef DEBUG_OUTPUT_RAIN
 				SerialTimePrintfln(F("%SRain disabled, wet"), dbgCtrlRainSensor);
 				#endif
-				sendStatus(RAIN, F("%s DISABLED WET"), strMode);
+				sendStatus(false,RAIN, F("%s DISABLED WET"), strMode);
 			}
 			else {
 				#ifdef DEBUG_OUTPUT_RAIN
 				SerialTimePrintfln(F("%SRain disabled, dry"), dbgCtrlRainSensor);
 				#endif
-				sendStatus(RAIN, F("%s DISABLED DRY"), strMode);
+				sendStatus(false,RAIN, F("%s DISABLED DRY"), strMode);
 			}
 			isRaining = false;
 			digitalWrite(STATUS_LED, LOW);
@@ -1663,7 +1665,7 @@ void operatonHours(void)
 		eeprom.OperatingHours++;
 		eepromWriteVars();
 		savedOperationTime = opHour;
-		sendStatus(SYSTEM, F("RUNNING %d h"), eeprom.OperatingHours);
+		sendStatus(false,SYSTEM, F("RUNNING %d h"), eeprom.OperatingHours);
 	}
 
 	watchdogReset();
