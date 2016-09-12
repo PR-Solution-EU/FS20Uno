@@ -38,7 +38,6 @@ void printProgramInfo(bool copyright)
 	if( copyright ) {
 		SerialPrintfln(F("(c) 2016 www.p-r-solution.de - Norbert Richter <n.richter@p-r-solution.de>"));
 	}
-	watchdogReset();
 }
 
 
@@ -267,14 +266,14 @@ void sendStatus(bool send, statusType type, const __FlashStringHelper *fmt, ... 
 			Serial.print(F("5 RAIN "));
 			break;
 		}
+		watchdogReset();
+		
 		va_list args;
 		va_start (args, fmt);
 		vaSerialPrint(fmt, args);
 		va_end(args);
 		printCRLF();
 	}
-
-	watchdogReset();
 }
 
 /* ===================================================================
@@ -320,20 +319,36 @@ void sendMotorOffStatus(void)
 /* ===================================================================
  * Function:    setMotorPosition
  * Return:
- * Arguments:
+ * Arguments:   motorNum    - Motornummer [0..x]
+ *              destPercent - Zielposition [0..100]
+ *                            wobei  0 = CLOSE
+ *                            und  100 = OPEN
  * Description: Motor auf bestimmte Position schalten
  * ===================================================================*/
-void setMotorPosition(byte motorNum, MOTOR_TIMER destPosition)
+void setMotorPosition(byte motorNum, byte destPercent)
 {
 	#ifdef DEBUG_OUTPUT_MOTOR
-	SerialTimePrintfln(F("setMotorPosition- Motor %d current pos=%d, destPosition=%d"), motorNum+1, MotorPosition[motorNum], destPosition);
+	SerialTimePrintfln(F("setMotorPosition- Motor %d current pos=%d, destPercent=%d%%"), motorNum+1, MotorPosition[motorNum], destPercent);
 	#endif
-	destMotorPosition[motorNum] = destPosition;
-	if ( destMotorPosition[motorNum] > MotorPosition[motorNum] ) {
-		setMotorDirection(motorNum, MOTOR_OPEN);
+	if ( destPercent>0 && destPercent<100 ) {
+		destMotorPosition[motorNum] = (MOTOR_TIMER)((long)(eeprom.MaxRuntime[motorNum] / TIMER_MS) * (long)destPercent / 100L);
+
+		#ifdef DEBUG_OUTPUT_MOTOR
+		SerialTimePrintfln(F("setMotorPosition- Motor %d current pos=%d, destMotorPosition=%d"), motorNum+1, MotorPosition[motorNum], destMotorPosition[motorNum]);
+		#endif
+
+		if ( destMotorPosition[motorNum] > MotorPosition[motorNum] ) {
+			setMotorDirection(motorNum, MOTOR_OPEN);
+		}
+		else {
+			setMotorDirection(motorNum, MOTOR_CLOSE);
+		}
 	}
-	else {
+	else if ( destPercent==0 ) {
 		setMotorDirection(motorNum, MOTOR_CLOSE);
+	}
+	else if ( destPercent>=100 ) {
+		setMotorDirection(motorNum, MOTOR_OPEN);
 	}
 }
 

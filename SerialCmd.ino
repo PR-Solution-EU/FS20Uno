@@ -10,17 +10,17 @@ void setupSerialCommand(void)
 	SCmd.addCommand(PSTR("?"),cmdHelp);
 	SCmd.addCommand(PSTR("HELP"),cmdHelp);
 	SCmd.addCommand(PSTR("INFO"),cmdInfo);
-	SCmd.addCommand(PSTR("ECHO"),Echo);
-	SCmd.addCommand(PSTR("TERM"),Term);
+	SCmd.addCommand(PSTR("ECHO"),cmdEcho);
+	SCmd.addCommand(PSTR("TERM"),cmdTerm);
 	SCmd.addCommand(PSTR("UPTIME"),cmdUptime);
 	SCmd.addCommand(PSTR("FS20"),cmdFS20);
 	SCmd.addCommand(PSTR("BUTTON"),cmdWallButton);
 	SCmd.addCommand(PSTR("PUSHBUTTON"),cmdWallButton);
 	SCmd.addCommand(PSTR("WALLBUTTON"),cmdWallButton);
 	SCmd.addCommand(PSTR("MOTOR"),cmdMotor);
-	SCmd.addCommand(PSTR("MOTORNAME"),cmdName);
-	SCmd.addCommand(PSTR("MOTORTIME"),cmdRuntime);
-	SCmd.addCommand(PSTR("MOTORTYPE"),cmdType);
+	SCmd.addCommand(PSTR("MOTORNAME"),cmdMotorName);
+	SCmd.addCommand(PSTR("MOTORTIME"),cmdMotorTime);
+	SCmd.addCommand(PSTR("MOTORTYPE"),cmdMotorType);
 	SCmd.addCommand(PSTR("RAINSENSOR"),cmdRainSensor);
 	SCmd.addCommand(PSTR("RAIN"),cmdRainSensor);
 	SCmd.addCommand(PSTR("STATUS"),cmdStatus);
@@ -43,6 +43,7 @@ void processSerialCommand(void)
 
 void cmdHelp()
 {
+	#ifndef DEBUG_OUTPUT
 	#ifndef CMDHELP_LONG
 	Serial.print(F(
 		"Command List\r\n"
@@ -71,7 +72,7 @@ void cmdHelp()
 		"\tMotor runtime\r\n"
 		"MOTORTYPE [<m> [WINDOW|JALOUSIE]\r\n"
 		"\tMotor type\r\n"
-		"RAIN, RAINSENSOR [AUTO|ENABLE|DISABLE|ON|OFF|RESUME <delay>|FORGET]\r\n"
+		"RAIN, RAINSENSOR [AUTO|ENABLE|DISABLE|WET|ON|DRY|OFF|RESUME <delay>|FORGET]\r\n"
 		"\tRain sensor function\r\n"
 		"BUTTON, PUSHBUTTON, WALLBUTTON [<b> [ON|OFF]]\r\n"
 		"\tWall pushbutton status\r\n"
@@ -213,8 +214,8 @@ void cmdHelp()
 			"\t\t\tAUTO       Rain detection enabled from input signals\r\n"
 			"\t\t\tENABLE     Enable rain detection\r\n"
 			"\t\t\tDISABLE    Disable rain detection\r\n"
-			"\t\t\tON         Rain\r\n"
-			"\t\t\tOFF        Dry\r\n"
+			"\t\t\tWET|ON     Raining\r\n"
+			"\t\t\tDRY|OFF    Dry\r\n"
 			"\t\t\tRESUME <s> Resume window position after rain was gone\r\n"
 			"\t\t\t           <s> is the delay (sec) before resume starts\r\n"
 			"\t\t\tFORGET     Don not resume, keep windows closed\r\n"
@@ -275,6 +276,10 @@ void cmdHelp()
 			));
 	}
 	#endif
+	#else
+	Serial.print(F("Debug enabled, no help"));
+
+	#endif
 	watchdogReset();
 	
 	printCRLF();
@@ -308,17 +313,16 @@ void cmdBackup(void)
 	SerialPrintf(F("UPTIME %ld %ld\r\n"), millis(), eeprom.OperatingHours);
 	// LED
 	SerialPrintf(F("LED %d %d\r\n"), eeprom.BlinkInterval, eeprom.BlinkLen);
+
 	// RAIN
-//~ "       AUTO        Rain detection and detection enabled from input signals\r\n"
-//~ "       ENABLE      Enable rain detection, disables AUTO\r\n"
-//~ "       DISABLE     Disable rain detection, disables AUTO\r\n"
-//~ "       ON          Raining, disables AUTO\r\n"
-//~ "       OFF         No raining, disables AUTO\r\n"
-//~ "       RESUME <s>  Resume window position after rain was gone\r\n"
-//~ "                   <s> is the delay in sec after rain was gone before resume starr\r\n"
-//~ "                   and before resume starts.\r\n"
-//~ "       FORGET      Do not remember window position, keep it close\r\n"
-	//	SerialPrintf(F("RAIN %d %d\r\n"), eeprom.BlinkInterval, eeprom.BlinkLen);
+	SerialPrintf(F("RAIN RESUME %d\r\n"), eeprom.RainResumeTime);
+	if( !bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) { 
+		SerialPrintf(F("RAIN FORGET\r\n"));
+	}
+	SerialPrintf(F("RAIN %S\r\n"), bitRead(eeprom.Rain, RAIN_BIT_ENABLE) ? F("ENABLE") : F("DISABLE"));
+	if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
+		SerialPrintf(F("RAIN AUTO\r\n"));
+	}
 
 	// MOTORNAME
 	for(m=0; m<MAX_MOTORS; m++) {
@@ -341,6 +345,11 @@ void cmdBackup(void)
 			,(int)(eeprom.OvertravelTime[m] / 1000)
 			,(int)(eeprom.OvertravelTime[m] % 1000)
 			);
+	}
+
+	// MOTOR POSITIONS
+	for(m=0; m<MAX_MOTORS; m++) {
+		SerialPrintf(F("MOTOR %d SYNC\r\n"), m+1);
 	}
 
 	cmdOK();
@@ -453,7 +462,6 @@ void cmdFS20()
 	if (arg == NULL) {
 		for(channel=0; channel<IOBITS_CNT; channel++) {
 			sendStatus(true,FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
-			watchdogReset();
 		}
 		cmdOK();
 	}
@@ -487,7 +495,6 @@ void cmdFS20()
 					SerialPrintf(F("Setting channel %d into program mode, please wait:  "), channel+1);
 					for(byte d=0; d<(FS20_SM8_IN_PROGRAMMODE/1000); d++) {
 						SerialPrintf(F("\b%1d"), (FS20_SM8_IN_PROGRAMMODE/1000)-d);
-						watchdogReset();
 						delay(1000);
 						watchdogReset();
 					}
@@ -617,7 +624,7 @@ void cmdMotor()
 						cmdError(F("Parameter out of range (0-100)"));
 					}
 					else {
-						setMotorPosition(motor, (MOTOR_TIMER)((long)(eeprom.MaxRuntime[motor] / TIMER_MS) * (long)percent / 100L));
+						setMotorPosition(motor, percent);
 						cmdOK();
 					}
 				}
@@ -656,11 +663,11 @@ void cmdMotor()
 					cmdOK();
 				}
 				else if ( (atoi(arg)>=0 && atoi(arg)<=100) ) {
-					setMotorPosition(motor, (MOTOR_TIMER)((long)(eeprom.MaxRuntime[motor] / TIMER_MS) * (long)atoi(arg) / 100L));
+					setMotorPosition(motor, (byte)atoi(arg) );
 					cmdOK();
 				}
 				else {
-					cmdError(F("Unknown 2. parameter (use 'HELP MOTOR' for more info)"));
+					cmdErrorParameter(F("'HELP MOTOR' for more info"));
 				}
 			}
 			if (arg == NULL || strnicmp(arg, F("ST"),2)==0 ) {
@@ -672,7 +679,7 @@ void cmdMotor()
 }
 
 
-void cmdRuntime()
+void cmdMotorTime()
 {
 //~ "MOTORTIME [<m> [<sec> [<delay>]]\r\n"
 //~ "\tSet/Get motor maximum runtime\r\n"
@@ -686,7 +693,7 @@ void cmdRuntime()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			cmdRuntimePrintStatus(motor);
+			cmdMotorTimePrintStatus(motor);
 		}
 		cmdOK();
 	}
@@ -700,7 +707,7 @@ void cmdRuntime()
 
 			if (arg == NULL) {
 				// Status
-				cmdRuntimePrintStatus(motor);
+				cmdMotorTimePrintStatus(motor);
 				cmdOK();
 			}
 			else {
@@ -714,7 +721,7 @@ void cmdRuntime()
 					eepromWriteVars();
 					arg = SCmd.next();
 					if (arg == NULL) {
-						cmdRuntimePrintStatus(motor);
+						cmdMotorTimePrintStatus(motor);
 						cmdOK();
 					}
 					else {
@@ -725,7 +732,7 @@ void cmdRuntime()
 						else {
 							eeprom.OvertravelTime[motor] = (DWORD)(runtime*1000.0);
 							eepromWriteVars();
-							cmdRuntimePrintStatus(motor);
+							cmdMotorTimePrintStatus(motor);
 							cmdOK();
 						}
 					}
@@ -734,9 +741,9 @@ void cmdRuntime()
 		}
 	}
 }
-void cmdRuntimePrintStatus(int motor)
+void cmdMotorTimePrintStatus(int motor)
 {
-	SerialPrintfln(F("MOTOR %02d %d.%03d %d.%03d (%s)")
+	sendStatus(true,MOTOR,F("%02d TIME %d.%03d %d.%03d (%s)")
 				,(int)(motor+1)
 				,(int)(eeprom.MaxRuntime[motor] / 1000)
 				,(int)(eeprom.MaxRuntime[motor] % 1000)
@@ -744,11 +751,10 @@ void cmdRuntimePrintStatus(int motor)
 				,(int)(eeprom.OvertravelTime[motor] % 1000)
 				,(char *)eeprom.MotorName[motor]
 				);
-	watchdogReset();
 }
 
 
-void cmdName()
+void cmdMotorName()
 {
 //~ "MOTORNAME [<m> [<name>]\r\n"
 //~ "  Set/Get motor name\r\n"
@@ -760,7 +766,7 @@ void cmdName()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			cmdNamePrintStatus(motor);
+			cmdMotorNamePrintStatus(motor);
 		}
 		cmdOK();
 	}
@@ -775,9 +781,9 @@ void cmdName()
 				char sName[MAX_NAMELEN];
 
 				#ifdef DEBUG_OUTPUT
-				SerialTimePrintfln(F("cmdName arg=%s"), arg);
-				SerialTimePrintfln(F("cmdName sizeof(eeprom.MotorName[motor])=%d"), sizeof(eeprom.MotorName[motor]) );
-				SerialTimePrintfln(F("cmdName &eeprom.MotorName[motor]=%p"), &eeprom.MotorName[motor] );
+				SerialTimePrintfln(F("cmdMotorName arg=%s"), arg);
+				SerialTimePrintfln(F("cmdMotorName sizeof(eeprom.MotorName[motor])=%d"), sizeof(eeprom.MotorName[motor]) );
+				SerialTimePrintfln(F("cmdMotorName &eeprom.MotorName[motor]=%p"), &eeprom.MotorName[motor] );
 				#endif
 
 				strncpy(sName, arg, sizeof(sName)-1);
@@ -788,20 +794,19 @@ void cmdName()
 				cmdOK();
 			}
 			else {
-				cmdNamePrintStatus(motor);
+				cmdMotorNamePrintStatus(motor);
 				cmdOK();
 			}
 		}
 	}
 }
-void cmdNamePrintStatus(int motor)
+void cmdMotorNamePrintStatus(int motor)
 {
-	SerialPrintfln(F("M%02d %s"), motor+1, (char *)eeprom.MotorName[motor]);
-	watchdogReset();
+	sendStatus(true,MOTOR,F("%02d NAME %s"), motor+1, (char *)eeprom.MotorName[motor]);
 }
 
 
-void cmdType()
+void cmdMotorType()
 {
 //~ "    motortype [<m> [<cmd>]\r\n"
 //~ "         Set/Get motor type\r\n"
@@ -813,7 +818,7 @@ void cmdType()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			cmdTypePrintStatus(motor);
+			cmdMotorTypePrintStatus(motor);
 		}
 		cmdOK();
 	}
@@ -840,16 +845,18 @@ void cmdType()
 				}
 			}
 			else {
-				cmdTypePrintStatus(motor);
+				cmdMotorTypePrintStatus(motor);
 				cmdOK();
 			}
 		}
 	}
 }
-void cmdTypePrintStatus(int motor)
+void cmdMotorTypePrintStatus(int motor)
 {
-	SerialPrintfln(F("M%02d %-8s (%S)"), motor+1, getMotorType(motor)==WINDOW ? F("WINDOW") : F("JALOUSIE"), (char *)eeprom.MotorName[motor]);
-	watchdogReset();
+	sendStatus(true,MOTOR,F("%02d TYPE %-8S (%s)")
+				,motor+1
+				,getMotorType(motor)==WINDOW ? F("WINDOW") : F("JALOUSIE")
+				,(char *)eeprom.MotorName[motor]);
 }
 
 
@@ -861,8 +868,8 @@ void cmdRainSensor()
 //~ "       AUTO        Rain detection and detection enabled from input signals\r\n"
 //~ "       ENABLE      Enable rain detection, disables AUTO\r\n"
 //~ "       DISABLE     Disable rain detection, disables AUTO\r\n"
-//~ "       ON          Raining, disables AUTO\r\n"
-//~ "       OFF         No raining, disables AUTO\r\n"
+//~ "       WET|ON      Raining, disables AUTO\r\n"
+//~ "       DRY|OFF     No raining, disables AUTO\r\n"
 //~ "       RESUME <s>  Resume window position after rain was gone\r\n"
 //~ "                   <s> is the delay in sec after rain was gone before resume starr\r\n"
 //~ "                   and before resume starts.\r\n"
@@ -872,39 +879,16 @@ void cmdRainSensor()
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		debEnable.update();
-		debInput.update();
-		bool sensorEnabled;
-
-		/*
-		Rainsensor input:   Dry|Raining
-		Rainsensor setting: Dry|Raining
-		Sensor monitoring:  Enabled|Disabled readin from input|setting
-		Rainsensor status:  Dry|Raining
-		*/
-
-		if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
-			sensorEnabled = (debEnable.read() == RAIN_ENABLE_AKTIV);
-		}
-		else {
-			sensorEnabled = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
-		}
-		SerialPrintfln(F("Sensor monitoring:  %S  reading from %S")
-				,sensorEnabled?F("Enabled"):F("Disabled")
-				,bitRead(eeprom.Rain, RAIN_BIT_AUTO)?F("input"):F("setting"));
-		SerialPrintfln(F("Rainsensor input:   %S"), (debInput.read()==RAIN_INPUT_AKTIV)?F("Raining"):F("Dry"));
-		SerialPrintfln(F("Rainsensor setting: %S"), softRainInput?F("Raining"):F("Dry"));
-		SerialPrintfln(F("Window position:    %S, delay: %d sec"), bitRead(eeprom.Rain, RAIN_BIT_RESUME)?F("Resume"):F("Forget"), eeprom.RainResumeTime);
-		SerialPrintfln(F("Rainsensor status:  %S"), sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? F("Raining") : F("Dry"));
+		cmdRainSensorPrintStatus();
 		cmdOK();
 	}
 	else {
-		if ( strnicmp(arg, fstrON,2)==0 ) {
+		if ( strnicmp(arg, fstrON,2)==0 || strnicmp(arg, fstrWET,3)==0 ) {
 			softRainInput = true;
 			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
-		else if ( strnicmp(arg, F("OF"),2)==0 ) {
+		if ( strnicmp(arg, fstrOFF,3)==0 || strnicmp(arg, fstrDRY,3)==0 ) {
 			softRainInput = false;
 			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
 			cmd = true;
@@ -955,6 +939,31 @@ void cmdRainSensor()
 		}
 	}
 }
+void cmdRainSensorPrintStatus()
+{
+	bool sensorEnabled;
+
+	debEnable.update();
+	debInput.update();
+
+	if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
+		sensorEnabled = (debEnable.read() == RAIN_ENABLE_AKTIV);
+	}
+	else {
+		sensorEnabled = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
+	}
+
+	sendStatus(true,RAIN,F("%S MODE:%S IN:%S SET:%S RAIN:%S FROM:%S POS:%S DELAY:%d")
+				,sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? fstrWET : fstrDRY
+				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? F("AUTO") : F("MANUAL")
+				,(debInput.read()==RAIN_INPUT_AKTIV) ? fstrWET : fstrDRY
+				,softRainInput ? fstrWET : fstrDRY
+				,sensorEnabled ? F("ENABLED") : F("DISABLED")
+				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? F("INPUT") : F("SET")
+				,bitRead(eeprom.Rain, RAIN_BIT_RESUME) ? F("RESUME") : F("FORGET")
+				,eeprom.RainResumeTime
+				);
+}
 
 void cmdStatus()
 {
@@ -966,7 +975,7 @@ void cmdStatus()
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintf(eeprom.SendStatus?F("ON\r\n"):F("OFF\r\n"));
+		sendStatus(true,SYSTEM,F("STATUS %S"), eeprom.SendStatus?fstrON:fstrOFF);
 		cmdOK();
 	}
 	else {
@@ -1003,15 +1012,14 @@ void cmdLed()
 	argInterval = SCmd.next();
 	argFlash = SCmd.next();
 	if (argInterval == NULL) {
-		SerialPrintfln(F("Interval %d ms"), eeprom.BlinkInterval);
-		SerialPrintfln(F("Flash %d ms"), eeprom.BlinkLen);
+		sendStatus(true,SYSTEM,F("LED %d %d"), eeprom.BlinkInterval, eeprom.BlinkLen);
 		cmdOK();
 	}
 	else if ( argInterval != NULL && argFlash != NULL ) {
 		Interval=(WORD)atoi(argInterval);
 		Flash=(WORD)atoi(argFlash);
 		if ( Interval<Flash ) {
-			cmdError(F("Wrong option, flash must be >= interval time"));
+			cmdError(F("flash time must be >= interval time"));
 		}
 		else {
 			eeprom.BlinkInterval = Interval;
@@ -1037,7 +1045,7 @@ void cmdReset(void)
 {
 	cmdOK();
 
-	SerialPrintf(F("Restart system in %d sec"), (WATCHDOG_TIME/1000));
+	sendStatus(true,SYSTEM,F("RESTART (in %d s)"), (WATCHDOG_TIME/1000));
 	for(byte d=0; d<(FS20_SM8_IN_PROGRAMMODE/1000); d++) {
 		Serial.print(F("."));
 		delay(1000);
@@ -1045,7 +1053,7 @@ void cmdReset(void)
 	while(true) {};
 }
 
-void Echo(void)
+void cmdEcho(void)
 {
 //~ "    ECHO [ON|OFF]\r\n"
 //~ "        Set/Get echo on or off\r\n"
@@ -1053,7 +1061,7 @@ void Echo(void)
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintfln(F("ECHO %S"),eeprom.Echo?fstrON:fstrOFF);
+		sendStatus(true,SYSTEM,F("ECHO %S"), eeprom.Echo?fstrON:fstrOFF);
 		cmdOK();
 	}
 	else if ( strnicmp(arg, fstrON,2)==0 ) {
@@ -1062,7 +1070,7 @@ void Echo(void)
 		eepromWriteVars();
 		cmdOK();
 	}
-	else if ( strnicmp(arg, F("OF"),2)==0 ) {
+	else if ( strnicmp(arg, fstrOFF,3)==0 ) {
 		eeprom.Echo = false;
 		SCmd.setEcho(eeprom.Echo);
 		eepromWriteVars();
@@ -1073,7 +1081,7 @@ void Echo(void)
 	}
 }
 
-void Term(void)
+void cmdTerm(void)
 {
 //~ "    TERM [CR|LF]\r\n"
 //~ "        Set/Get command terminator\r\n"
@@ -1081,16 +1089,16 @@ void Term(void)
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		SerialPrintfln(F("TERM %S"),eeprom.Term=='\r'?F("CR"):F("LF"));
+		sendStatus(true,SYSTEM,F("TERM %S"),eeprom.Term=='\r'?fstrCR:fstrLF);
 		cmdOK();
 	}
-	else if ( strnicmp(arg, F("CR"),2)==0 ) {
+	else if ( strnicmp(arg, fstrCR,2)==0 ) {
 		eeprom.Term = '\r';
 		SCmd.setTerm(eeprom.Term);
 		eepromWriteVars();
 		cmdOK();
 	}
-	else if ( strnicmp(arg, F("OF"),2)==0 ) {
+	else if ( strnicmp(arg, fstrLF,2)==0 ) {
 		eeprom.Term = '\n';
 		SCmd.setTerm(eeprom.Term);
 		eepromWriteVars();
@@ -1116,7 +1124,7 @@ void cmdError(String err)
 
 void cmdErrorParameter(String err)
 {
-	SerialPrintf(F("ERROR: Unknown option (use "));
+	SerialPrintf(F("ERROR: Parameter error (use "));
 	Serial.print(err);
 	Serial.println(")");
 }

@@ -80,7 +80,7 @@ void eepromInitVars()
 		#ifdef DEBUG_OUTPUT_EEPROM
 		SerialTimePrintfln(F("EEPROM - CRC32 not matching, set defaults..."));
 		#endif
-		sendStatus(true,SYSTEM, F("SET DEFAULT"));
+		sendStatus(true,SYSTEM, F("SET DEFAULT VALUES"));
 		eeprom.BlinkInterval 	= LED_BLINK_INTERVAL;
 		eeprom.BlinkLen      	= LED_BLINK_LEN;
 		eeprom.MTypeBitmask  	= MTYPE_BITMASK;

@@ -170,7 +170,7 @@
 
 /* ===================================================================
  * TODO:
- * - SerialCmd: LOGIN  (using password function on WIZ110SR)
+ *  - SerialCmd: LOGIN  (using password function on WIZ110SR)
  * ===================================================================*/
 
 #include <Arduino.h>
@@ -188,7 +188,7 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"		// Programmname
-#define VERSION "3.36"			// Programmversion
+#define VERSION "3.38"			// Programmversion
 #include "REVISION.h"			// Build (wird von git geändert)
 #define DATAVERSION 124			// Kann verwendet werden, um Defaults
 								// zu schreiben
@@ -364,6 +364,10 @@ struct EEPROM {
 /* Strings */
 const char fstrON[]  PROGMEM = "ON";
 const char fstrOFF[] PROGMEM = "OFF";
+const char fstrCR[]  PROGMEM = "CR";
+const char fstrLF[]  PROGMEM = "LF";
+const char fstrWET[] PROGMEM = "WET";
+const char fstrDRY[] PROGMEM = "DRY";
 
 
 /* Laufzeitmessung */
@@ -429,7 +433,7 @@ void setup()
 	// Initalisere Kommando-Interface
 	setupSerialCommand();
 
-	if( !eeprom.SendStatus ) {
+	if ( !eeprom.SendStatus ) {
 		printProgramInfo(true);
 	}
 	sendStatus(false,SYSTEM, F("%s %s.%s"), PROGRAM, VERSION, REVISION);
@@ -1450,7 +1454,9 @@ void ctrlRainSensor(void)
 	static bool prevRainInput;
 	static bool prevRainEnable;
 	static bool prevRainEnableInput;
+	#ifdef DEBUG_OUTPUT_RAIN
 	const char *strMode;
+	#endif
 
 	// Eingänge entprellen
 	debEnable.update();
@@ -1494,12 +1500,14 @@ void ctrlRainSensor(void)
 		firstRun = false;
 	}
 
+	#ifdef DEBUG_OUTPUT_RAIN
 	if ( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
 		strMode = "AUTO";
 	}
 	else {
 		strMode = "MANUAL";
 	}
+	#endif
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable ) {
 		#ifdef DEBUG_OUTPUT_RAIN
 		SerialTimePrintfln(F("%S----------------------------------------"), dbgCtrlRainSensor);
@@ -1522,20 +1530,21 @@ void ctrlRainSensor(void)
 						if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME)
 							&& getMotorDirection(i)==MOTOR_OFF
 							&& MotorPosition[i]!=0 ) {
-							#ifdef DEBUG_OUTPUT_MOTOR
-							SerialTimePrintfln(F("%SRemember window %d position %d"), dbgCtrlRainSensor, i, );
+							resumeMotorPosition[i] = (MOTOR_TIMER)(((unsigned long)MotorPosition[i]*100L) / (unsigned long)(eeprom.MaxRuntime[i] / TIMER_MS));
+							#ifdef DEBUG_OUTPUT_RAIN
+							SerialTimePrintfln(F("%SRemember window %d position %d%% (%d)"), dbgCtrlRainSensor, i, resumeMotorPosition[i], MotorPosition[i]);
 							#endif
-							resumeMotorPosition[i] = MotorPosition[i];
 						}
 						if ( getMotorDirection(i)!=MOTOR_CLOSE && getMotorDirection(i)!=MOTOR_CLOSE_DELAYED) {
-							#ifdef DEBUG_OUTPUT_MOTOR
+							#ifdef DEBUG_OUTPUT_RAIN
 							SerialTimePrintfln(F("%SClose window %d"), dbgCtrlRainSensor, i);
 							#endif
 							setMotorDirection(i, MOTOR_CLOSE);
 						}
 					}
 				}
-				sendStatus(false,RAIN, F("%s ENABLED WET"), strMode);
+				cmdRainSensorPrintStatus();
+				// sendStatus(false,RAIN, F("%s ENABLED WET"), strMode);
 				isRaining = true;
 				digitalWrite(STATUS_LED, HIGH);
 			}
@@ -1546,8 +1555,8 @@ void ctrlRainSensor(void)
 				if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
 					resumeDelay = (WORD)((unsigned long)eeprom.RainResumeTime * 1000L / TIMER_MS);
 				}
-
-				sendStatus(false,RAIN, F("%s ENABLED DRY"), strMode);
+				cmdRainSensorPrintStatus();
+				// sendStatus(false,RAIN, F("%s ENABLED DRY"), strMode);
 				isRaining = false;
 				digitalWrite(STATUS_LED, LOW);
 			}
@@ -1557,13 +1566,15 @@ void ctrlRainSensor(void)
 				#ifdef DEBUG_OUTPUT_RAIN
 				SerialTimePrintfln(F("%SRain disabled, wet"), dbgCtrlRainSensor);
 				#endif
-				sendStatus(false,RAIN, F("%s DISABLED WET"), strMode);
+				cmdRainSensorPrintStatus();
+				//sendStatus(false,RAIN, F("%s DISABLED WET"), strMode);
 			}
 			else {
 				#ifdef DEBUG_OUTPUT_RAIN
 				SerialTimePrintfln(F("%SRain disabled, dry"), dbgCtrlRainSensor);
 				#endif
-				sendStatus(false,RAIN, F("%s DISABLED DRY"), strMode);
+				cmdRainSensorPrintStatus();
+				//sendStatus(false,RAIN, F("%s DISABLED DRY"), strMode);
 			}
 			isRaining = false;
 			digitalWrite(STATUS_LED, LOW);
@@ -1582,7 +1593,7 @@ void ctrlRainSensor(void)
 				&& getMotorDirection(i)==MOTOR_OFF
 				&& resumeMotorPosition[i]!=NO_POSITION ) {
 					#ifdef DEBUG_OUTPUT_RAIN
-					SerialTimePrintfln(F("%SResume motor %d to pos %d"), dbgCtrlRainSensor, i+1, resumeMotorPosition[i]);
+					SerialTimePrintfln(F("%SResume motor %d to %d%%"), dbgCtrlRainSensor, i+1, resumeMotorPosition[i] );
 					#endif
 					setMotorPosition(i, resumeMotorPosition[i]);
 					resumeMotorPosition[i] = NO_POSITION;
@@ -1666,7 +1677,7 @@ void operatonHours(bool millisSet)
 		if ( !millisSet ) {
 			eeprom.OperatingHours++;
 			eepromWriteVars();
-			sendStatus(false,SYSTEM, F("RUNNING %d h"), eeprom.OperatingHours);
+			sendStatus(false,SYSTEM, F("OPERATION %d h"), eeprom.OperatingHours);
 		}
 		savedOperationTime = opHour;
 	}
