@@ -282,7 +282,7 @@ void sendStatus(bool send, statusType type, const __FlashStringHelper *fmt, ... 
  * Arguments:
  * Description:  Motor OFF Status aus IRQ senden
  * ===================================================================*/
-void sendMotorStatus(int motor)
+void sendMotorStatus(bool send, int motor)
 {
 	byte runTimePercent = (byte)((long)MotorPosition[motor]*100L / (long)(eeprom.MaxRuntime[motor] / TIMER_MS));
 
@@ -292,7 +292,7 @@ void sendMotorStatus(int motor)
 	if( runTimePercent>100 ) {
 		runTimePercent=100;
 	}
-	sendStatus(true,MOTOR,F("%02d %-7S %3d%% %-7S (%s)")
+	sendStatus(send,MOTOR,F("%02d %-7S %3d%% %-7S (%s)")
 				,motor+1
 				,runTimePercent==0?F("CLOSE"):(runTimePercent==100?F("OPEN"):F("BETWEEN"))
 				,runTimePercent
@@ -310,7 +310,7 @@ void sendMotorOffStatus(void)
 {
 	for (byte i = 0; i < MAX_MOTORS; i++) {
 		if ( bitRead(sendStatusMOTOR_OFF, i) ) {
-			sendMotorStatus(i);
+			sendMotorStatus(false,i);
 			bitClear(sendStatusMOTOR_OFF, i);
 		}
 	}
@@ -368,19 +368,19 @@ void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor auf Öffnen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN_DELAYED;
-				sendMotorStatus(motorNum);
+				sendMotorStatus(false,motorNum);
 			}
 			// Motor läuft auf Öffnen
 			else if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sendMotorStatus(motorNum);
+				sendMotorStatus(false,motorNum);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf öffnen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_OPEN;
-				sendMotorStatus(motorNum);
+				sendMotorStatus(false,motorNum);
 			}
 		}
 		// Neue Richtung: Schliessen
@@ -389,26 +389,26 @@ void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 			if (MotorCtrl[motorNum] >= MOTOR_OPEN) {
 				// Motor auf Schliessen mit Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE_DELAYED;
-				sendMotorStatus(motorNum);
+				sendMotorStatus(false,motorNum);
 			}
 			// Motor läuft auf Schliessen
 			else if (MotorCtrl[motorNum] <= MOTOR_CLOSE) {
 				// Motor aus
 				MotorCtrl[motorNum] = MOTOR_OFF;
-				sendMotorStatus(motorNum);
+				sendMotorStatus(false,motorNum);
 			}
 			// Motor ist aus
 			else {
 				// Motor auf Schliessen ohne Umschaltdelay
 				MotorCtrl[motorNum] = MOTOR_CLOSE;
-				sendMotorStatus(motorNum);
+				sendMotorStatus(false,motorNum);
 			}
 		}
 		// Neue Richtung: AUS
 		else {
 			// Motor AUS
 			MotorCtrl[motorNum] = MOTOR_OFF;
-			sendMotorStatus(motorNum);
+			sendMotorStatus(false,motorNum);
 		}
 	}
 }

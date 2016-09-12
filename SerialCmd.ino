@@ -586,7 +586,7 @@ void cmdMotor()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(motor=0; motor<MAX_MOTORS; motor++) {
-			sendMotorStatus(motor);
+			sendMotorStatus(true,motor);
 		}
 		cmdOK();
 	}
@@ -671,7 +671,7 @@ void cmdMotor()
 				}
 			}
 			if (arg == NULL || strnicmp(arg, F("ST"),2)==0 ) {
-				sendMotorStatus(motor);
+				sendMotorStatus(true,motor);
 				cmdOK();
 			}
 		}

@@ -188,7 +188,7 @@
 #include "I2C.h"
 
 #define PROGRAM "FS20Uno"		// Programmname
-#define VERSION "3.38"			// Programmversion
+#define VERSION "3.39"			// Programmversion
 #include "REVISION.h"			// Build (wird von git geändert)
 #define DATAVERSION 124			// Kann verwendet werden, um Defaults
 								// zu schreiben
