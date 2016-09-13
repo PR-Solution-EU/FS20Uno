@@ -43,7 +43,9 @@ void processSerialCommand(void)
 
 void cmdHelp()
 {
-	#ifndef DEBUG_OUTPUT
+	#ifdef DEBUG_OUTPUT
+	Serial.print(F("Debug enabled, no help"));
+	#else
 	#ifndef CMDHELP_LONG
 	Serial.print(F(
 		"Command List\r\n"
@@ -219,7 +221,7 @@ void cmdHelp()
 			"\t\t\tRESUME <s> Resume window position after rain was gone\r\n"
 			"\t\t\t           <s> is the delay (sec) before resume starts\r\n"
 			"\t\t\tFORGET     Don not resume, keep windows closed\r\n"
-			"ENABLE, DISABLE, ON, OFF disables AUTO"
+			"\r\nON|WET, OFF|DRY, ENABLE or DISABLE disables AUTO mode"
 			));
 			
 	}
@@ -276,12 +278,9 @@ void cmdHelp()
 			));
 	}
 	#endif
-	#else
-	Serial.print(F("Debug enabled, no help"));
-
 	#endif
+
 	watchdogReset();
-	
 	printCRLF();
 }
 
@@ -306,7 +305,7 @@ void cmdBackup(void)
 	// ECHO
 	SerialPrintf(F("ECHO %S\r\n"), eeprom.Echo?fstrON:fstrOFF);
 	// TERM
-	SerialPrintf(F("TERM %S\r\n"), eeprom.Term=='\r'?F("CR"):F("LF"));
+	SerialPrintf(F("TERM %S\r\n"), eeprom.Term=='\r'?fstrCR:fstrLF);
 	// STATUS
 	SerialPrintf(F("STATUS %S\r\n"), eeprom.SendStatus?fstrON:fstrOFF);
 	// UPTIME
@@ -319,9 +318,9 @@ void cmdBackup(void)
 	if( !bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) { 
 		SerialPrintf(F("RAIN FORGET\r\n"));
 	}
-	SerialPrintf(F("RAIN %S\r\n"), bitRead(eeprom.Rain, RAIN_BIT_ENABLE) ? F("ENABLE") : F("DISABLE"));
+	SerialPrintf(F("RAIN %S\r\n"), bitRead(eeprom.Rain, RAIN_BIT_ENABLE) ? fstrENABLE : fstrDISABLE);
 	if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
-		SerialPrintf(F("RAIN AUTO\r\n"));
+		SerialPrintf(F("RAIN %S\r\n"), fstrAUTO);
 	}
 
 	// MOTORNAME
@@ -334,7 +333,7 @@ void cmdBackup(void)
 	}
 	// MOTORTYPE
 	for(m=0; m<MAX_MOTORS; m++) {
-		SerialPrintf(F("MOTORTYPE %d %S\r\n"), m+1, bitRead(MTYPE_BITMASK,m)!=0?F("WIN"):F("JAL"));
+		SerialPrintf(F("MOTORTYPE %d %S\r\n"), m+1, bitRead(MTYPE_BITMASK,m)!=0?fstrWIN:fstrJAL);
 	}
 	// MOTORTIME
 	for(m=0; m<MAX_MOTORS; m++) {
@@ -476,13 +475,13 @@ void cmdFS20()
 			arg = SCmd.next();
 			if (arg != NULL) {
 				// ON|OFF entered?
-				if      ( strnicmp(arg, fstrON,2)==0 ) {
+				if      ( strnicmp(arg, fstrON, 2)==0 ) {
 					if( !bitRead(curSM8Status, channel) ) {
 						bitClear(valSM8Button, channel);
 					}
 					cmdOK();
 				}
-				else if ( strnicmp(arg, F("OF"),2)==0 ) {
+				else if ( strnicmp(arg, fstrOFF, 2)==0 ) {
 					if( bitRead(curSM8Status, channel) ) {
 						bitClear(valSM8Button, channel);
 					}
@@ -547,7 +546,7 @@ void cmdWallButton()
 					bitSet(curWallButton, button);
 					cmdOK();
 				}
-				else if ( strnicmp(arg, F("OF"),2)==0 ) {
+				else if ( strnicmp(arg, fstrOFF, 2)==0 ) {
 					bitClear(curWallButton, button);
 					cmdOK();
 				}
@@ -610,7 +609,7 @@ void cmdMotor()
 					}
 					cmdOK();
 				}
-				else if ( strnicmp(arg, F("OF"),2)==0 ) {
+				else if ( strnicmp(arg, fstrOFF, 2)==0 ) {
 					if( getMotorDirection(motor)!=MOTOR_OFF ) {
 						setMotorDirection(motor, MOTOR_OFF);
 					}
@@ -667,7 +666,11 @@ void cmdMotor()
 					cmdOK();
 				}
 				else {
+					#ifdef CMDHELP_LONG
 					cmdErrorParameter(F("'HELP MOTOR' for more info"));
+					#else
+					cmdError(F("Wrong parameter"));
+					#endif
 				}
 			}
 			if (arg == NULL || strnicmp(arg, F("ST"),2)==0 ) {
@@ -830,12 +833,12 @@ void cmdMotorType()
 		else {
 			arg = SCmd.next();
 			if (arg != NULL) {
-				if      ( strnicmp(arg, F("WIN"),3)==0 ) {
+				if      ( strnicmp(arg, fstrWIN,3)==0 ) {
 					setMotorType(motor, WINDOW);
 					eepromWriteVars();
 					cmdOK();
 				}
-				else if ( strnicmp(arg, F("JAL"),3)==0 ) {
+				else if ( strnicmp(arg, fstrJAL,3)==0 ) {
 					setMotorType(motor, JALOUSIE);
 					eepromWriteVars();
 					cmdOK();
@@ -888,26 +891,26 @@ void cmdRainSensor()
 			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
-		if ( strnicmp(arg, fstrOFF,3)==0 || strnicmp(arg, fstrDRY,3)==0 ) {
+		if ( strnicmp(arg, fstrOFF,2)==0 || strnicmp(arg, fstrDRY,3)==0 ) {
 			softRainInput = false;
 			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
-		else if ( strnicmp(arg, F("EN"),2)==0 ) {
+		else if ( strnicmp(arg, fstrENABLE,2)==0 ) {
 			bitSet(eeprom.Rain, RAIN_BIT_ENABLE);
 			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
-		else if ( strnicmp(arg, F("DI"),2)==0 ) {
+		else if ( strnicmp(arg, fstrDISABLE,2)==0 ) {
 			bitClear(eeprom.Rain, RAIN_BIT_ENABLE);
 			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
-		else if ( strnicmp(arg, F("AU"),2)==0 ) {
+		else if ( strnicmp(arg, fstrAUTO,2)==0 ) {
 			bitSet(eeprom.Rain, RAIN_BIT_AUTO);
 			cmd = true;
 		}
-		else if ( strnicmp(arg, F("RE"),2)==0 ) {
+		else if ( strnicmp(arg, fstrRESUME,2)==0 ) {
 			int delay = eeprom.RainResumeTime;
 			arg = SCmd.next();
 			if( arg!=NULL ) {
@@ -922,10 +925,10 @@ void cmdRainSensor()
 				cmd = true;
 			}
 		}
-		else if ( strnicmp(arg, F("FO"),2)==0 ) {
+		else if ( strnicmp(arg, fstrFORGET,2)==0 ) {
 			// Clear resumeMotorPosition[]
 			for(size_t i=0; i<(sizeof(resumeMotorPosition)/sizeof(resumeMotorPosition[0])); i++) {
-				resumeMotorPosition[i] = NO_POSITION;
+				resumeMotorPosition[i] = NO_RESUME_POSITION;
 			}
 			bitClear(eeprom.Rain, RAIN_BIT_RESUME);
 			cmd = true;
@@ -953,14 +956,14 @@ void cmdRainSensorPrintStatus()
 		sensorEnabled = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
 	}
 
-	sendStatus(true,RAIN,F("%S MODE:%S IN:%S SET:%S RAIN:%S FROM:%S POS:%S DELAY:%d")
+	sendStatus(true,RAIN,F("%S MODE:%S IN:%S SET:%S RAIN:%SD FROM:%S POS:%S DELAY:%d")
 				,sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? fstrWET : fstrDRY
-				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? F("AUTO") : F("MANUAL")
+				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? fstrAUTO : fstrMANUAL
 				,(debInput.read()==RAIN_INPUT_AKTIV) ? fstrWET : fstrDRY
 				,softRainInput ? fstrWET : fstrDRY
-				,sensorEnabled ? F("ENABLED") : F("DISABLED")
+				,sensorEnabled ? fstrENABLE : fstrDISABLE
 				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? F("INPUT") : F("SET")
-				,bitRead(eeprom.Rain, RAIN_BIT_RESUME) ? F("RESUME") : F("FORGET")
+				,bitRead(eeprom.Rain, RAIN_BIT_RESUME) ? fstrRESUME : fstrFORGET
 				,eeprom.RainResumeTime
 				);
 }
@@ -984,7 +987,7 @@ void cmdStatus()
 			eepromWriteVars();
 			cmdOK();
 		}
-		else if ( strnicmp(arg, F("OF"),2)==0 ) {
+		else if ( strnicmp(arg, fstrOFF, 2)==0 ) {
 			eeprom.SendStatus = false;
 			eepromWriteVars();
 			cmdOK();
@@ -1070,7 +1073,7 @@ void cmdEcho(void)
 		eepromWriteVars();
 		cmdOK();
 	}
-	else if ( strnicmp(arg, fstrOFF,3)==0 ) {
+	else if ( strnicmp(arg, fstrOFF,2)==0 ) {
 		eeprom.Echo = false;
 		SCmd.setEcho(eeprom.Echo);
 		eepromWriteVars();

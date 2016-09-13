@@ -319,7 +319,7 @@ volatile MOTOR_TIMER MotorPosition[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 volatile MOTOR_TIMER destMotorPosition[MAX_MOTORS] = {NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION};
 
 /* Enthält Motorposition von Fenstern vor Regenbeginn */
-volatile MOTOR_TIMER resumeMotorPosition[MAX_MOTORS] = {NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION};
+volatile byte resumeMotorPosition[MAX_MOTORS] = {NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION};
 volatile WORD resumeDelay = NO_RESUME_DELAY;
 
 /* Zeitzähler für Auto-Learn Funktion:
@@ -362,12 +362,20 @@ struct EEPROM {
 
 
 /* Strings */
-const char fstrON[]  PROGMEM = "ON";
-const char fstrOFF[] PROGMEM = "OFF";
-const char fstrCR[]  PROGMEM = "CR";
-const char fstrLF[]  PROGMEM = "LF";
-const char fstrWET[] PROGMEM = "WET";
-const char fstrDRY[] PROGMEM = "DRY";
+const char fstrON[]			PROGMEM = "ON";
+const char fstrOFF[]		PROGMEM = "OFF";
+const char fstrAUTO[] 		PROGMEM = "AUTO";
+const char fstrMANUAL[]		PROGMEM = "MANUAL";
+const char fstrENABLE[] 	PROGMEM = "ENSABLE";
+const char fstrDISABLE[]	PROGMEM = "DISABLE";
+const char fstrRESUME[]		PROGMEM = "RESUME";
+const char fstrFORGET[]		PROGMEM = "FORGET";
+const char fstrCR[]			PROGMEM = "CR";
+const char fstrLF[]			PROGMEM = "LF";
+const char fstrWET[]		PROGMEM = "WET";
+const char fstrDRY[]		PROGMEM = "DRY";
+const char fstrWIN[]		PROGMEM = "WIN";
+const char fstrJAL[]		PROGMEM = "JAL";
 
 
 /* Laufzeitmessung */
@@ -1591,12 +1599,12 @@ void ctrlRainSensor(void)
 			if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME)
 				&& getMotorType(i)==WINDOW
 				&& getMotorDirection(i)==MOTOR_OFF
-				&& resumeMotorPosition[i]!=NO_POSITION ) {
+				&& resumeMotorPosition[i]!=NO_RESUME_POSITION ) {
 					#ifdef DEBUG_OUTPUT_RAIN
 					SerialTimePrintfln(F("%SResume motor %d to %d%%"), dbgCtrlRainSensor, i+1, resumeMotorPosition[i] );
 					#endif
 					setMotorPosition(i, resumeMotorPosition[i]);
-					resumeMotorPosition[i] = NO_POSITION;
+					resumeMotorPosition[i] = NO_RESUME_POSITION;
 			}
 		}
 		resumeDelay = NO_RESUME_DELAY;

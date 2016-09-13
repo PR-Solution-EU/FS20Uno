@@ -183,6 +183,7 @@ typedef char MOTOR_CTRL;
 #endif
 
 #define NO_POSITION 			MAX_MOTOR_TIMER
+#define NO_RESUME_POSITION		UINT8_MAX
 #define NO_RESUME_DELAY 		MAX_MOTOR_TIMER
 
 // Status Typen
