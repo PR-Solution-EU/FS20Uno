@@ -159,7 +159,7 @@ typedef unsigned long	TIMER;
 #endif
 
 
-#define IOBITS_CNT	(MAX_MOTORS * 2)
+#define IOBITS_CNT	(2*MAX_MOTORS)
 
 typedef char MOTOR_CTRL;
 
@@ -204,4 +204,16 @@ enum crcType
 	RAMCRC = 1
 } CRCTYPE;
 
+enum printCmdType
+{
+	 PRINT_CMD
+	,PRINT_PARM
+	,PRINT_DESC
+	,PRINT_PDESC
+} PRINTCMDTYPE;
+
+
 extern unsigned long timer0_millis;
+
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)

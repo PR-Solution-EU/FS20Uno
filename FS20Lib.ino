@@ -3,8 +3,7 @@
  * ===================================================================*/
 
 #define MAX_PRINTF_BUFFER	160
-#define strnicmp(str1, str2, n) strncasecmp_P(str1, (const char *)str2, n)
-
+#define strnicmp_P(str1, str2, n) strncasecmp_P(str1, (const char *)str2, n)
 
 void strReplaceChar(char *s, char find, char replace)
 {
@@ -32,7 +31,7 @@ void printCRLF()
  * ===================================================================*/
 void printProgramInfo(bool copyright)
 {
-	SerialPrintfln(F("%s v%s (build %s)"), PROGRAM, VERSION, REVISION);
+	SerialPrintfln(F("%S v%S (build %s)"), PROGRAM, VERSION, REVISION);
 	SerialPrintfln(F("compiled on %s %s (GnuC%S %s)"), __DATE__, __TIME__, __GNUG__?F("++ "):F(" "), __VERSION__);
 	SerialPrintfln(F("using avr library %s (%s)"),  __AVR_LIBC_VERSION_STRING__, __AVR_LIBC_DATE_STRING__);
 	if( copyright ) {

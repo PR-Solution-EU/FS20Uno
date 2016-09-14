@@ -187,47 +187,46 @@
 #include "FS20Uno.h"
 #include "I2C.h"
 
-#define PROGRAM "FS20Uno"		// Programmname
-#define VERSION "3.39"			// Programmversion
+#define PROGRAM F("FS20Uno")	// Programmname
+#define VERSION F("3.39")		// Programmversion
 #include "REVISION.h"			// Build (wird von git geändert)
 #define DATAVERSION 124			// Kann verwendet werden, um Defaults
 								// zu schreiben
 
-/* Kommandoschnittstelle Hilfe Umfang
- * Der umfangreiche Hilfetext benötigt viel Programmspeicher, daher kann
- * man diesen mit Hilfe von CMDHELP_LONG definieren:
- * Wenn CMDHELP_LONG definiert ist, gibt es neben HELP auch die
- * Möglichkeit für HELP cmd für detailierte Infos über alle Parameter.
- * Ansonsten (CMDHELP_LONG nicht definiert) wird mit HELP nur eine
- * Kurzhilfe ausgegeben, die Parameterbeschreibung muss dann in der
- * Hilfe oder im Programmtext nachgesehen werden. */
-#undef CMDHELP_LONG
+
+#define WATCHDOG_ENABLED		// #undef um den Watchdog abzuschalten
+
+
+/* ===================================================================
+ * DEBUG SETTINGS
+ * ===================================================================*/
 
 /* Die nächste Zeile auskommentieren, um den millis()-Überlauf
  * zu testen. millis() startet dann mit TEST_MILLIS_TIMER ms
  * vor dem 1 Überlauf (max 49 Tage 17:02:47.295) */
 //#define TEST_MILLIS_TIMER	30000L
 
-// define next macros to output debug prints
+/* Die nächsten defines aktivieren zusätzliche Debug-Ausgaben:
+ * Diese defines lassen sich nicht mehr alle zusammen verwenden 
+ * (die ungefähre Größe, die der Debug-Code belegt ist im Kommentar
+ * angegeben). 
+ * Hinweis: Bei aktiviertem Debug ist die Online-Hilfe abgeschalten */
 #undef DEBUG_OUTPUT
-#undef DEBUG_PINS				// enable debug output pins
-#undef DEBUG_RUNTIME			// enable runtime debugging
-#undef DEBUG_OUTPUT_SETUP		// enable setup related outputs
-#undef DEBUG_OUTPUT_WATCHDOG	// enable watchdog related outputs
-#undef DEBUG_OUTPUT_EEPROM		// enable EEPROM related outputs
-#undef DEBUG_OUTPUT_CMD_RESTORE	// enable CMD RESTORE related outputs
-#undef DEBUG_OUTPUT_SM8STATUS	// enable FS20-SM8-output related output
-#undef DEBUG_OUTPUT_WALLBUTTON	// enable wall button related output
-#undef DEBUG_OUTPUT_SM8OUTPUT	// enable FS20-SM8-key related output
-#undef DEBUG_OUTPUT_MOTOR		// enable motor control related output
-#undef DEBUG_OUTPUT_MOTOR_DETAILS// enable motor control details output
-#undef DEBUG_OUTPUT_RAIN		// enable rain sensor related output
-#undef DEBUG_OUTPUT_ALIVE		// enable program alive signal output
+#undef DEBUG_PINS				// 0,2 kB: enable debug output pins
+#undef DEBUG_RUNTIME			// 0.4 kB: enable runtime debugging
+#undef DEBUG_OUTPUT_SETUP		// 0.1 kB: enable setup related outputs
+#undef DEBUG_OUTPUT_WATCHDOG	// 0.2 kB: enable watchdog related outputs
+#undef DEBUG_OUTPUT_EEPROM		// 2.0 kB: enable EEPROM related outputs
+#undef DEBUG_OUTPUT_CMD_RESTORE	// 0.1 kB: enable CMD RESTORE related outputs
+#undef DEBUG_OUTPUT_SM8STATUS	// 1.1 kB: enable FS20-SM8-output related output
+#undef DEBUG_OUTPUT_WALLBUTTON	// 0.9 kB: enable wall button related output
+#undef DEBUG_OUTPUT_SM8OUTPUT	// 0.5 kB: enable FS20-SM8-key related output
+#undef DEBUG_OUTPUT_MOTOR		// 1.7 kB: enable motor control related output
+#undef DEBUG_OUTPUT_MOTOR_DETAILS// 0.5 kB: enable motor control details output
+#undef DEBUG_OUTPUT_RAIN		// 1.0 kB: enable rain sensor related output
+#undef DEBUG_OUTPUT_ALIVE		// 0.1 kB: enable program alive signal output
 
-#ifdef DEBUG_OUTPUT
-	#undef WATCHDOG_ENABLED
-	#undef CMDHELP_LONG
-#else
+#ifndef DEBUG_OUTPUT
 	#undef DEBUG_PINS
 	#undef DEBUG_RUNTIME
 	#undef DEBUG_OUTPUT_SETUP
@@ -250,6 +249,20 @@
 	#define DBG_TIMER	 		10			// Debug PIN = D10
 #endif
 
+/* Laufzeitmessung */
+#ifdef DEBUG_RUNTIME
+	#define DEBUG_RUNTIME_START(val) unsigned long val = micros();
+	#define DEBUG_RUNTIME_END(funcName,val) printRuntime(F(funcName), val);
+#else
+	#define DEBUG_RUNTIME_START(val)
+	#define DEBUG_RUNTIME_END(funcName,val)
+#endif
+
+
+
+/* ===================================================================
+ * Global Vars
+ * ===================================================================*/
 
 // Uptime
 volatile unsigned int millisOverflow = 0;
@@ -361,31 +374,10 @@ struct EEPROM {
 } eeprom;
 
 
-/* Strings */
+/* Strings in PROGMEM */
 const char fstrON[]			PROGMEM = "ON";
 const char fstrOFF[]		PROGMEM = "OFF";
-const char fstrAUTO[] 		PROGMEM = "AUTO";
-const char fstrMANUAL[]		PROGMEM = "MANUAL";
-const char fstrENABLE[] 	PROGMEM = "ENSABLE";
-const char fstrDISABLE[]	PROGMEM = "DISABLE";
-const char fstrRESUME[]		PROGMEM = "RESUME";
-const char fstrFORGET[]		PROGMEM = "FORGET";
-const char fstrCR[]			PROGMEM = "CR";
-const char fstrLF[]			PROGMEM = "LF";
-const char fstrWET[]		PROGMEM = "WET";
-const char fstrDRY[]		PROGMEM = "DRY";
-const char fstrWIN[]		PROGMEM = "WIN";
-const char fstrJAL[]		PROGMEM = "JAL";
 
-
-/* Laufzeitmessung */
-#ifdef DEBUG_RUNTIME
-	#define DEBUG_RUNTIME_START(val) unsigned long val = micros();
-	#define DEBUG_RUNTIME_END(funcName,val) printRuntime(F(funcName), val);
-#else
-	#define DEBUG_RUNTIME_START(val)
-	#define DEBUG_RUNTIME_END(funcName,val)
-#endif
 
 
 /* ===================================================================
@@ -444,7 +436,7 @@ void setup()
 	if ( !eeprom.SendStatus ) {
 		printProgramInfo(true);
 	}
-	sendStatus(false,SYSTEM, F("%s %s.%s"), PROGRAM, VERSION, REVISION);
+	sendStatus(false,SYSTEM, F("%S %S.%s"), PROGRAM, VERSION, REVISION);
 
 	#ifdef DEBUG_OUTPUT
 	SerialTimePrintfln(F("setup - Debug output enabled"));

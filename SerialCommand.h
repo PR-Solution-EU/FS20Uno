@@ -63,8 +63,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 #define SERIALCOMMANDBUFFER 64		// Len of the buffer which stores the received input
-#define MAXSERIALCOMMANDLEN 13		// max len of the command name
-#define MAXSERIALCOMMANDS	22		// max number of commands which can be defined
+#define MAXSERIALCOMMANDLEN 10		// max len of the command name
+#define MAXSERIALCOMMANDS	18		// max number of commands which can be defined
 #define MAXDELIMETER		3		// max. number of delimiters
 
 #define DEFAULT_TERMINATOR	'\r'
@@ -100,7 +100,7 @@ class SerialCommand
 		char *token;                        // Returned token from the command buffer as returned by strtok_r
 		char *last;                         // State variable used by strtok_r during processing
 		typedef struct _callback {
-			char command[MAXSERIALCOMMANDLEN];
+			char command[MAXSERIALCOMMANDLEN+1];
 			void (*function)();
 		} SerialCommandCallback;            // Data structure to hold Command/Handler function key-value pairs
 		int numCommand;
