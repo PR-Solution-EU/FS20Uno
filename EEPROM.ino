@@ -81,8 +81,10 @@ void eepromInitVars()
 		SerialTimePrintfln(F("EEPROM - CRC32 not matching, set defaults..."));
 		#endif
 		sendStatus(true,SYSTEM, F("SET DEFAULT VALUES"));
-		eeprom.BlinkInterval 	= LED_BLINK_INTERVAL;
-		eeprom.BlinkLen      	= LED_BLINK_LEN;
+		eeprom.LEDBitCount  	= LED_BIT_COUNT;
+		eeprom.LEDBitLenght 	= LED_BIT_LENGTH;
+		eeprom.LEDPatternNormal = LED_PATTERN_NORMAL;
+		eeprom.LEDPatternRain	= LED_PATTERN_RAIN;
 		eeprom.MTypeBitmask  	= MTYPE_BITMASK;
 		byte window=1;
 		byte jalousie=1;
@@ -124,30 +126,32 @@ void eepromInitVars()
 
 	#ifdef DEBUG_OUTPUT_EEPROM
 	SerialTimePrintfln(F("EEPROM - values:"));
-	SerialTimePrintfln(F("EEPROM -   eeprom.BlinkInterval: %d"),     eeprom.BlinkInterval);
-	SerialTimePrintfln(F("EEPROM -   eeprom.BlinkLen:      %d"),     eeprom.BlinkLen);
-	SerialTimePrintfln(F("EEPROM -   eeprom.MTypeBitmask:  0x%02x"), eeprom.MTypeBitmask);
-	SerialTimePrintf  (F("EEPROM -   eeprom.MaxRuntime:    "));
+	SerialTimePrintfln(F("EEPROM -   eeprom.LEDPatternNormal:\t0x%08lx"),	eeprom.LEDPatternNormal);
+	SerialTimePrintfln(F("EEPROM -   eeprom.LEDPatternRain:\t0x%08lx"),		eeprom.LEDPatternRain);
+	SerialTimePrintfln(F("EEPROM -   eeprom.LEDBitCount:\t%d"),         	eeprom.LEDBitCount);
+	SerialTimePrintfln(F("EEPROM -   eeprom.LEDBitLenght:\t%d"),			eeprom.LEDBitLenght);
+	SerialTimePrintfln(F("EEPROM -   eeprom.MTypeBitmask:\t0x%02x"),		eeprom.MTypeBitmask);
+	SerialTimePrintf  (F("EEPROM -   eeprom.MaxRuntime:\t"));
 	for(i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%ld"), i?",":"", eeprom.MaxRuntime[i]);
 	}
 	printCRLF();
-	SerialTimePrintf  (F("EEPROM -   eeprom.MotorName:     "));
+	SerialTimePrintf  (F("EEPROM -   eeprom.MotorName:\t"));
 	for(i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%s"), i?",":"", (char *)eeprom.MotorName[i]);
 	}
 	printCRLF();
-	SerialTimePrintf  (F("EEPROM -   eeprom.MotorPosition: "));
+	SerialTimePrintf  (F("EEPROM -   eeprom.MotorPosition:\t"));
 	for(i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%d"), i?",":"", eeprom.MotorPosition[i]);
 	}
 	printCRLF();
-	SerialTimePrintfln(F("EEPROM -   eeprom.Rain:          0x%02x"), eeprom.Rain);
-	SerialTimePrintfln(F("EEPROM -   eeprom.RainResumeTime:%d"), eeprom.RainResumeTime);
-	SerialTimePrintfln(F("EEPROM -   eeprom.SendStatus: %s"), eeprom.SendStatus?"yes":"no");
-	SerialTimePrintfln(F("EEPROM -   eeprom.Echo:       %s"), eeprom.Echo?"yes":"no");
-	SerialTimePrintfln(F("EEPROM -   eeprom.Term:       %s"), eeprom.Term=='\r'?"CR":"LF");
-	SerialTimePrintfln(F("EEPROM -   eeprom.OperatingHours:%ld"), eeprom.OperatingHours);
+	SerialTimePrintfln(F("EEPROM -   eeprom.Rain:\t\t0x%02x"), eeprom.Rain);
+	SerialTimePrintfln(F("EEPROM -   eeprom.RainResumeTime:\t%d"), eeprom.RainResumeTime);
+	SerialTimePrintfln(F("EEPROM -   eeprom.SendStatus:\t%s"), eeprom.SendStatus?"yes":"no");
+	SerialTimePrintfln(F("EEPROM -   eeprom.Echo:\t\t%s"), eeprom.Echo?"yes":"no");
+	SerialTimePrintfln(F("EEPROM -   eeprom.Term:\t\t%s"), eeprom.Term=='\r'?"CR":"LF");
+	SerialTimePrintfln(F("EEPROM -   eeprom.OperatingHours:\t%ld"), eeprom.OperatingHours);
 	#endif
 }
 

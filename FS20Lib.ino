@@ -2,9 +2,23 @@
  * FS20Uno Helper Functions
  * ===================================================================*/
 
+// Max output size of SerialPrintf* functions
 #define MAX_PRINTF_BUFFER	160
+
+// If using strncasecmp_P direct in code compiler reports warnings for
+// F() macro. So we use strnicmp_P() macro with same paramater without
+// warnings
 #define strnicmp_P(str1, str2, n) strncasecmp_P(str1, (const char *)str2, n)
 
+/* ===================================================================
+ * Function:    strReplaceChar
+ * Return:
+ * Arguments:	s        string where to replace char
+ *              find     char to find
+ *              replace  char to replace
+ * Description: Replace all chars <find> with char <replace>
+ *              within a given string
+ * ===================================================================*/
 void strReplaceChar(char *s, char find, char replace)
 {
     while (*s != 0) {
@@ -12,11 +26,6 @@ void strReplaceChar(char *s, char find, char replace)
         *s = replace;
         s++;
     }
-}
-
-void printCRLF()
-{
-	Serial.println();
 }
 
 /* *******************************************************************
@@ -31,7 +40,7 @@ void printCRLF()
  * ===================================================================*/
 void printProgramInfo(bool copyright)
 {
-	SerialPrintfln(F("%S v%S (build %s)"), PROGRAM, VERSION, REVISION);
+	SerialPrintfln(F("%S v%S (build %S)"), PROGRAM, VERSION, REVISION);
 	SerialPrintfln(F("compiled on %s %s (GnuC%S %s)"), __DATE__, __TIME__, __GNUG__?F("++ "):F(" "), __VERSION__);
 	SerialPrintfln(F("using avr library %s (%s)"),  __AVR_LIBC_VERSION_STRING__, __AVR_LIBC_DATE_STRING__);
 	if( copyright ) {
@@ -92,6 +101,18 @@ void vaSerialPrint(const __FlashStringHelper *fmt, va_list argp)
 	Serial.print(buf);
 	watchdogReset();
 }
+
+/* ===================================================================
+ * Function:    printCRLF
+ * Return:
+ * Arguments:	
+ * Description: Serial output new line
+ * ===================================================================*/
+void printCRLF()
+{
+	Serial.println();
+}
+
 
 /* ===================================================================
  * Function:    SerialPrintf

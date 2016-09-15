@@ -188,9 +188,9 @@
 #include "I2C.h"
 
 #define PROGRAM F("FS20Uno")	// Programmname
-#define VERSION F("3.39")		// Programmversion
+#define VERSION F("3.41")		// Programmversion
 #include "REVISION.h"			// Build (wird von git geändert)
-#define DATAVERSION 124			// Kann verwendet werden, um Defaults
+#define DATAVERSION 125			// Kann verwendet werden, um Defaults
 								// zu schreiben
 
 
@@ -216,7 +216,7 @@
 #undef DEBUG_RUNTIME			// 0.4 kB: enable runtime debugging
 #undef DEBUG_OUTPUT_SETUP		// 0.1 kB: enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// 0.2 kB: enable watchdog related outputs
-#undef DEBUG_OUTPUT_EEPROM		// 2.0 kB: enable EEPROM related outputs
+#define DEBUG_OUTPUT_EEPROM		// 2.0 kB: enable EEPROM related outputs
 #undef DEBUG_OUTPUT_CMD_RESTORE	// 0.1 kB: enable CMD RESTORE related outputs
 #undef DEBUG_OUTPUT_SM8STATUS	// 1.1 kB: enable FS20-SM8-output related output
 #undef DEBUG_OUTPUT_WALLBUTTON	// 0.9 kB: enable wall button related output
@@ -277,8 +277,10 @@ volatile bool isrTrigger      = false;
 
 // loop() timer vars
 TIMER ledTimer;
-bool  ledStatus;
+LEDPATTERN currentLEDPattern;
+byte     currentLEDBitCount;
 TIMER runTimer;
+
 
 // MPC output data
 
@@ -355,22 +357,50 @@ bool isRaining = false;
 
 /* EEPROM Variablen */
 struct EEPROM {
-	WORD 		BlinkInterval;				// Alive LED Blinkintervall
-	WORD 		BlinkLen;					// Alive LED Blinkdauer
-	MOTORBITS	MTypeBitmask;				// Motortyp Bitmask
-	volatile DWORD MaxRuntime[MAX_MOTORS];	// Maximale Motorlaufzeit in ms
-	volatile DWORD OvertravelTime[MAX_MOTORS];	// Motor Nachlauflaufzeit in ms
-	char 		MotorName[MAX_MOTORS][MAX_NAMELEN];	// Motornamen
-	volatile MOTOR_TIMER MotorPosition[MAX_MOTORS];// Letzte Motorposition
-	byte 		Rain;						// Regenfunktionen (s. define)
+	/* LED-Pattern
+	 * <LEDPattern> wird bitweise <LEDBitLen> lang, beginnend
+	 * mit Bit 0, rechtsrotierend ausgegeben, bis <LEDBitCount>
+	 * erreicht ist. Danach beginnt das Pattern wieder von vorne.
+	 * Zwischen jedem Bit wird <LEDBitLenght> ms gewartet.
+	 * Standardmuster: 0010.0000  0000.1000  0000.0010  0000.0000
+	 * mit 30 Bits und 100 ms pro Bit
+	 */
+	// LED Pattern für Normalzustand
+	LEDPATTERN 	LEDPatternNormal;
+	// LED Pattern für Regen
+	LEDPATTERN 	LEDPatternRain;
+	// LED Pattern Bit-Zähler
+	byte 		LEDBitCount;
+	// LED Pattern Bit-Länge in ms
+	WORD 		LEDBitLenght;					
+
+	// Motortyp Bitmask
+	MOTORBITS	MTypeBitmask;				
+	// Maximale Motorlaufzeit in ms
+	volatile DWORD MaxRuntime[MAX_MOTORS];
+	// Motor Nachlauflaufzeit in ms
+	volatile DWORD OvertravelTime[MAX_MOTORS];
+	// Motornamen
+	char 		MotorName[MAX_MOTORS][MAX_NAMELEN];
+	// Letzte Motorposition
+	volatile MOTOR_TIMER MotorPosition[MAX_MOTORS];
+	
+	// Regenfunktionen (s. define)
 	#define RAIN_BIT_AUTO	(1<<0)
 	#define RAIN_BIT_ENABLE	(1<<1)
 	#define RAIN_BIT_RESUME	(1<<2)
-	WORD 		RainResumeTime;				// Wiederherstellungsverzögerung
-	bool 		Echo;						// Kommando-Schnittstelle Echo
-	char 		Term;						// Kommando-Schnittstelle Terminator
-	bool 		SendStatus;					// Sende autom. Statusänderung
-	DWORD		OperatingHours;				// Betriebsstunden
+	byte 		Rain;						
+	// Wiederherstellungsverzögerung
+	WORD 		RainResumeTime;				
+	
+	// Kommando-Schnittstelle Echo
+	bool 		Echo;						
+	// Kommando-Schnittstelle Terminator
+	char 		Term;						
+	// Sende autom. Statusänderung
+	bool 		SendStatus;					
+	// Betriebsstundenzähler
+	DWORD		OperatingHours;				
 } eeprom;
 
 
@@ -436,7 +466,7 @@ void setup()
 	if ( !eeprom.SendStatus ) {
 		printProgramInfo(true);
 	}
-	sendStatus(false,SYSTEM, F("%S %S.%s"), PROGRAM, VERSION, REVISION);
+	sendStatus(false,SYSTEM, F("%S %S.%S"), PROGRAM, VERSION, REVISION);
 
 	#ifdef DEBUG_OUTPUT
 	SerialTimePrintfln(F("setup - Debug output enabled"));
@@ -586,9 +616,11 @@ void initVars()
 	}
 
 	// Variablen initalisieren
-	ledStatus = false;
-	ledTimer = millis() + eeprom.BlinkInterval;
-	runTimer = millis() + 500;
+	currentLEDPattern = eeprom.LEDPatternNormal;
+	currentLEDBitCount = 0;
+	ledTimer = millis() + eeprom.LEDBitLenght;
+
+	runTimer = millis() + ALIVE_TIMER;
 
 	sendStatusMOTOR_OFF = 0;
 }
@@ -1544,9 +1576,8 @@ void ctrlRainSensor(void)
 					}
 				}
 				cmdRainSensorPrintStatus();
-				// sendStatus(false,RAIN, F("%s ENABLED WET"), strMode);
 				isRaining = true;
-				digitalWrite(STATUS_LED, HIGH);
+				currentLEDPattern = eeprom.LEDPatternRain;
 			}
 			else {
 				#ifdef DEBUG_OUTPUT_RAIN
@@ -1556,9 +1587,8 @@ void ctrlRainSensor(void)
 					resumeDelay = (WORD)((unsigned long)eeprom.RainResumeTime * 1000L / TIMER_MS);
 				}
 				cmdRainSensorPrintStatus();
-				// sendStatus(false,RAIN, F("%s ENABLED DRY"), strMode);
 				isRaining = false;
-				digitalWrite(STATUS_LED, LOW);
+				currentLEDPattern = eeprom.LEDPatternNormal;
 			}
 		}
 		else {
@@ -1567,17 +1597,15 @@ void ctrlRainSensor(void)
 				SerialTimePrintfln(F("%SRain disabled, wet"), dbgCtrlRainSensor);
 				#endif
 				cmdRainSensorPrintStatus();
-				//sendStatus(false,RAIN, F("%s DISABLED WET"), strMode);
 			}
 			else {
 				#ifdef DEBUG_OUTPUT_RAIN
 				SerialTimePrintfln(F("%SRain disabled, dry"), dbgCtrlRainSensor);
 				#endif
 				cmdRainSensorPrintStatus();
-				//sendStatus(false,RAIN, F("%s DISABLED DRY"), strMode);
 			}
 			isRaining = false;
-			digitalWrite(STATUS_LED, LOW);
+			currentLEDPattern = eeprom.LEDPatternNormal;
 		}
 		prevRainEnable = RainEnable;
 		prevRainInput  = RainInput;
@@ -1621,7 +1649,7 @@ void beAlive(void)
 
 	// Live timer und watchdog handling
 	if ( (long)( millis() - runTimer) >= 0 ) {
-		runTimer += 500;
+		runTimer += ALIVE_TIMER;
 		watchdogReset();
 		#ifdef DEBUG_OUTPUT_ALIVE
 		if ((liveToogle--) < 1) {
@@ -1647,15 +1675,18 @@ void beAlive(void)
 void blinkLED(void)
 {
 	if ( (long)( millis() - ledTimer) >= 0 ) {
-		if ( !ledStatus ) {
-			ledTimer += eeprom.BlinkLen;
-			ledStatus = true;
-			digitalWrite(STATUS_LED, isRaining?LOW:HIGH);
-		}
-		else {
-			ledTimer += eeprom.BlinkInterval;
-			ledStatus = false;
-			digitalWrite(STATUS_LED, isRaining?HIGH:LOW);
+		ledTimer += eeprom.LEDBitLenght;
+		digitalWrite(STATUS_LED, bitRead(currentLEDPattern, 1) );
+		currentLEDPattern >>= 1;
+		currentLEDBitCount++;
+		if ( currentLEDBitCount > eeprom.LEDBitCount ) {
+			currentLEDBitCount = 0;
+			if ( isRaining ) {
+				currentLEDPattern = eeprom.LEDPatternRain;
+			}
+			else {
+				currentLEDPattern = eeprom.LEDPatternNormal;
+			}
 		}
 	}
 

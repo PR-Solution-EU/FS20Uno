@@ -52,7 +52,7 @@ const char sCmdMOTORNAME[]		PROGMEM = "MOTORNAME";
 const char sCmdMOTORTIME[]		PROGMEM = "MOTORTIME";
 const char sCmdMOTORTYPE[]		PROGMEM = "MOTORTYPE";
 const char sCmdFS20[]			PROGMEM = "FS20";
-const char sCmdPUSHBUTTON[]		PROGMEM = "PUSHBUTTON";
+const char sCmdPUSHBUTTON[]		PROGMEM = "PB";
 const char sCmdRAIN[]			PROGMEM = "RAIN";
 const char sCmdBACKUP[]			PROGMEM = "BACKUP";
 const char sCmdRESTORE[]		PROGMEM = "RESTORE";
@@ -66,7 +66,7 @@ const char sParmECHO[]			PROGMEM = "[ON|OFF]";
 const char sParmTERM[]			PROGMEM = "[CR|LF]";
 const char sParmSTATUS[]		PROGMEM = "[ON|OFF]";
 const char sParmUPTIME[]		PROGMEM = "[<uptime> [<h>]]";
-const char sParmLED[]			PROGMEM = "[<interval> <flash>]";
+const char sParmLED[]			PROGMEM = "[<len> [<count> [<normal> [<rain>]]]]";
 const char sParmMOTOR[]			PROGMEM = "[<m> [[T]OPEN|[T]CLOSE|TOOGLE|[GOTO ]<pos>|OFF|SYNC|STATUS]";
 const char sParmMOTORNAME[]		PROGMEM = "[<m> [<name>]";
 const char sParmMOTORTIME[]		PROGMEM = "[<m> [<sec> [<overtravel>]]";
@@ -104,10 +104,11 @@ const char sPDescINFO[]			PROGMEM = "";
 const char sPDescECHO[]			PROGMEM = "    ON|OFF  set local echo ON or OFF";
 const char sPDescTERM[]			PROGMEM = "    CR|LF   set terminator to CR or LF";
 const char sPDescSTATUS[]		PROGMEM = "    ON|OFF  set status messages ON or OFF";
-const char sPDescUPTIME[]		PROGMEM = "    <uptime>  set uptime (in ms since start)\r\n"
-								          "    <h>       set operation hours (in h)";
-const char sPDescLED[]			PROGMEM = "    <interval>  blinkinterval in ms\r\n"
-								          "    <flash>     flash duration in ms";
+const char sPDescUPTIME[]		PROGMEM = "    <uptime>  set uptime (in ms since start)\r\n";
+const char sPDescLED[]			PROGMEM = "    <len>     pattern bit time in ms\r\n"
+								          "    <count>   pattern bit count [1.." TOSTRING(MAX_LEDPATTERN_BITS) "]\r\n"
+								          "    <normal>  normal blink pattern\r\n"
+								          "    <rain>    rain blink pattern";
 const char sPDescMOTOR[]		PROGMEM = "    <m>    motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
 								          "    <cmd>  can be\r\n"
 								          "      OPEN       start motor opening\r\n"
@@ -202,24 +203,24 @@ void setupSerialCommand(void)
 	}
 	#else
 	// do it step by step without help texts to save all the space for program memory
-	SCmd.addCommand( sCmdHELP, cmdHelp );
-	SCmd.addCommand( sCmdINFO, cmdInfo );
-	SCmd.addCommand( sCmdECHO, cmdEcho );
-	SCmd.addCommand( sCmdTERM, cmdTerm );
-	SCmd.addCommand( sCmdSTATUS, cmdStatus );
-	SCmd.addCommand( sCmdUPTIME, cmdUptime );
-	SCmd.addCommand( sCmdLED, cmdLed );
-	SCmd.addCommand( sCmdMOTOR, cmdMotor );
-	SCmd.addCommand( sCmdMOTORNAME, cmdMotorName );
-	SCmd.addCommand( sCmdMOTORTIME, cmdMotorTime );
-	SCmd.addCommand( sCmdMOTORTYPE, cmdMotorType );
-	SCmd.addCommand( sCmdFS20, cmdFS20 );
-	SCmd.addCommand( sCmdPUSHBUTTON, cmdPushButton );
-	SCmd.addCommand( sCmdRAIN, cmdRain );
-	SCmd.addCommand( sCmdBACKUP, cmdBackup );
-	SCmd.addCommand( sCmdRESTORE, cmdRestore );
-	SCmd.addCommand( sCmdFACTORY, cmdFactory );
-	SCmd.addCommand( sCmdREBOOT, cmdReboot );
+	SCmd.addCommand( sCmdHELP,		cmdHelp );
+	SCmd.addCommand( sCmdINFO,		cmdInfo );
+	SCmd.addCommand( sCmdECHO,		cmdEcho );
+	SCmd.addCommand( sCmdTERM,		cmdTerm );
+	SCmd.addCommand( sCmdSTATUS,	cmdStatus );
+	SCmd.addCommand( sCmdUPTIME,	cmdUptime );
+	SCmd.addCommand( sCmdLED,		cmdLed );
+	SCmd.addCommand( sCmdMOTOR,		cmdMotor );
+	SCmd.addCommand( sCmdMOTORNAME,	cmdMotorName );
+	SCmd.addCommand( sCmdMOTORTIME,	cmdMotorTime );
+	SCmd.addCommand( sCmdMOTORTYPE,	cmdMotorType );
+	SCmd.addCommand( sCmdFS20,		cmdFS20 );
+	SCmd.addCommand( sCmdPUSHBUTTON,cmdPushButton );
+	SCmd.addCommand( sCmdRAIN,		cmdRain );
+	SCmd.addCommand( sCmdBACKUP,	cmdBackup );
+	SCmd.addCommand( sCmdRESTORE,	cmdRestore );
+	SCmd.addCommand( sCmdFACTORY,	cmdFactory );
+	SCmd.addCommand( sCmdREBOOT,	cmdReboot );
 	#endif
 
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
@@ -235,20 +236,27 @@ void processSerialCommand(void)
 
 void cmdOK(void)
 {
-	SerialPrintfln(F("OK"));
+	Serial.println(F("OK"));
 }
 
-void cmdError(String err)
+void cmdError(const __FlashStringHelper *str)
 {
-	SerialPrintf(F("ERROR: "));
-	Serial.println(err);
+	Serial.print(F("ERROR: "));
+	Serial.println(str);
 }
 
-void cmdErrorParameter(String err)
+void cmdErrorParameter(const __FlashStringHelper *err)
 {
-	SerialPrintf(F("ERROR: Parameter error (use "));
+	Serial.print(F("ERROR: Parameter error (use "));
 	Serial.print(err);
 	Serial.println(")");
+}
+
+void cmdErrorOutOfRange(const __FlashStringHelper *str)
+{
+	Serial.print(F("ERROR: "));
+	Serial.print(str);
+	Serial.println(F(" out of range"));
 }
 
 void unrecognized()
@@ -479,39 +487,72 @@ void cmdUptime()
 	cmdOK();
 }
 
-/* LED [<interval> <flash>]
+/* LED [<len> [<count> [<normal> [<rain>]]]]
  *   LED control
- *     <interval>  blinkinterval in ms
- *     <flash>     flash flash duration in ms
+ *     <len>     pattern bit time in ms
+ *     <count>   pattern bit count (max 32)
+ *     <normal>  normal blink pattern
+ *     <rain>    rain blink pattern
  */
 void cmdLed()
 {
-	WORD Interval;
-	WORD Flash;
-	char *argInterval;
-	char *argFlash;
+	LEDPATTERN 	LEDPatternNormal;
+	LEDPATTERN 	LEDPatternRain;
+	byte 		LEDBitCount;
+	WORD 		LEDBitLenght;					
 
-	argInterval = SCmd.next();
-	argFlash = SCmd.next();
-	if (argInterval == NULL) {
-		sendStatus(true,SYSTEM,F("LED %d %d"), eeprom.BlinkInterval, eeprom.BlinkLen);
+	char *argLEDPatternNormal;
+	char *argLEDPatternRain;
+	char *argLEDBitCount;
+	char *argLEDBitLenght;
+
+	LEDBitLenght		= eeprom.LEDBitLenght;
+	LEDBitCount			= eeprom.LEDBitCount;
+	LEDPatternNormal	= eeprom.LEDPatternNormal;
+	LEDPatternRain		= eeprom.LEDPatternRain;
+
+	argLEDBitLenght		= SCmd.next();
+	argLEDBitCount		= SCmd.next();
+	argLEDPatternNormal	= SCmd.next();
+	argLEDPatternRain	= SCmd.next();
+	if ( argLEDBitLenght == NULL ) {
+		sendStatus(true,SYSTEM,F("LED %d %d 0x%08lx 0x%08lx")
+					,eeprom.LEDBitLenght
+					,eeprom.LEDBitCount
+					,eeprom.LEDPatternNormal
+					,eeprom.LEDPatternRain
+					);
 		cmdOK();
 	}
-	else if ( argInterval != NULL && argFlash != NULL ) {
-		Interval=(WORD)atoi(argInterval);
-		Flash=(WORD)atoi(argFlash);
-		if ( Interval<Flash ) {
-			cmdError(F("flash time must be >= interval time"));
-		}
-		else {
-			eeprom.BlinkInterval = Interval;
-			eeprom.BlinkLen = Flash;
-			eepromWriteVars();
-			cmdOK();
-		}
-	}
 	else {
-		cmdError(F("Need two arguments"));
+		LEDBitLenght	= (WORD)atoi(argLEDBitLenght);
+		if ( argLEDBitCount!=NULL ) {
+			LEDBitCount		= (byte)atoi(argLEDBitCount);
+			if ( LEDBitCount<1 || LEDBitCount>MAX_LEDPATTERN_BITS ) {
+				cmdErrorOutOfRange(F("<bits>"));
+				return;
+			}
+		}
+		if ( argLEDPatternNormal!=NULL ) {
+			LEDPatternNormal = (LEDPATTERN)strtoul(argLEDPatternNormal, NULL, 0);
+			if ( errno == ERANGE ) {
+				cmdErrorOutOfRange(F("<normal>"));
+				return;
+			}
+		}
+		if ( argLEDBitCount!=NULL ) {
+			LEDPatternRain = (LEDPATTERN)strtoul(argLEDPatternRain, NULL, 0);
+			if ( errno == ERANGE ) {
+				cmdErrorOutOfRange(F("<rain>"));
+				return;
+			}
+		}
+		eeprom.LEDPatternNormal	= LEDPatternNormal;
+		eeprom.LEDPatternRain	= LEDPatternRain;
+		eeprom.LEDBitCount		= LEDBitCount;
+		eeprom.LEDBitLenght		= LEDBitLenght;
+		eepromWriteVars();
+		cmdOK();
 	}
 }
 
@@ -544,7 +585,7 @@ void cmdMotor()
 	else {
 		motor=atoi(arg)-1;
 		if ( motor<0 || motor>=MAX_MOTORS ) {
-			cmdError(F("Motor number out of range"));
+			cmdErrorOutOfRange(F("<m>"));
 		}
 		else {
 			arg = SCmd.next();
@@ -572,7 +613,7 @@ void cmdMotor()
 					int percent=atoi(arg);
 
 					if ( percent<0 || percent>100 ) {
-						cmdError(F("Parameter out of range (0-100)"));
+						cmdError(F("<p> of range"));
 					}
 					else {
 						setMotorPosition(motor, percent);
@@ -651,7 +692,7 @@ void cmdMotorTime()
 	else {
 		motor=atoi(arg)-1;
 		if ( motor<0 || motor>=MAX_MOTORS ) {
-			cmdError(F("Motor number out of range"));
+			cmdErrorOutOfRange(F("<m>"));
 		}
 		else {
 			arg = SCmd.next();
@@ -665,7 +706,7 @@ void cmdMotorTime()
 				// Set new runtime value
 				runtime = atof(arg);
 				if ( runtime<=0.0 || runtime>(double)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
-					cmdError(F("Motor runtime out of range"));
+					cmdErrorOutOfRange(F("<sec>"));
 				}
 				else {
 					eeprom.MaxRuntime[motor] = (DWORD)(runtime*1000.0);
@@ -678,7 +719,7 @@ void cmdMotorTime()
 					else {
 						runtime = atof(arg);
 						if ( runtime<0.0 || runtime>(double)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
-							cmdError(F("Motor overtravel time out of range"));
+							cmdErrorOutOfRange(F("<overtravel>"));
 						}
 						else {
 							eeprom.OvertravelTime[motor] = (DWORD)(runtime*1000.0);
@@ -724,7 +765,7 @@ void cmdMotorName()
 	else {
 		motor=atoi(arg)-1;
 		if ( motor<0 || motor>=MAX_MOTORS ) {
-			cmdError(F("Motor number out of range"));
+			cmdErrorOutOfRange(F("<m>"));
 		}
 		else {
 			arg = SCmd.next();
@@ -776,7 +817,7 @@ void cmdMotorType()
 	else {
 		motor=atoi(arg)-1;
 		if ( motor<0 || motor>=MAX_MOTORS ) {
-			cmdError(F("Motor number out of range"));
+			cmdErrorOutOfRange(F("<m>"));
 		}
 		else {
 			arg = SCmd.next();
@@ -833,7 +874,7 @@ void cmdFS20()
 		// Channel number entered
 		channel=atoi(arg)-1;
 		if ( channel<0 || channel>=IOBITS_CNT ) {
-			cmdError(F("Channel number out of range"));
+			cmdErrorOutOfRange(F("<ch>"));
 		}
 		else {
 			// Channel number ok
@@ -901,7 +942,7 @@ void cmdPushButton()
 		// Button number entered
 		button=atoi(arg)-1;
 		if ( button<0 || button>=IOBITS_CNT ) {
-			cmdError(F("Pushbutton number out of range"));
+			cmdErrorOutOfRange(F("<b>"));
 		}
 		else {
 			// Button number ok
@@ -983,7 +1024,7 @@ void cmdRain()
 				delay=atoi(arg);
 			}
 			if ( delay<0 || delay>6000 ) {
-				cmdError(F("Parameter out of range (0-6000)"));
+				cmdError(F("<s> (max 6000) of range"));
 			}
 			else {
 				eeprom.RainResumeTime = delay;
@@ -1064,7 +1105,12 @@ void cmdBackup(void)
 	// UPTIME
 	SerialPrintf(F("UPTIME %ld %ld\r\n"), millis(), eeprom.OperatingHours);
 	// LED
-	SerialPrintf(F("LED %d %d\r\n"), eeprom.BlinkInterval, eeprom.BlinkLen);
+	SerialPrintf(F("LED %d %d 0x%08lx 0x%08lx")
+					,eeprom.LEDBitLenght
+					,eeprom.LEDBitCount
+					,eeprom.LEDPatternNormal
+					,eeprom.LEDPatternRain
+					);
 
 	// RAIN
 	SerialPrintf(F("RAIN RESUME %d\r\n"), eeprom.RainResumeTime);

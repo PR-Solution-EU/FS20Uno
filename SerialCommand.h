@@ -63,7 +63,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 #define SERIALCOMMANDBUFFER 64		// Len of the buffer which stores the received input
-#define MAXSERIALCOMMANDLEN 10		// max len of the command name
+#define MAXSERIALCOMMANDLEN 9		// max len of the command name
 #define MAXSERIALCOMMANDS	18		// max number of commands which can be defined
 #define MAXDELIMETER		3		// max. number of delimiters
 

@@ -54,6 +54,9 @@
 // Mögliche Werte (ms): 15,30,60,120,250,500,1000,2000,4000,8000
 #define WATCHDOG_TIME				4000
 
+// Alive timer period in ms
+#define ALIVE_TIMER					500
+
 /* ===================================================================
  * Standardwerte
  * ===================================================================*/
@@ -94,11 +97,27 @@ enum mtype
 } MTYPE;
 #define MTYPE_BITMASK				0b01010101
 
-// LED Blink Interval in ms
-#define LED_BLINK_INTERVAL			1900
-// LED Blink Length in ms
-#define LED_BLINK_LEN				100
 
+// LED Pattern
+#define MAX_LEDPATTERN_BITS			32
+typedef uint32_t					LEDPATTERN;
+
+// 0010.0000  0000.1000  0000.0010  0000.0000
+// LED 100 30 0x20080200
+#define LED_PATTERN_NORMAL			0x20080200
+// 1101.1111  1111.0111  1111.1101  1111.1111
+// LED 100 30 0x20080200 0xdff7fdff
+// 0000.0101  0000.0000  0000.0011  1111.1111
+// LED 100 30 0x20080200 0x050003FF
+// 0010.1000  0000.1010  0000.0010  1000.0000
+// LED 100 30 0x20080200 0x280a0280
+// 1101.0111  1111.0101  1111.1101  0111.1111
+// LED 100 30 0x20080200 0xd7f5fd7f
+#define LED_PATTERN_RAIN			0xd7f5fd7f
+// Anzahl auszugebender Bits der Pattern
+#define LED_BIT_COUNT				30
+// LED Bit Length in ms
+#define LED_BIT_LENGTH				100
 
 
 /* ===================================================================
@@ -107,6 +126,8 @@ enum mtype
 typedef unsigned int  	WORD;
 typedef unsigned long 	DWORD;
 typedef unsigned long	TIMER;
+
+
 
 // EEPROM Data Adressen
 #define EEPROM_ADDR_CRC32				0
