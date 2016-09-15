@@ -1,176 +1,206 @@
 /* ===================================================================
  * File:    FS20Uno.ino
  * Author:  Norbert Richter <mail@norbert-richter.info>
- * Project: Dachflächenfenster/-Jalousie Steuerung
- * 	        mit 2x FS20 SM8
- * Desc:    Die Steuerung besteht aus
- *          - einem Arduino Uno
- *          - vier Porterweiterungen MCP23017
- *          - zwei ELV FS20 SM8
- *          - Der Uno steuert über 16 Relais ingesamt acht Motoren
- *            - 8 Relais für Motor Ein/Aus
- *          - 8 Relais für die Drehrichtung.
+ * Project: Electric rooflight window and shutter controller
+ *          with wallbuttons and FS20-SM8 control using Arduino Uno
+ * Desc:    The control unit consists of
+ *          * Arduino Uno
+ *          * 4 I2C Portexpander MCP23017
+ *          * 2 ELV FS20-SM8 8-channel receiver
+ *          * 16 Relais to control 8 motors:
+ *            * 8 Relais for motor on/off
+ *            * 8 Relais for motot direction.
  *
- * Funktionsweise der Steuerung:
- * Zwei FS20 SM8 dienen als FS20 Empfänger für Dachflächenfenster-
- * steuerung (DFF)
- * Mit Hilfer zweier FS20-SM8 stehen stehen insgesamt 16 FS20 Kanäle
- * zur Verfügung.
- * Jeweils zwei steuern einen Motor:
- * - ein Kanal steuert Linkslauf (z. B. Öffnen)
- * - ein Kanal steuert Rechtslauf (z. B. Schliessen)
+ * Operation mode:
+ * ==============
+ * Features:
+ * * Can control up to 4 electrical roof windows with shutter
+ * * Control windows by using 
+ *   * two pushbuttons ("Open" and "Close")
+ *   * two FS20-SM8 channel ("Open" and "Close" via FS20 sender)
+ *   * command using serial interface
+ *     (connected to a Serial2Ethernet interface like WIZNET or a
+ *      RaspberryPi using ser2net it is also usable via network)
+ *  * Optional rain sensor to close roof windows when it is raining
+ *  * Optional restore window position after rain has gone.
+ * 
+ * Functions:
+ * * 2 pushbutton (wall button)
+ *    * Opening a motor by pushing the "Open" pushbutton for a short
+ *      time.
+ *      When using the "Open" pushbutton again when motor runs in "Open"
+ *      direction will stop the motor.
+ *    * Closing a motor by pushing the "Close" pushbutton for a short
+ *      time.
+ *      When using the "Close" pushbutton again when motor runs in
+ *      "Close" direction will stop the motor.
+ *    * Pushing both buttons together will stop the current running 
+ *      direction anyway.
+ *    * If pushing a button longer than 10 sec, the pressed time until
+ *      releasing the button will be used as new motor running time.
+ * 
+ * * 2 FS20-SM8 channel
+ *    * Opening a motor by enable the related FS20-SM8 "Open" channel.
+ *      Stop this mode by enable again the related FS20-SM8 "Open"
+ *      channel.
+ *    * Closing a motor by enable the related FS20-SM8 "Close" channel.
+ *      Stop this mode by enable again the related FS20-SM8 "Close"
+ *      channel.
+ * 
+ * * Serial interface with simple commands
  *
- * Damit lassen sich insgesamt 4 DF-Fenster mit jeweils zwei 24V
- * Motoren ansteuern:
- * - ein Motor zum Öffnen/Schliessen des Fensters
- * - ein Motor für die Jalousie
- * Der Uno übernimmt dabei die 'Übersetzung' von Öffnen/Schliessen
- * auf die Motorzustände
- * - Aus
- * - Öffnen
- * - Schließen
  *
- * Für jeden Motor wird bestimmt:
- * - Fenster oder Jalousie (wichtig für Regensensor)
- * - Max. Motorlaufzeit
+ * Two FS20-SM8 8 channel recevier are used as FS20 receiver, so we
+ * have 16 channels to control 8 motors in open and close direction.
  *
- * Da wir in den Ablauf des FS20 SM8 nur bedingt eingreifen können,
- * werden dieFS20 SM8 nur als 'Geber' eingesetzt. Die Motorsteuerung
- * erfolgt komplett über dieses Steuerungsprogramm.
+ * With this setup we control 4 electric roof windows with electric 
+ * shutter having 24V direct current motors:
+ * - one motor open/close the window
+ * - one motor open/close the shutter (jalousie)
+ * 
+ * Using the Arduino Uno we translate the user inputs from pushbuttons
+ * and FS20-SM8 channels to motor signals for
+ * - Off
+ * - Opening
+ * - Closing
  *
- * Verdrahtung:
+ * For further functionality (e. g. command to position the motor to a
+ * desired position), we keep the following attributes:
+ * * Motor type (window or jalousie)
+ * * Motor running time (from open <-> close position)
+ *
+ * I2C MCP23017 port enhancer connection:
  * MPC1
- *   Port A (Output): Relais Motor 1-8 EIN/AUS
- *   Port B (Output): Relais Motor 1-8 Drehrichtung
+ *   Port A (Output): Relais Motor 1-8 ON/OFF
+ *   Port B (Output): Relais Motor 1-8 Direction
  * MPC2
- *   Port A (Output): FS20-SM8 #1 Taster 1-8 ("Auf" Funktion)
- *   Port B (Output): FS20-SM8 #2 Taster 1-8 ("Zu" Funktion)
+ *   Port A (Output): FS20-SM8 #1 Key 1-8    ("OPEN")
+ *   Port B (Output): FS20-SM8 #2 Key 1-8    ("CLOSE")
  * MPC3
- *   Port A (Input) : FS20-SM8 #1 Status 1-8 ("Auf" Funktion)
- *   Port B (Input) : FS20-SM8 #2 Status 1-8 ("Zu" Funktion)
- *   Die FS20-SM8 Ausgänge schalten das Signal gegen Masse (0=Aktiv)
+ *   Port A (Input) : FS20-SM8 #1 Status 1-8 ("OPEN")
+ *   Port B (Input) : FS20-SM8 #2 Status 1-8 ("CLOSE")
+ *   FS20-SM8 outputs connect signal to GND (0=active)
  * MPC4
- *   Port A (Input) : Wandtaster             ("Auf" Funktion)
- *   Port B (Input) : Wandtaster             ("Zu" Funktion)
+ *   Port A (Input) : Pushbutton             ("OPEN")
+ *   Port B (Input) : Pushbutton             ("CLOSE")
  *
- * Zwei Digitaleingänge des Uno werden für Regensensoraktivitäten
- * verwendet.
+ * Two additonal inputs are used as rains sensor and rain sensor enabled.
  *
- * Motorsteuerung:
+ * Motor control:
  * ----------------------------
- * Die Motoren werden vollständig über den Uno gesteuert, keine der
- * Tasten oder FS20-SM8 Ausgänge gehen an die Motoren.
- * Jeder Motor kennt zwei zusätzliche Eigenschaften (TYPE):
- * - Motortyp: "Fenster" (WINDOW) oder "Jalousie" (JALOUSIE)
- * - Motorlaufzeit: Maximale Laufzeit des Motors
- * Diese Eigenschaften lassen sich mit Hilfe der Standardwerte
- * MTYPE_BITMASK, MOTOR_WINDOW_MAXRUNTIME und
- * MOTOR_JALOUSIE_MAXRUNTIME vordefinieren, als auch später mit Hilfe
- * der Control-Kommandos "MOTORTYPE" und "MOTORTIME" verändern.
- * Motoren vom Typ Fenster werden bei aktivem Regensensoreingang
- * automatisch geschlossen.
- * Jeder Motor wird nach Ablauf seiner Motorlaufzeit abgeschaltet.
+ * Each motor will be completyl controlled by Arduino Uno. There are
+ * no direct connections of FS20-SM8 channel outputs or pushbutton to
+ * motor relais control signal.
+ * 
+ * Each motor used two additional porperties: 
+ * * Motor type (window or jalousie)
+ * * Motor running time (from open <-> close position)
+ * Both properties are set to default values using the program defines
+ * MTYPE_BITMASK, MOTOR_WINDOW_MAXRUNTIME and MOTOR_JALOUSIE_MAXRUNTIME.
+ * They can be changed during operation with the commands  "MOTORTYPE"
+ * and "MOTORTIME". Values are stored in EEPROM.
+ * Motors having property WINDOW are closed when rain sensor is enable
+ * and rain is active.
+ * Each motor will be automatically switch off after a maximum runtime
+ * including an additonal overtravel time. The motor runtime is used to
+ * properly calculate the current position between open and close.
+ * To be sure that a window will be realy closed, each motor can have
+ * and optional overtravel time.
+ * The runtime and overtime values can be set via program defaults, by
+ * using the serial command interface or (runtime only) by using the
+ * auto-learn function pressing the related pushbutton for longer than
+ * 10 seconds. Keep the pushbutton as long as the window or shutter
+ * moves, then release it.
  *
- * Motorschutz:
- * - Das Einschalten der Motorspannung erfolgt erst, nachdem das
- *   Richtungsrelais umgeschalten hat (OPERATE_TIME).
- * - Ebenso wird auch unter Berücksichtigung der Relais
- *   Ansprechzeiten (OPERATE_TIME) bei laufendem Motor und
- *   Richtungsumkehr der Motor zuerst abgeschaltet, die Laufrichtung
- *   geändert und danach der Motor wieder eingeschaltet
- *   (MOTOR_SWITCHOVER).
+ * Motor protection:
+ * Due to the electromagnetic induction effect of the direct current
+ * motors, there are several protection implemented:
+ * * The motor voltage is switched on only after direction relais
+ *   was switched into proper direction and attend relais operation
+ *   time (OPERATE_TIME).
+ * * Also motor is switched off first if the motor is still running
+ *   and we need to reverse the direction attend relais operation
+ *   time (OPERATE_TIME). Before motor is switch on in reverse direction
+ *   we also attend an additonal MOTOR_SWITCHOVER time to protect motor
+ *   itself.
  *
- * Wandtaster:
+ * Pushbutton:
  * ----------------------------
- * Die Taster schalten das Eingangssignal gegen Masse (0=Aktiv).
- * Die Wandtaster haben folgende Funktion:
- * - Taste Auf: "Auf" einschalten,
- *              nochmaliger Druck schaltet Motor ab.
- * - Taste Zu : "Zu" einschalten,
- *              nochmaliger Druck schaltet Motor ab.
- * - Beide Tasten: Schaltet Motor ab.
- * Wandtaster haben Vorrang vor SM8 Steuerungseingängen. Eventuell
- * aktive SM8 Kanäle werden bei Betätigung des zugehörigen Wandtasters
- * angeschaltet.
+ * Pusbutton connects a pull-up input to GND (means 0=active).
+ * Pushbutton function:
+ * - Button "OPEN":  Switch motor to "Open",
+ *                   pushng a second time switch motor off.
+ * - Button "CLOSE": Switch motor to "Close",
+ *                   pushng a second time switch motor off.
+ * - Push both buttons together also swich motor off.
+ * - Keep a pushbutton pressed longer than 10 sec, activates a auto-
+ *   learn function to measure the real runtime for a motor needs to 
+ *   move a window or shutter.
+ * Pusbuttons having a higher priority than FS20-SM8 channel outputs
+ * so if a FS20-SM8 channel is active, pushbutton overwrite the state
+ * and possibly switchs FS20-SM8 channel off.
  *
  * FS20-SM8:
  * ----------------------------
- * Vom SM8 werden jeweils die Kanalausgänge als Steuereingang für die
- * Motorsteuerung herangezogen. Die SM8-Kanaleingänge können mit Hilfe
- * eines weiteren MPC vom Uno gesteuert werden. Dadurch ist es
- * möglich, aktive SM8 Kanäle, die z. B. per Funk aktiviert wurden,
- * umzuschalten.
- * Folgende Bedingungen werden berücksichtigt:
- * - gleichzeitig aktivierte SM8 Ausgänge (z.b. AUF & ZU aktiv)
- *   werden entkoppelt, der zuletzt gegeben Befehl wird aktiviert,
- *   der zugehörige zu entkopplende Kanal deaktiviert.
- * - nur die steigende Flanke (0->1) eines Kanals aktiviert die
- *   zugehörige Funktion.
- * - die fallende Flanke (1->0) eines SM8-Kanals schaltet die
- *   jeweilige Funktion ab.
- * - ein Motor, der durch Wandtaster oder Timeout abgeschaltet wird,
- *   schaltet auch den zugehörige SM8-Kanal ab.
+ * FS20-SM8 channel outputs are also used to control the motors. Because
+ * we connect the FS20-SM8 channel key inputs also to Arduino, we are
+ * able to activly control the FS20-SM8 channel by soft-push the 
+ * FS20-SM8 key. So we can switch FS20-SM8 channel, which are switch
+ * by key pressing or by FS20 control signal.
+ * FS20 control conditions:
+ * * two active FS20-SM8 channels, which are related to the same motor
+ *   will be decoupled:
+ *   If a FS20-SM8 output will be go active even the related other
+ *   FS20-SM8 channel output is active, the other FS20-SM8 channel
+ *   will be switch off - means the latest trigger wins.
+ * * only rising slope will activate the function.
+ * * only falling slope will deactive the function.
+ * * Pushbutton using will overwrite FS20-SM8 channel, so it will be
+ *   disabled if necessary.
  *
- * Regensensor
+ * Rainsensor
  * ----------------------------
- * Regensensoreingänge:
+ * Rain sensor can be used to automatically close all motors of type
+ * WINDOW. An optional RESUME function will reopen all windows which
+ * are not closed when rain begins to the previous position.
+ * The resume functionaliy only works properly, if the motor runtime
+ * are properly set to a real value.
+ * 
+ * Rain sensor input:
+ * Can be connect to input "RAIN_INPUT", the active level polarity can
+ * be set using "RAIN_INPUT_ACTIVE".
  *
- * Ein Regensensor kann am Eingang "RAIN_INPUT" angeschlossen werden
- * (Regensensor-Steuereingang). Die Pegelaktivität kann mit Hilfe
- * der Konstanten "RAIN_INPUT_AKTIV" festgelegt werden.
+ * Rain sensor enable input:
+ * A second input connected to "RAIN_ENABLE" can be used to enable/dis-
+ * able Rain sensor input. This is usefull if you want to temporarly
+ * switch the rain sensor function off using a wall button.
+ * The active level polarity can be set using "RAIN_ENABLE_ACTIVE".
+ * If input "RAIN_ENABLE" is inactive, than rain sensor input signal
+ * will be ignored.
  *
- * Die Abfrage des Regensensor-Steuereingangs läßt sich mit Hilfe
- * eines zweiten Steuereingangs "RAIN_ENABLE" (Pegelaktivität über
- * die Konstante "RAIN_ENABLE_AKTIV" einstellbar) festlegen. Nur wenn
- * der Steuereingang "RAIN_ENABLE" aktiv oder das Control-Kommando
- * "RAINSENSOR ENABLE" gegeben wurde, wird der Regensensor-
- * Steuereingang auch abgefragt, ansonsten ignoriert.
+ * Control-Kommando "RAIN"
+ * Both inputs for rain can be overruled by control command "RAIN":
+ * * RAIN WET|ON|DRY|OFF
+ *     Simulate the rain input signal: WET|ON =Raining
+ *                                     DRY|OFF=Inaktiv
+ * * RAIN ENABLE|DISABLE
+ *     Simulate rain enable input:    ENABLE =Rain function enabled
+ *                                    DISABLE=Rain function disabled
+ * * RAIN AUTO
+ *     Because using of one of the above simulation commands switch
+ *     of the automatic mode, this command re-enables the physical input
  *
- * Der Regensensor-Steuereingang wird nur im Automatikmodus (s.u.
- * Control-Kommando "RAINSENSOR") abgefragt.
- * Die Verwendung der "RAINSENSOR" Kommandos (mit Ausnahme von
- * "RAINSENSOR AUTO") schaltet Abfrage des Regensensor-Steuereingangs
- * erstmal ab. Der Regensensor-Steuereingang wird entweder durch das
- * Control-Kommando "RAINSENSOR AUTO" oder durch Änderung des
- * Steuereingangs "RAIN_ENABLE" wieder aktiviert.
- *
- * Bei aktivier Regenmeldung (Steuereingang RAIN_INPUT bzw. Control-
- * Kommando RAINSENSOR ON), werden alle Motoren vom Typ "Fenster"
- * (siehe Motorensteuerung) geschlossen.
- * Zusätzlich läßt sich mit RAINSENSOR RESUME einstellen, dass die
- * vorherigen Fensterpositionen nach Regenende wiederhergestellt
- * werden sollen.
- *
- * Control-Kommando "RAINSENSOR"
- * Die beiden Eingänge lassen sich über Control-Kommandos "RAINSENSOR"
- * übersteuern:
- * - RAINSENSOR ON|OFF
- *     Simuliert den Regensensoreingang:  ON =Aktiv
- *                                        OFF=Inaktiv
- * - RAINSENSOR ENABLE|DISABLE
- *     Simuliert die Regensensor-Abfrage: ENABLE =Abfrage aktiv,
- *                                        DISABLE=Abfrage inaktiv
- * - RAINSENSOR AUTO
- *     Da bei Verwendung eines der o.a. Befehle der Automatikmodus
- *     (d.h. die Abfrage der Regensensor-Hardwareeingänge)
- *     abgeschaltet wird, kann hiermit die Abfrage der Regensensor-
- *     Hardwareeingänge wieder aktiviert werden. Die eingestellten
- *     Simulationswerte haben, solange sie nicht wieder verwendet
- *     werden, keine Bedeutung mehr.
- *
- * - RAINSENSOR RESUME <s>/FORGET
- *     Bei Verwendung von RESUME werden alle Motoren vom Type "Fenster"
- *     nach Regenende automatisch auf ihre vorherige Position geöffnet.
- *     Der Wert <s> bestimmt (ins Sekunden), wie lange nach Regenende
- *     gewartet werden soll, bevor die DFF-Positionen wiederhergestellt
- *     werden.
- *     Die Wiederherstellungsfunktion läßt sich mit RAINSENSOR FORGET
- *     abschalten.
+ * * RAIN RESUME <s>/FORGET
+ *     RESUME <s> reopen all windows after rain has gone to the previous
+ *     position after a delay of <s> seconds.
+ *     The delay <s> can be used to prevent that the windows are closed
+ *     and reopened in short times when it is not permanently raining.
+ *     The resume functonaly can be disabled by using "RAIN FORGET". In
+ *     this case the windows are close on rain but not reopened after
+ *     rain has gone.
  * ===================================================================*/
 
 /* ===================================================================
- * TODO:
- *  - SerialCmd: LOGIN  (using password function on WIZ110SR)
  * ===================================================================*/
 
 #include <Arduino.h>
@@ -187,31 +217,34 @@
 #include "FS20Uno.h"
 #include "I2C.h"
 
-#define PROGRAM F("FS20Uno")	// Programmname
-#define VERSION F("3.41")		// Programmversion
-#include "REVISION.h"			// Build (wird von git geändert)
-#define DATAVERSION 125			// Kann verwendet werden, um Defaults
-								// zu schreiben
+#define PROGRAM F("FS20Uno")	// program name
+#define VERSION F("3.41")		// program version
+#include "REVISION.h"			// Build (changed from git hook)
+#define DATAVERSION 125			// can be used to invalidate EEPROM data
 
 
-#define WATCHDOG_ENABLED		// #undef um den Watchdog abzuschalten
+#define WATCHDOG_ENABLED		// #undef to disable watchdog function
 
 
 /* ===================================================================
  * DEBUG SETTINGS
  * ===================================================================*/
 
-/* Die nächste Zeile auskommentieren, um den millis()-Überlauf
- * zu testen. millis() startet dann mit TEST_MILLIS_TIMER ms
- * vor dem 1 Überlauf (max 49 Tage 17:02:47.295) */
-//#define TEST_MILLIS_TIMER	30000L
+/* Uncomment next line to test the Arduino library millis() overflow
+ * millis() will then start with TEST_MILLIS_TIMER [ms]
+ * before first overflow (max 49 days 17:02:47.295),
+ */
+//#define TEST_MILLIS_TIMER	30000L	// start with 30 sec before overflow
 
-/* Die nächsten defines aktivieren zusätzliche Debug-Ausgaben:
- * Diese defines lassen sich nicht mehr alle zusammen verwenden 
- * (die ungefähre Größe, die der Debug-Code belegt ist im Kommentar
- * angegeben). 
- * Hinweis: Bei aktiviertem Debug ist die Online-Hilfe abgeschalten */
+/* Global debug switch.
+ * #undef to disable debugging at all regardless other settings below */
 #undef DEBUG_OUTPUT
+
+/* Fine tune debug outputs with next defines:
+ * You can not use all debug outputs together because default program
+ * size is to big. Use the debug code size value to estimate which
+ * debug may be enabled together.
+ * Note: Debugging disables all the build-in online help */
 #undef DEBUG_PINS				// 0,2 kB: enable debug output pins
 #undef DEBUG_RUNTIME			// 0.4 kB: enable runtime debugging
 #undef DEBUG_OUTPUT_SETUP		// 0.1 kB: enable setup related outputs
@@ -219,7 +252,7 @@
 #define DEBUG_OUTPUT_EEPROM		// 2.0 kB: enable EEPROM related outputs
 #undef DEBUG_OUTPUT_CMD_RESTORE	// 0.1 kB: enable CMD RESTORE related outputs
 #undef DEBUG_OUTPUT_SM8STATUS	// 1.1 kB: enable FS20-SM8-output related output
-#undef DEBUG_OUTPUT_WALLBUTTON	// 0.9 kB: enable wall button related output
+#undef DEBUG_OUTPUT_PUSHBUTTON	// 0.9 kB: enable pushbutton related output
 #undef DEBUG_OUTPUT_SM8OUTPUT	// 0.5 kB: enable FS20-SM8-key related output
 #undef DEBUG_OUTPUT_MOTOR		// 1.7 kB: enable motor control related output
 #undef DEBUG_OUTPUT_MOTOR_DETAILS// 0.5 kB: enable motor control details output
@@ -234,7 +267,7 @@
 	#undef DEBUG_OUTPUT_EEPROM
 	#undef DEBUG_OUTPUT_CMD_RESTORE
 	#undef DEBUG_OUTPUT_SM8STATUS
-	#undef DEBUG_OUTPUT_WALLBUTTON
+	#undef DEBUG_OUTPUT_PUSHBUTTON
 	#undef DEBUG_OUTPUT_SM8OUTPUT
 	#undef DEBUG_OUTPUT_MOTOR
 	#undef DEBUG_OUTPUT_MOTOR_DETAILS
@@ -249,7 +282,7 @@
 	#define DBG_TIMER	 		10			// Debug PIN = D10
 #endif
 
-/* Laufzeitmessung */
+/* Run time measurement */
 #ifdef DEBUG_RUNTIME
 	#define DEBUG_RUNTIME_START(val) unsigned long val = micros();
 	#define DEBUG_RUNTIME_END(funcName,val) printRuntime(F(funcName), val);
@@ -285,122 +318,122 @@ TIMER runTimer;
 // MPC output data
 
 /* Motor
- * Unteren Bits: Motor Ein/Aus
- * Oberen Bits:  Motor Drehrichtung */
-volatile IOBITS valMotorRelais = IOBITS_ZERO;	// Gewünschter Wert
-volatile IOBITS regMotorRelais = IOBITS_ZERO;	// An MPC ausgegebener Wert
+ * Lower Bits: Motor on/off
+ * Upper Bits: Motor direction */
+volatile IOBITS valMotorRelais = IOBITS_ZERO;	// wanted value
+volatile IOBITS regMotorRelais = IOBITS_ZERO;	// value put to MPC
 
-/* SM8 Tasten
- * Unteren Bits: Motor Öffnen
- * Oberen Bits:  Motor Schliessen */
+/* SM8 Keys
+ * Lower Bits: Motor opening
+ * Upper Bits: Motor closing */
 volatile IOBITS valSM8Button   = ~IOBITS_ZERO;
 
-/* Werte, die von den MCP23017 während MPC IRQ ausgelesen werden
- * Unteren Bits: Motor Öffnen
- * Oberen Bits:  Motor Schliessen */
+/* Values read out from MCP23017 when MPC triggers an IRQ
+ * Lower Bits: Motor opening
+ * Upper Bits: Motor closing */
 volatile IOBITS irqSM8Status   = IOBITS_ZERO;
-volatile IOBITS irqWallButton  = IOBITS_ZERO;
+volatile IOBITS irqPushButton  = IOBITS_ZERO;
 
-/* Werte werden im Programmablauf verwendet
- * Unteren Bits: Motor Öffnen
- * Oberen Bits:  Motor Schliessen */
+/* Values used within program logic
+ * Lower Bits: Motor opening
+ * Upper Bits: Motor closing */
 volatile IOBITS curSM8Status    = IOBITS_ZERO;
          IOBITS SM8StatusIgnore = IOBITS_ZERO;
-volatile IOBITS curWallButton   = IOBITS_ZERO;
+volatile IOBITS curPushButton   = IOBITS_ZERO;
 
-/* Entprellzähler für SM8-Ausgänge und Wandtaster */
+/* Debounce counter for FS20-SM8 outputs and pushbuttons */
 volatile char debSM8Status[IOBITS_CNT]  = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-volatile char debWallButton[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+volatile char debPushButton[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 
-/* Motor Steuerungskommandos:
- *   0: Motor AUS
- *  >0: Motor Öffnen
- *  <0: Motor Schliessen
- * abs(Werte) <> 0 haben folgende Bedeutung:
- *      1: Motor sofort schalten
- *     >1: Motor Delay in (abs(Wert) - 1) * 10 ms */
+/* Motor control values:
+ *  0: Motor off
+ * >0: Motor opening    1=immediately, >1=delay in ms before opening)
+ * <0: Motor closeing  -1=immediately, <1=abs(delay) in ms before closing)
+ *                        delay values are in ms/TIMER_MS
+ */
 volatile MOTOR_CTRL  MotorCtrl[MAX_MOTORS]	= {MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF};
-// Bitmask für Motoren, die im IRQ abgeschaltet wurden
+// Bitmask for motors which are switch off during IRQ
 volatile MOTORBITS sendStatusMOTOR_OFF;
 
-/* Enthält Timeout Zähler. Wenn Zähler 0 wird, dann Motor Aus. */
+/* Motor timeout counter: Counted down within timer IRQ and switches
+ * motor off if getting 0 */
 volatile MOTOR_TIMER MotorTimeout[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 
-/* Enthält aktuelle Motorposition */
+/* Current motor positions (counter values) */
 volatile MOTOR_TIMER MotorPosition[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 
-/* Enthält gewünschte Motorposition bzw NO_POSITION, falls inaktiv */
+/* Requested motor positions (counter values) or NO_POSITION if inactive */
 volatile MOTOR_TIMER destMotorPosition[MAX_MOTORS] = {NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION,NO_POSITION};
 
-/* Enthält Motorposition von Fenstern vor Regenbeginn */
+/* Stored motor positions (percent values) when rain starts */
 volatile byte resumeMotorPosition[MAX_MOTORS] = {NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION};
+/* Delay to count down before resumes window position after rain */
 volatile WORD resumeDelay = NO_RESUME_DELAY;
 
-/* Zeitzähler für Auto-Learn Funktion:
- * Enthält die Zeit, wie lange die Wandtaste gedrückt wurde */
-TIMER WallButtonTimer[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
+/* Timer for auto learn function: Counts the time of pressed pushbutton */
+TIMER PushButtonTimer[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 
-/* SM8 Tastensteuerung "gedrückt"-Zeit */
-volatile SM8_TIMEOUT   SM8Timeout[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-
+/* SM8 key control "pushed"-time */
+volatile SM8_TIMEOUT SM8Timeout[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 
-/* Regensensor */
-/* Software Regendetektion (wird nicht in EEPROM gespeichert) */
+
+/* Rain sensor */
+/* Soft rain detection (not permanently stored in EEPROM) */
 bool softRainInput = false;
-/* Regensensor Aktivitätseingang und Sensor */
+/* Rain sensor input and enable input */
 Bounce debEnable = Bounce();
 Bounce debInput = Bounce();
+/* Rain flag */
 bool isRaining = false;
 
 
 /* EEPROM Variablen */
 struct EEPROM {
 	/* LED-Pattern
-	 * <LEDPattern> wird bitweise <LEDBitLen> lang, beginnend
-	 * mit Bit 0, rechtsrotierend ausgegeben, bis <LEDBitCount>
-	 * erreicht ist. Danach beginnt das Pattern wieder von vorne.
-	 * Zwischen jedem Bit wird <LEDBitLenght> ms gewartet.
-	 * Standardmuster: 0010.0000  0000.1000  0000.0010  0000.0000
-	 * mit 30 Bits und 100 ms pro Bit
+	 * <LEDPattern> are bitwise copied to LED, starting with bit 0
+	 * right-sifted <LEDBitCount> times with a delay of <LEDBitLenght>
+	 * between each bit.
+	 * Default pattern: 0010.0000  0000.1000  0000.0010  0000.0000
+	 * using 30 bits and 100 ms delay each bit
 	 */
-	// LED Pattern für Normalzustand
+	// LED normal pattern
 	LEDPATTERN 	LEDPatternNormal;
-	// LED Pattern für Regen
+	// LED rain pattern
 	LEDPATTERN 	LEDPatternRain;
-	// LED Pattern Bit-Zähler
+	// LED bit count
 	byte 		LEDBitCount;
-	// LED Pattern Bit-Länge in ms
-	WORD 		LEDBitLenght;					
+	// LED bit delay
+	WORD 		LEDBitLenght;
 
-	// Motortyp Bitmask
-	MOTORBITS	MTypeBitmask;				
-	// Maximale Motorlaufzeit in ms
+	// Motor type bitmask
+	MOTORBITS	MTypeBitmask;
+	// Motor runtimes
 	volatile DWORD MaxRuntime[MAX_MOTORS];
-	// Motor Nachlauflaufzeit in ms
+	// Motor overtravel times
 	volatile DWORD OvertravelTime[MAX_MOTORS];
-	// Motornamen
+	// Motor names
 	char 		MotorName[MAX_MOTORS][MAX_NAMELEN];
-	// Letzte Motorposition
+	// Last motor position
 	volatile MOTOR_TIMER MotorPosition[MAX_MOTORS];
-	
-	// Regenfunktionen (s. define)
+
+	// <Rain> function bits
 	#define RAIN_BIT_AUTO	(1<<0)
 	#define RAIN_BIT_ENABLE	(1<<1)
 	#define RAIN_BIT_RESUME	(1<<2)
-	byte 		Rain;						
-	// Wiederherstellungsverzögerung
-	WORD 		RainResumeTime;				
-	
-	// Kommando-Schnittstelle Echo
-	bool 		Echo;						
-	// Kommando-Schnittstelle Terminator
-	char 		Term;						
-	// Sende autom. Statusänderung
-	bool 		SendStatus;					
-	// Betriebsstundenzähler
-	DWORD		OperatingHours;				
+	byte 		Rain;
+	// Rain resume delay time
+	WORD 		RainResumeTime;
+
+	// Command interface local echo flag
+	bool 		Echo;
+	// Command interface terminator
+	char 		Term;
+	// Auto status flag
+	bool 		SendStatus;
+	// Opration timer
+	DWORD		OperatingHours;
 } eeprom;
 
 
@@ -454,13 +487,13 @@ void setup()
 	Serial.begin(SERIAL_BAUDRATE);
 	Serial.println();
 
-	// Lese EEPROM Programmvariablen
+	// Read EEPROM program setting
 	eepromInitVars();
 
-	// Initalisiere andere Programmvariablen
+	// Init program vars
 	initVars();
 
-	// Initalisere Kommando-Interface
+	// Init command interface
 	setupSerialCommand();
 
 	if ( !eeprom.SendStatus ) {
@@ -473,29 +506,29 @@ void setup()
 	#endif
 	#ifdef DEBUG_PINS
 	SerialTimePrintfln(F("setup - Debug pins enabled"));
-	pinMode(DBG_INT, OUTPUT); 		// debugging
-	pinMode(DBG_MPC, OUTPUT); 		// debugging
-	pinMode(DBG_TIMER, OUTPUT);		// debugging
+	pinMode(DBG_INT, OUTPUT);
+	pinMode(DBG_MPC, OUTPUT);
+	pinMode(DBG_TIMER, OUTPUT);
 	#endif
 
 	// Input pins pulled-up
 	pinMode(RAIN_ENABLE, INPUT_PULLUP);
-	digitalWrite(RAIN_ENABLE, RAIN_ENABLE_AKTIV==0?HIGH:LOW);
+	digitalWrite(RAIN_ENABLE, RAIN_ENABLE_ACTIVE==0?HIGH:LOW);
 	// After setting up the button, setup the Bounce instance
 	debEnable.attach(RAIN_ENABLE);
 	debEnable.interval(RAIN_DEBOUNCE_TIME); // interval in ms
 
 	pinMode(RAIN_INPUT, INPUT_PULLUP);
-	digitalWrite(RAIN_INPUT, RAIN_INPUT_AKTIV==0?HIGH:LOW);
+	digitalWrite(RAIN_INPUT, RAIN_INPUT_ACTIVE==0?HIGH:LOW);
 	// After setting up the button, setup the Bounce instance
 	debInput.attach(RAIN_INPUT);
 	debInput.interval(RAIN_DEBOUNCE_TIME);
 
 
 	#ifdef DEBUG_PINS
-	digitalWrite(DBG_INT, LOW);  	// debugging
-	digitalWrite(DBG_MPC, LOW);		// debugging
-	digitalWrite(DBG_TIMER, LOW);	// debugging
+	digitalWrite(DBG_INT, LOW);
+	digitalWrite(DBG_MPC, LOW);
+	digitalWrite(DBG_TIMER, LOW);
 	#endif
 
 	Wire.begin();
@@ -503,52 +536,52 @@ void setup()
 	expanderWriteBoth(MPC_MOTORRELAIS, IOCON, 0b00100100);	//                    sequential mode, INT Open-drain output
 	expanderWriteBoth(MPC_SM8BUTTON,   IOCON, 0b00100100);	//                    sequential mode, INT Open-drain output
 	expanderWriteBoth(MPC_SM8STATUS,   IOCON, 0b01100100);	// mirror interrupts, sequential mode, INT Open-drain output
-	expanderWriteBoth(MPC_WALLBUTTON,  IOCON, 0b01100100);	// mirror interrupts, sequential mode, INT Open-drain output
+	expanderWriteBoth(MPC_PUSHBUTTON,  IOCON, 0b01100100);	// mirror interrupts, sequential mode, INT Open-drain output
 
 	// enable pull-up on switches
 	expanderWriteBoth(MPC_MOTORRELAIS, GPPU, 0xFF);  	// pull-up resistor A/B
 	expanderWriteBoth(MPC_SM8BUTTON,   GPPU, 0xFF);  	// pull-up resistor A/B
 	expanderWriteBoth(MPC_SM8STATUS,   GPPU, 0xFF);  	// pull-up resistor A/B
-	expanderWriteBoth(MPC_WALLBUTTON,  GPPU, 0xFF);  	// pull-up resistor A/B
+	expanderWriteBoth(MPC_PUSHBUTTON,  GPPU, 0xFF);  	// pull-up resistor A/B
 
 	// port data
 	expanderWriteWord(MPC_MOTORRELAIS, GPIO, regMotorRelais);
 	expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
 	expanderWriteWord(MPC_SM8STATUS,   GPIO, ~IOBITS_ZERO);
-	expanderWriteWord(MPC_WALLBUTTON,  GPIO, ~IOBITS_ZERO);
+	expanderWriteWord(MPC_PUSHBUTTON,  GPIO, ~IOBITS_ZERO);
 
 	// port direction
 	expanderWriteBoth(MPC_MOTORRELAIS, IODIR, 0x00);	// OUTPUT
 	expanderWriteBoth(MPC_SM8BUTTON,   IODIR, 0x00);	// OUTPUT
 	expanderWriteBoth(MPC_SM8STATUS,   IODIR, 0xFF);	// INPUT
-	expanderWriteBoth(MPC_WALLBUTTON,  IODIR, 0xFF);	// INPUT
+	expanderWriteBoth(MPC_PUSHBUTTON,  IODIR, 0xFF);	// INPUT
 
 	// invert polarity
 	expanderWriteBoth(MPC_SM8STATUS,   IOPOL, 0xFF);	// invert polarity of signal
-	expanderWriteBoth(MPC_WALLBUTTON,  IOPOL, 0xFF);	// invert polarity of signal
+	expanderWriteBoth(MPC_PUSHBUTTON,  IOPOL, 0xFF);	// invert polarity of signal
 
 	// interrupt on change to previous one
-	expanderWriteBoth(MPC_WALLBUTTON,  INTCON, 0x00);	// enable interrupts
+	expanderWriteBoth(MPC_PUSHBUTTON,  INTCON, 0x00);	// enable interrupts
 
 	// enable interrupts on input MPC
 	expanderWriteBoth(MPC_SM8STATUS,   GPINTEN, 0xFF);	// enable interrupts
-	expanderWriteBoth(MPC_WALLBUTTON,  GPINTEN, 0xFF);	// enable interrupts
+	expanderWriteBoth(MPC_PUSHBUTTON,  GPINTEN, 0xFF);	// enable interrupts
 
 	// read from interrupt capture ports to clear them
 	expanderRead(MPC_SM8STATUS,  INTCAPA);
 	expanderRead(MPC_SM8STATUS,  INTCAPB);
-	expanderRead(MPC_WALLBUTTON, INTCAPA);
-	expanderRead(MPC_WALLBUTTON, INTCAPB);
+	expanderRead(MPC_PUSHBUTTON, INTCAPA);
+	expanderRead(MPC_PUSHBUTTON, INTCAPB);
 
 
-	// pin 19 der MPC23017 sind an einem Interrupteingang
-	// MPC_INT_INPUT angeschlossen
+	// MPC23017 pin 19 are connected together to an Ardunino IRQ input
 	pinMode(MPC_INT_INPUT, INPUT_PULLUP);// make int input
 	digitalWrite(MPC_INT_INPUT, HIGH);	// enable pull-up as we have made
-									// the interrupt pins open drain
+										// the interrupt pins open drain
 
-	// Interrupts abschalten
+	// Disable controller interrupts
 	noInterrupts();
+	// Disable interrupt processing too
 	extISREnabled = false;
 	timerISREnabled = false;
 
@@ -559,34 +592,34 @@ void setup()
 	MsTimer2::set(TIMER_MS, timerISR);
 	MsTimer2::start();
 
-	// Hardware Interrupts erlauben
+	// Enable controller interrupts
 	interrupts();
 
-	// Watchdog initalisieren
+	// Init watchdog
 	watchdogInit();
 
-	// SM8 zurücksetzen
+	// Reset FS20-SM8
 	clrSM8Status();
 
 	// Clear interrupt flag register by reading data
 	curSM8Status  = expanderReadWord(MPC_SM8STATUS,  GPIO);
-	curWallButton = expanderReadWord(MPC_WALLBUTTON, GPIO);
+	curPushButton = expanderReadWord(MPC_PUSHBUTTON, GPIO);
 
 	// clear interrupt capture register by reading
 	expanderReadWord(MPC_SM8STATUS,  INTCAP);
-	expanderReadWord(MPC_WALLBUTTON, INTCAP);
+	expanderReadWord(MPC_PUSHBUTTON, INTCAP);
 
 	// clear again interrupt flag register by reading flag register
 	expanderReadWord(MPC_SM8STATUS,  INFTF);
-	expanderReadWord(MPC_WALLBUTTON, INFTF);
+	expanderReadWord(MPC_PUSHBUTTON, INFTF);
 
-	// Interrupt-Software Ausführung erlauben
+	// Enable interrupt processing
 	extISREnabled   = true;
 	timerISREnabled = true;
 
 	prevMillis = millis();
 
-	// Fertig signalisieren
+	// Finished
 	digitalWrite(STATUS_LED, LOW);
 
 #ifdef DEBUG_OUTPUT_SETUP
@@ -605,7 +638,7 @@ void setup()
  * Function:    initVars
  * Return:
  * Arguments:
- * Description: Initalisiere Programmvariablen
+ * Description: Init program vars
  * ===================================================================*/
 void initVars()
 {
@@ -639,7 +672,7 @@ void extISR()
 	if( extISREnabled )
 	{
 		#ifdef DEBUG_PINS
-		digitalWrite(DBG_INT, !digitalRead(DBG_INT));  			// debugging
+		digitalWrite(DBG_INT, !digitalRead(DBG_INT));  			
 		#endif
 		isrTrigger = true;
 	}
@@ -650,7 +683,7 @@ void extISR()
  * Return:
  * Arguments:
  * Description: Timer Interrupt service routine
- *              Wird alle 10 ms aufgerufen
+ *              called every TIMER_MS ms
  * ===================================================================*/
 void timerISR()
 {
@@ -659,22 +692,22 @@ void timerISR()
 		byte i;
 
 		#ifdef DEBUG_PINS
-		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	// debugging
+		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	
 		#endif
 
-		// Prüfe millis() timer overflow
+		// Check millis() timer overflow
 		if( millis() < prevMillis ) {
 			millisOverflow++;
 			prevMillis = millis();
 		}
 
-		// Delay für Regensensor RESUME
+		// Delay for rain RESUME command
 		if ( resumeDelay!=NO_RESUME_DELAY && resumeDelay>0 ) {
 			resumeDelay--;
 		}
 
 		for (i = 0; i < IOBITS_CNT; i++) {
-			// Tastenentprellung für SM8 Ausgänge
+			// Debounce FS20-SM8 outputs
 			if ( debSM8Status[i] > 0 ) {
 				debSM8Status[i]--;
 			}
@@ -682,62 +715,66 @@ void timerISR()
 				bitWrite(curSM8Status, i, bitRead(irqSM8Status, i));
 			}
 
-			// Tastenentprellung für Wandtaster
-			if ( debWallButton[i] > 0 ) {
-				debWallButton[i]--;
+			// Debounce pushbuttons
+			if ( debPushButton[i] > 0 ) {
+				debPushButton[i]--;
 			}
 			else {
-				bitWrite(curWallButton, i, bitRead(irqWallButton, i));
+				bitWrite(curPushButton, i, bitRead(irqPushButton, i));
 			}
 
-			// SM8 Tastersteuerung Timeout
+			/* SM8 key control timeout
+			 * FS20-SM8 key control press signal must be carefully
+			 * not longer than a short time, because otherwise the
+			 * FS20-SM8 channel will go into programming mode (> 5 s) */
 			if ( SM8Timeout[i] > 0 ) {
 				if ( --SM8Timeout[i] == 0 ) {
-					// SM8 Taster Timeout abgelaufen, Tasterausgang abschalten
+					// SM8 key timer timout, reset FS20-SM8 key output
 					bitSet(valSM8Button, i);
 				}
 			}
 
 		}
 
-		// MPC Motor-Bits steuern
-		// (das MPC Register wird außerhalb der ISR geschrieben)
+		// Control MPC motor bits
+		// (MPC register will not be written within IRQ service rouutine)
 		for (i = 0; i < MAX_MOTORS; i++) {
-			// Laufzeit messen
+			// Measure runtime
 			if ( bitRead(regMotorRelais, i) ) {
-				// Motor läuft, Richtung feststellen
+				// Motor is on, determine direction
 				if ( bitRead(regMotorRelais, i + MAX_MOTORS) ) {
-					// Motor läuft auf Öffnen
+					// Motor runs in open direction
 					if ( MotorPosition[i] < (eeprom.MaxRuntime[i] / TIMER_MS) ) {
 						++MotorPosition[i];
 					}
 				}
 				else {
-					// Motor läuft auf Schliessen
+					// Motor runs in close direction
 					if ( MotorPosition[i]>0 ) {
 						--MotorPosition[i];
 					}
 				}
-				// Falls Motor Zielposition gesetzt
+				// If a motor destination position is set, check it
 				if ( destMotorPosition[i] != NO_POSITION ) {
-					// Wenn Motor Zielposition erreicht
+					// Motor position achieved?
 					if ( MotorPosition[i] == destMotorPosition[i] ) {
-						// Motor AUS
+						// Motor OFF
 						if ( MotorCtrl[i] != MOTOR_OFF ) {
 							bitSet(sendStatusMOTOR_OFF, i);
 						}
 						MotorCtrl[i] = MOTOR_OFF;
-						// Zielposition löschen
+						// Clear destination position
 						destMotorPosition[i] = NO_POSITION;
 					}
 				}
 
 			}
 
-			// Motor Zeitablauf
+			// Check motor timeout
 			if ( MotorTimeout[i] > 0 ) {
 				--MotorTimeout[i];
 				if ( MotorTimeout[i] == 0 ) {
+					// Motor timeout, switch motor off
 					if ( MotorCtrl[i] != MOTOR_OFF ) {
 						bitSet(sendStatusMOTOR_OFF, i);
 					}
@@ -745,39 +782,40 @@ void timerISR()
 				}
 			}
 
-			// Motor Control
+			// Motor delay control
 			if ( MotorCtrl[i] > MOTOR_OPEN ) {
 				--MotorCtrl[i];
-				// Motor auf Öffnen, Motor AUS
+				// Motor opening, motor off
 				bitSet(valMotorRelais, i + MAX_MOTORS);
 				bitClear(valMotorRelais, i);
 			}
 			else if ( MotorCtrl[i] < MOTOR_CLOSE ) {
 				++MotorCtrl[i];
-				// Motor auf Schliessen, Motor AUS
+				// Motor closing, motor off
 				bitClear(valMotorRelais, i + MAX_MOTORS);
 				bitClear(valMotorRelais, i);
 			}
 			else {
+				// No more delay, motor should be set to a defined state
 				if ( MotorCtrl[i] == MOTOR_OPEN ) {
-					// Motor auf Öffnen, Motor EIN
+					// Motor to opening, motor on
 					bitSet(valMotorRelais, i + MAX_MOTORS);
 					bitSet(valMotorRelais, i);
 				}
 				else if ( MotorCtrl[i] == MOTOR_CLOSE ) {
-					// Motor auf Schliessen, Motor EIN
+					// Motor to closing, motor on
 					bitClear(valMotorRelais, i + MAX_MOTORS);
 					bitSet(valMotorRelais, i);
 				}
 				else if ( MotorCtrl[i] == MOTOR_OFF ) {
-					// Motor AUS, Motor auf Schliessen
+					// Motor off, direction relais to close
 					bitClear(valMotorRelais, i);
 					bitClear(valMotorRelais, i + MAX_MOTORS);
 				}
 			}
 		}
 		#ifdef DEBUG_PINS
-		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	// debugging
+		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	
 		#endif
 	}
 }
@@ -786,25 +824,25 @@ void timerISR()
  * Function:    handleMPCInt
  * Return:
  * Arguments:
- * Description: MPC Interrupt-Behandlung außerhalb extISR
- *              Liest die MPC Register in globale Variablen
- *              Aufruf aus loop(), nicht von der ISR
+ * Description: MPC IRQ handling outside IRQ routine, because we can
+ * 				not handle I2C interfacing within IRQ subroutine.
+ *              Read out MPC Register into global variables
  * ===================================================================*/
 void handleMPCInt()
 {
-	// MPC Interrupt aufgetreten?
+	// Check if an MPC irq occured
 	if ( isrTrigger ) {
 		byte i;
 
 		#ifdef DEBUG_PINS
-		//digitalWrite(DBG_INT, !digitalRead(DBG_INT));  		// debugging
+		digitalWrite(DBG_INT, !digitalRead(DBG_INT));  		
 		#endif
 		isrTrigger = false;
 
 		if ( expanderReadWord(MPC_SM8STATUS, INFTF) )
 		{
 			#ifdef DEBUG_PINS
-			digitalWrite(DBG_MPC, HIGH);	// debugging
+			digitalWrite(DBG_MPC, HIGH);	
 			#endif
 			irqSM8Status = expanderReadWord(MPC_SM8STATUS, GPIO);
 			for (i = 0; i < IOBITS_CNT; i++) {
@@ -813,36 +851,36 @@ void handleMPCInt()
 				}
 			}
 			#ifdef DEBUG_PINS
-			digitalWrite(DBG_MPC, LOW);		// debugging
+			digitalWrite(DBG_MPC, LOW);		
 			#endif
 		}
 
-		if ( expanderReadWord(MPC_WALLBUTTON, INFTF) )
+		if ( expanderReadWord(MPC_PUSHBUTTON, INFTF) )
 		{
-			static IOBITS tmpWallButton = IOBITS_ZERO;
+			static IOBITS tmpPushButton = IOBITS_ZERO;
 			#ifdef DEBUG_PINS
-			digitalWrite(DBG_MPC, HIGH);	// debugging
+			digitalWrite(DBG_MPC, HIGH);	
 			#endif
-			irqWallButton = expanderReadWord(MPC_WALLBUTTON, GPIO);
-			#ifdef DEBUG_OUTPUT_WALLBUTTON
-			SerialTimePrintfln(F("handleMPCInt    - IRQ - irqWallButton: 0x%04x"), irqWallButton);
+			irqPushButton = expanderReadWord(MPC_PUSHBUTTON, GPIO);
+			#ifdef DEBUG_OUTPUT_PUSHBUTTON
+			SerialTimePrintfln(F("handleMPCInt    - IRQ - irqPushButton: 0x%04x"), irqPushButton);
 			#endif
 			for (i = 0; i < IOBITS_CNT; i++) {
-				if ( bitRead(tmpWallButton,i) != bitRead(irqWallButton,i) ) {
-					#ifdef DEBUG_OUTPUT_WALLBUTTON
+				if ( bitRead(tmpPushButton,i) != bitRead(irqPushButton,i) ) {
+					#ifdef DEBUG_OUTPUT_PUSHBUTTON
 					SerialTimePrintfln(F("handleMPCInt    - IRQ - debounce key %d"), i);
 					#endif
-					debWallButton[i] = WPB_DEBOUNCE_TIME / TIMER_MS;
-					bitWrite(tmpWallButton, i, bitRead(irqWallButton,i));
+					debPushButton[i] = WPB_DEBOUNCE_TIME / TIMER_MS;
+					bitWrite(tmpPushButton, i, bitRead(irqPushButton,i));
 				}
 			}
 			#ifdef DEBUG_PINS
-			digitalWrite(DBG_MPC, LOW);		// debugging
+			digitalWrite(DBG_MPC, LOW);		
 			#endif
 		}
 
 		#ifdef DEBUG_PINS
-		//digitalWrite(DBG_INT, !digitalRead(DBG_INT));  		// debugging
+		digitalWrite(DBG_INT, !digitalRead(DBG_INT));  		
 		#endif
 	}
 	watchdogReset();
@@ -886,14 +924,14 @@ void debugPrintMotorStatus(bool from)
  * Function:    clrSM8Status
  * Return:
  * Arguments:
- * Description: SM8 in Ausgangszustand versetzen
- *              Alle aktivierten Kanäle abschalten
+ * Description: FS20-SM8 channel reset
+ *              Switches all channel in ON-state to OFF
  * ===================================================================*/
 void clrSM8Status(void)
 {
 	// Read current value from input MPC
 	curSM8Status  = expanderReadWord(MPC_SM8STATUS, GPIO);
-	curWallButton = expanderReadWord(MPC_WALLBUTTON, GPIO);
+	curPushButton = expanderReadWord(MPC_PUSHBUTTON, GPIO);
 
 	for(byte channel=0; channel<IOBITS_CNT; channel++) {
 		if( bitRead(curSM8Status, channel) ) {
@@ -918,7 +956,7 @@ void clrSM8Status(void)
  * Function:    ctrlSM8Status
  * Return:
  * Arguments:
- * Description: Kontrolle der Eingangssignale der SM8
+ * Description: FS20-SM8 channel output handling
  * ===================================================================*/
 void ctrlSM8Status(void)
 {
@@ -933,21 +971,21 @@ void ctrlSM8Status(void)
 		SerialTimePrintfln(F("ctrlSM8Status   - ----------------------------------------"));
 		SerialTimePrintfln(F("ctrlSM8Status   - SM8 Input Status changed"));
 		#endif
-		/* Lese SM8 Ausgänge
-			 die unteren 8-bits sind "Öffnen" Befehle
-			 die oberen 8-bits sind "Schliessen" Befehle
-			 Flankengesteuert
-				 Flanke von 0 nach 1 bedeuted: Motor Ein
-				 Flanke von 1 nach 0 bedeuted: Motor Aus
-				 Gleiche Flanken für Öffnen und Schliessen
-					sind ungültig
+		/* Read FS20-SM8 Outputs
+			 - Lower 8-bits are "open" commands
+			 - Upper 8-bits are "close" commands
+			 - Outputs are edge trigger
+				 - Slope from 0 to 1 means: Motor on
+				 - Slope from 1 to 0 means: Motor off
+				 - Slope for both, motor "open" and "close" within same
+				   time are invalid
 
-				Fo Fc  Motor
+				So Sc  Motor
 				-- --  ----------
-				0  0   Aus
-				1  0   Öffnen
-				0  1   Schliessen
-				1  1   Ignorieren
+				0  0   Off
+				1  0   Opening
+				0  1   Closing
+				1  1   ignored (illegal state)
 		*/
 		if ( prevSM8Status != curSM8Status ) {
 			byte i;
@@ -966,7 +1004,7 @@ void ctrlSM8Status(void)
 			SerialTimePrintfln(F("ctrlSM8Status   - SM8StatusChange: 0x%04x"), SM8StatusChange);
 			SerialTimePrintfln(F("ctrlSM8Status   - SM8StatusIgnore: 0x%04x"), SM8StatusIgnore);
 			#endif
-			// Eventuell Änderungen einzelner Bits ignorieren
+			// Possibly ignore changes of single bits
 			SM8StatusChange &= ~SM8StatusIgnore;
 			SM8StatusIgnore = 0;
 
@@ -981,7 +1019,7 @@ void ctrlSM8Status(void)
 				watchdogReset();
 			}
 			for (i = 0; i < MAX_MOTORS; i++) {
-				// Motor Öffnen
+				// Motor opening
 				if ( bitRead(SM8StatusChange, i) != 0 && bitRead(SM8StatusChange, i + MAX_MOTORS) == 0 ) {
 					#ifdef DEBUG_OUTPUT_SM8STATUS
 					SerialTimePrintfln(F("ctrlSM8Status   - Motor %i should be opened"), i);
@@ -990,27 +1028,27 @@ void ctrlSM8Status(void)
 						#ifdef DEBUG_OUTPUT_SM8STATUS
 						SerialTimePrintfln(F("ctrlSM8Status   - Motor %i set to OPEN"), i);
 						#endif
-						// Flanke von 0 nach 1: Motor Ein
+						// Slope from 0 to 1 means: Motor on
 						setMotorDirection(i, MOTOR_OPEN);
-						// Taste für Schliessen aktiv?
+						// FS20-SM8 key for "Close" active?
 						if ( bitRead(SM8Status, i + MAX_MOTORS) != 0 ) {
 							#ifdef DEBUG_OUTPUT_SM8STATUS
 							SerialTimePrintfln(F("ctrlSM8Status   - Reset FS20 'close' key %i"), i + MAX_MOTORS);
 							#endif
-							// Taste für Schliessen zurücksetzen
+							// Clear FS20-SM8 key for "Close"
 							bitClear(valSM8Button, i + MAX_MOTORS);
 							bitSet(SM8StatusIgnore, i + MAX_MOTORS);
 						}
 					}
 					else {
-						// Flanke von 0 nach 1: Motor Aus
+						// Slope from 1 to 0 means: Motor off
 						#ifdef DEBUG_OUTPUT_SM8STATUS
 						SerialTimePrintfln(F("ctrlSM8Status   - Open 0>1 Slope - Motor %i off"), i);
 						#endif
 						setMotorDirection(i, MOTOR_OFF);
 					}
 				}
-				// Motor Schliessen
+				// Motor closing
 				else if ( bitRead(SM8StatusChange, i) == 0 && bitRead(SM8StatusChange, i + MAX_MOTORS) != 0 ) {
 					#ifdef DEBUG_OUTPUT_SM8STATUS
 					SerialTimePrintfln(F("ctrlSM8Status   - Motor %i should be closed"), i);
@@ -1019,32 +1057,32 @@ void ctrlSM8Status(void)
 						#ifdef DEBUG_OUTPUT_SM8STATUS
 						SerialTimePrintfln(F("ctrlSM8Status   - Motor %i set to CLOSE"), i);
 						#endif
-						// Flanke von 0 nach 1: Motor Ein
+						// Slope from 0 to 1 means: Motor on
 						setMotorDirection(i, MOTOR_CLOSE);
-						// Taste für Öffnen aktiv?
+						// FS20-SM8 key for "Open" active?
 						if ( bitRead(SM8Status, i) != 0 ) {
 							#ifdef DEBUG_OUTPUT_SM8STATUS
 							SerialTimePrintfln(F("ctrlSM8Status   - Reset FS20 'open' key %i"), i);
 							#endif
-							// Taste für Öffnen zurücksetzen
+							// Clear FS20-SM8 key for "Close"
 							bitClear(valSM8Button, i);
 							bitSet(SM8StatusIgnore, i);
 						}
 					}
 					else {
-						// Flanke von 0 nach 1: Motor Aus
+						// Slope from 1 to 0 means: Motor off
 						#ifdef DEBUG_OUTPUT_SM8STATUS
 						SerialTimePrintfln(F("ctrlSM8Status   - Close 0>1 Slope - Motor %i off"), i);
 						#endif
 						setMotorDirection(i, MOTOR_OFF);;
 					}
 				}
-				// Ungültig: Änderungen beider Eingänge zur gleichen Zeit
+				// Ignored (illegal state)
 				else if ( bitRead(SM8StatusChange, i) != 0 && bitRead(SM8StatusChange, i + MAX_MOTORS) != 0 ) {
 					#ifdef DEBUG_OUTPUT_SM8STATUS
 					SerialTimePrintfln(F("ctrlSM8Status   - Invalid 0>1 Slope, reset key %i and %i"), i, i+MAX_MOTORS);
 					#endif
-					// Beide Tasten zurücksetzen
+					// Clear both FS20-SM8 key for "Open" and "Close"
 					bitClear(valSM8Button, i);
 					bitClear(valSM8Button, i + MAX_MOTORS);
 					bitSet(SM8StatusIgnore, i);
@@ -1067,68 +1105,66 @@ void ctrlSM8Status(void)
 }
 
 /* ===================================================================
- * Function:    ctrlWallButton
+ * Function:    ctrlPushButton
  * Return:
  * Arguments:
- * Description: Kontrolle der Eingangssignale der Wandtaster
+ * Description: Pushbutton handling
  * ===================================================================*/
-void ctrlWallButton(void)
+void ctrlPushButton(void)
 {
-	static IOBITS tmpWallButton  = ~IOBITS_ZERO;
+	static IOBITS tmpPushButton  = ~IOBITS_ZERO;
+	       IOBITS PushButton;		// Push button output
+	static IOBITS prevPushButton = ~IOBITS_ZERO;
 
-	/* Wall Button Output */
-	       IOBITS WallButton;
-	static IOBITS prevWallButton = ~IOBITS_ZERO;
-
-	if ( (tmpWallButton != curWallButton) ) {
-		/* Lese Wandtaster
-			 die unteren 8-bits sind "Öffnen" Befehle
-			 die oberen 8-bits sind "Schliessen" Befehle
-			 Flankenänderung von 0 auf 1 schaltet Motor ein/aus
-			 Flankenänderung von 1 auf 0 bewirkt nichts
-			 Einzelpegel bewirkt nichts
-			 Pegel Öffnen und Schliessen = 1:
-				- Motor Aus
-				- Taster verriegeln
-			 Pegel Öffnen und Schliessen = 0:
-				- Taster entriegeln
+	if ( (tmpPushButton != curPushButton) ) {
+		/* Read pushbuttons
+			 - Lower 8-bits are "Open" buttons
+			 - Upper 8-bits are "Close" buttons
+			 - Slope from 0 to 1: Toggle motor
+			 - Slope from 1 to 0: Do nothing
+			 - Single levels are unused, only slopes
+			 - Level for "Open" and "Close" button are together 1:
+				- Motor off
+				- Lock button pair
+			 - Level for "Open" and "Close" button are together 0:
+				- Unlock button pair
 		*/
-		#ifdef DEBUG_OUTPUT_WALLBUTTON
-		SerialTimePrintfln(F("ctrlWallButton  - tmpWallButton: 0x%04x"), tmpWallButton);
-		SerialTimePrintfln(F("ctrlWallButton  - curWallButton: 0x%04x"), curWallButton);
+		#ifdef DEBUG_OUTPUT_PUSHBUTTON
+		SerialTimePrintfln(F("ctrlPushButton  - tmpPushButton: 0x%04x"), tmpPushButton);
+		SerialTimePrintfln(F("ctrlPushButton  - curPushButton: 0x%04x"), curPushButton);
 		#endif
-		if ( prevWallButton != curWallButton ) {
+		if ( prevPushButton != curPushButton ) {
 			byte i;
 
-			IOBITS WallButtonSlope;
-			IOBITS WallButtonChange;
+			IOBITS PushButtonSlope;
+			IOBITS PushButtonChange;
 
-			WallButton = curWallButton;
-			WallButtonSlope = ~prevWallButton & WallButton;
-			WallButtonChange = prevWallButton ^ WallButton;
+			PushButton = curPushButton;
+			PushButtonSlope = ~prevPushButton & PushButton;
+			PushButtonChange = prevPushButton ^ PushButton;
 
 			for (i = 0; i < IOBITS_CNT; i++) {
-				if ( bitRead(WallButtonChange, i) ) {
-					sendStatus(false,PUSHBUTTON, F("%02d %S"), i+1, bitRead(curWallButton,i)?fstrON:fstrOFF);
-					if ( bitRead(curWallButton,i) ) {
-						WallButtonTimer[i % MAX_MOTORS] = millis();
+				if ( bitRead(PushButtonChange, i) ) {
+					sendStatus(false,PUSHBUTTON, F("%02d %S"), i+1, bitRead(curPushButton,i)?fstrON:fstrOFF);
+					if ( bitRead(curPushButton,i) ) {
+						PushButtonTimer[i % MAX_MOTORS] = millis();
 					}
 					else {
 						TIMER dt = 0;
 						TIMER maxTime = 0;
-						if ( millis() > WallButtonTimer[i % MAX_MOTORS] ) {
-							dt  = millis() - WallButtonTimer[i % MAX_MOTORS];
+						if ( millis() > PushButtonTimer[i % MAX_MOTORS] ) {
+							dt  = millis() - PushButtonTimer[i % MAX_MOTORS];
 							// Aufrunden
 							maxTime =  dt + (TIMER_MS / 2);
 							maxTime /= TIMER_MS;
 							maxTime *= TIMER_MS;
 						}
-						#ifdef DEBUG_OUTPUT_WALLBUTTON
-						SerialTimePrintfln(F("ctrlWallButton  - motor %d: delta_t=%ld ms"), i % MAX_MOTORS, dt);
+						#ifdef DEBUG_OUTPUT_PUSHBUTTON
+						SerialTimePrintfln(F("ctrlPushButton  - motor %d: delta_t=%ld ms"), i % MAX_MOTORS, dt);
 						#endif
 						if( maxTime > 10000 ) {
-							#ifdef DEBUG_OUTPUT_WALLBUTTON
-							SerialTimePrintfln(F("ctrlWallButton  - Setting new timeout for motor %d: %ld ms"), i % MAX_MOTORS, maxTime);
+							#ifdef DEBUG_OUTPUT_PUSHBUTTON
+							SerialTimePrintfln(F("ctrlPushButton  - Setting new timeout for motor %d: %ld ms"), i % MAX_MOTORS, maxTime);
 							#endif
 							sendStatus(false,MOTOR, F("%02d TIMEOUT %ld"), (i % MAX_MOTORS)+1, maxTime);
 							eeprom.MaxRuntime[i % MAX_MOTORS] = maxTime;
@@ -1139,37 +1175,37 @@ void ctrlWallButton(void)
 				watchdogReset();
 			}
 			for (i = 0; i < MAX_MOTORS; i++) {
-				// Flankenänderung von 0 auf 1 schaltet Motor ein/aus
-				if ( bitRead(WallButtonChange, i) != 0 && bitRead(WallButtonSlope, i) != 0 ) {
+				// Slope from 0 to 1: Toggle motor
+				if ( bitRead(PushButtonChange, i) != 0 && bitRead(PushButtonSlope, i) != 0 ) {
 					setMotorDirection(i, MOTOR_OPEN);
 				}
-				else if ( bitRead(WallButtonChange, i + MAX_MOTORS) != 0 && bitRead(WallButtonSlope, i + MAX_MOTORS) != 0 ) {
+				else if ( bitRead(PushButtonChange, i + MAX_MOTORS) != 0 && bitRead(PushButtonSlope, i + MAX_MOTORS) != 0 ) {
 					setMotorDirection(i, MOTOR_CLOSE);
 				}
 
-				// Pegel Öffnen und Schliessen = 1:
-				if ( bitRead(WallButton, i) != 0 && bitRead(WallButton, i + MAX_MOTORS) != 0 ) {
+				// Level for "Open" and "Close" button are together 1:
+				if ( bitRead(PushButton, i) != 0 && bitRead(PushButton, i + MAX_MOTORS) != 0 ) {
 					setMotorDirection(i, MOTOR_OFF);
 				}
 				watchdogReset();
 			}
 
-			#ifdef DEBUG_OUTPUT_WALLBUTTON
-			SerialTimePrintfln(F("ctrlWallButton  - ----------------------------------------"));
-			SerialTimePrintfln(F("ctrlWallButton  - prevWallButton:   0x%04x"), prevWallButton);
-			SerialTimePrintfln(F("ctrlWallButton  - WallButton:       0x%04x"), WallButton);
-			SerialTimePrintfln(F("ctrlWallButton  - WallButtonSlope:  0x%04x"), WallButtonSlope);
-			SerialTimePrintfln(F("ctrlWallButton  - WallButtonChange: 0x%04x"), WallButtonChange);
+			#ifdef DEBUG_OUTPUT_PUSHBUTTON
+			SerialTimePrintfln(F("ctrlPushButton  - ----------------------------------------"));
+			SerialTimePrintfln(F("ctrlPushButton  - prevPushButton:   0x%04x"), prevPushButton);
+			SerialTimePrintfln(F("ctrlPushButton  - PushButton:       0x%04x"), PushButton);
+			SerialTimePrintfln(F("ctrlPushButton  - PushButtonSlope:  0x%04x"), PushButtonSlope);
+			SerialTimePrintfln(F("ctrlPushButton  - PushButtonChange: 0x%04x"), PushButtonChange);
 			#endif
 
-			prevWallButton = curWallButton;
+			prevPushButton = curPushButton;
 		}
 
 		#ifdef DEBUG_OUTPUT_MOTOR
 		debugPrintMotorStatus(true);
 		#endif
 
-		tmpWallButton = curWallButton;
+		tmpPushButton = curPushButton;
 	}
 
 	watchdogReset();
@@ -1179,7 +1215,7 @@ void ctrlWallButton(void)
  * Function:    ctrlSM8Button
  * Return:
  * Arguments:
- * Description: Kontrolle der SM8 Tastensteuerung
+ * Description: FS20-SM8 key button handling
  * ===================================================================*/
 void ctrlSM8Button(void)
 {
@@ -1198,7 +1234,7 @@ void ctrlSM8Button(void)
 				sendStatus(false,FS20OUT, F("%2d %S"), i+1, bitRead(valSM8Button,i)?fstrOFF:fstrON);
 			}
 
-			// SM8 Taste Timeout setzen, falls Tastenausgang gerade aktiviert wurde
+			// If key output just activated, set FS20-SM8 key timeout
 			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) && (bitRead(valSM8Button, i) == 0) ) {
 				#ifdef DEBUG_OUTPUT_SM8OUTPUT
 				SerialTimePrintfln(F("ctrlSM8Button   - SM8 key %d output set timeout to %d ms"), i+1, FS20_SM8_IN_RESPONSE/TIMER_MS);
@@ -1218,7 +1254,7 @@ void ctrlSM8Button(void)
  * Function:    ctrlMotorRelais
  * Return:
  * Arguments:
- * Description: Kontrolle der Motor Ausgangssignale
+ * Description: Motor relais output bit handling
  * ===================================================================*/
 void ctrlMotorRelais(void)
 {
@@ -1244,12 +1280,6 @@ void ctrlMotorRelais(void)
 		SerialTimePrintfln(F("ctrlMotorRelais -   tmpMotorRelais: 0x%04X"), tmpMotorRelais);
 		SerialTimePrintfln(F("ctrlMotorRelais -   valMotorRelais: 0x%04X"), valMotorRelais);
 		#endif
-		/* Relais-Schaltzeiten beachten:
-		 * Generell: Drehrichtungsrelais nicht bei laufendem Motor umschalten
-		 */
-		//~ MOTORBITS valMotorStat01;
-		//~ MOTORBITS valMotorStat11;
-		//~ MOTORBITS valMotorDirChange;
 
 		preMotorTimer = millis() + RELAIS_OPERATE_TIME;
 		preMotorCount = 0;
@@ -1258,33 +1288,33 @@ void ctrlMotorRelais(void)
 		preMotorRelais[2] = valMotorRelais;
 		preMotorRelais[3] = valMotorRelais;
 
-		/* Tabelle (M=Motorbit, D=Directionbit, S=Steps)
-		 * Ist Soll Steps
-		 * MD  MD   MD          S MC MD
-		 * 00  00   -        -  0 00 00
-		 * 00  01   01       -  1 00 01
-		 * 00  10   10       -  1 01 00
-		 * 00  11   01 11    x  2 01 01
-		 * 01  00   00       -  1 00 10
-		 * 01  01   -        -  0 00 11
-		 * 01  10   00 10    x  2 01 10
-		 * 01  11   11       -  1 01 11
-		 * 10  00   00       -  1 10 00
-		 * 10  01   00 01    x  2 10 01
-		 * 10  10   -        -  0 11 00
-		 * 10  11   00 01 11 x  3 11 01
-		 * 11  00   01 00    x  2 10 10
-		 * 11  01   01       -  1 10 11
-		 * 11  10   01 00 10 x  3 11 00
-		 * 11  11   -        -  0 11 11	 */
-		// Jeden Motor einzeln testen
+		/* Table (M=Motorbit, D=Directionbit, S=Steps)
+		 * Current Target Steps
+		 * MD      MD     MD          S MC MD
+		 * 00      00     -        -  0 00 00
+		 * 00      01     01       -  1 00 01
+		 * 00      10     10       -  1 01 00
+		 * 00      11     01 11    x  2 01 01
+		 * 01      00     00       -  1 00 10
+		 * 01      01     -        -  0 00 11
+		 * 01      10     00 10    x  2 01 10
+		 * 01      11     11       -  1 01 11
+		 * 10      00     00       -  1 10 00
+		 * 10      01     00 01    x  2 10 01
+		 * 10      10     -        -  0 11 00
+		 * 10      11     00 01 11 x  3 11 01
+		 * 11      00     01 00    x  2 10 10
+		 * 11      01     01       -  1 10 11
+		 * 11      10     01 00 10 x  3 11 00
+		 * 11      11     -        -  0 11 11	 */
+		// Check motor by motor
 		for(i=0; i<MAX_MOTORS; i++) {
 			curTarget = 0;
 			bitWrite(curTarget, 3, bitRead(tmpMotorRelais, i));
 			bitWrite(curTarget, 2, bitRead(tmpMotorRelais, i+MAX_MOTORS));
 			bitWrite(curTarget, 1, bitRead(valMotorRelais, i));
 			bitWrite(curTarget, 0, bitRead(valMotorRelais, i+MAX_MOTORS));
-			// Letzter Schritt (Relais Endzustand) wird immer ausgegeben
+			// everytime output last step (relais final state) 
 			targetSteps = 0;
 
 			switch (curTarget) {
@@ -1339,17 +1369,17 @@ void ctrlMotorRelais(void)
 			SerialTimePrintfln(F("ctrlMotorRelais -   Motor %d, curTarget 0x%02X, Steps %d"), i, curTarget, targetSteps);
 			#endif
 
-			// Alle Schritte in die entgültigen Masken kopieren
+			// Copy all steps to final mask
 			for(k=targetSteps; k>0; k--) {
 				#ifdef DEBUG_OUTPUT_MOTOR_DETAILS
 				SerialTimePrintfln(F("ctrlMotorRelais -     targetStep[%d]=0x%02X"), k, targetStep[k]);
 				#endif
-				// Jetzt die Bits des gerade betrachteten Motors ausblenden
+				// mask bits of the current motor
 				bitClear(preMotorRelais[k], i);
 				bitClear(preMotorRelais[k], i+MAX_MOTORS);
-				// Die neuen Bits dieses Schrittes für Motor
+				// New motor bit for this step and motor
 				bitWrite(preMotorRelais[k], i, targetStep[k]>>1);
-				// Die neuen Bits dieses Schrittes für Drehrichtung
+				// New direction bit for this step and motor
 				bitWrite(preMotorRelais[k], i+MAX_MOTORS, targetStep[k] & 1);
 			}
 
@@ -1364,14 +1394,14 @@ void ctrlMotorRelais(void)
 		}
 		#endif
 
-		// Nächste Ausgabe ohne Delay
+		// Next bit output without delay
 		preMotorTimer = millis();
 
 		tmpMotorRelais = valMotorRelais;
 	}
 
 	if ( (long)( millis() - preMotorTimer) >= 0 ) {
-		// Aktuelle Motorsteuerungsbits holen
+		// Get current motor bits
 		bool doSM8andTimeout = true;
 
 		outMotorRelais = preMotorRelais[preMotorCount];
@@ -1397,10 +1427,10 @@ void ctrlMotorRelais(void)
 
 			if( doSM8andTimeout ) {
 				for (i = 0; i < MAX_MOTORS; i++) {
-					// Motor Timeout setzen
-						// - falls Motor gerade aktiviert wurde
+					// Set motor timeout
+						// - if motor just activated
 					if (    ( !bitRead(tmpOutMotorRelais, i) && bitRead(outMotorRelais, i) )
-						// - oder bereits läuft und die Laufrichtung geändert wurde
+						// - or still running but direction changed
 						 || ( bitRead(outMotorRelais, i) &&
 							  bitRead(tmpOutMotorRelais, i+MAX_MOTORS)!=bitRead(outMotorRelais, i+MAX_MOTORS) ) ) {
 						#ifdef DEBUG_OUTPUT_MOTOR
@@ -1408,10 +1438,10 @@ void ctrlMotorRelais(void)
 						#endif
 						MotorTimeout[i] = (eeprom.MaxRuntime[i] / TIMER_MS) + (eeprom.OvertravelTime[i] / TIMER_MS);
 					}
-					// SM8 Ausgang für "Öffnen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Schliessen"
+					// FS20-SM8 Output for "Open" active, but motor is off or closing
 					if ( bitRead(curSM8Status, i)
 						 && (getMotorDirection(i)==MOTOR_OFF || getMotorDirection(i)==MOTOR_CLOSE) ) {
-						// SM8 Taste für "Öffnen" zurücksetzen
+						// Reset FS20-SM8 key for "Open"
 						#if defined(DEBUG_OUTPUT_MOTOR) || defined(DEBUG_OUTPUT_SM8OUTPUT)
 						SerialTimePrintfln(F("ctrlMotorRelais - SM8 Taste %d (für \"Öffnen\") zurücksetzen"), i);
 						#endif
@@ -1419,10 +1449,10 @@ void ctrlMotorRelais(void)
 						bitClear(valSM8Button, i);
 					}
 
-					// SM8 Ausgang für "Schliessen" aktiv, aber Motor ist AUS bzw. arbeitet auf "Öffnen"
+					// FS20-SM8 Output for "Close" active, but motor is off or opening
 					if (    bitRead(curSM8Status, i+MAX_MOTORS)
 						 && (getMotorDirection(i)==MOTOR_OFF || getMotorDirection(i)==MOTOR_OPEN) ) {
-						// SM8 Taste für "Schliessen" zurücksetzen
+						// Reset FS20-SM8 key for "Close"
 						#if defined(DEBUG_OUTPUT_MOTOR) || defined(DEBUG_OUTPUT_SM8OUTPUT)
 						SerialTimePrintfln(F("ctrlMotorRelais - SM8 Taste %d (für \"Schliessen\") zurücksetzen"), i+MAX_MOTORS);
 						#endif
@@ -1434,7 +1464,7 @@ void ctrlMotorRelais(void)
 			}
 			tmpOutMotorRelais = outMotorRelais;
 
-			// Eventuell Motorpositionen merken und in EEPROM schreiben
+			// Possibly remember motor position and write it to EEPROM
 			if ( prevRegMotorRelais != regMotorRelais ) {
 				bool changed = false;
 				#ifdef DEBUG_OUTPUT_MOTOR
@@ -1442,7 +1472,7 @@ void ctrlMotorRelais(void)
 				#endif
 				for (i = 0; i < MAX_MOTORS; i++) {
 					if ( !bitRead(regMotorRelais, i) && (eeprom.MotorPosition[i] != MotorPosition[i]) ) {
-						// Motor läuft nicht, Position merken
+						// Only when motor is off, write position to EEPROM
 						#ifdef DEBUG_OUTPUT_MOTOR
 						SerialTimePrintfln(F("ctrlMotorRelais -     Store motor %d position %d"), i, MotorPosition[i]);
 						#endif
@@ -1471,7 +1501,7 @@ void ctrlMotorRelais(void)
  * Function:    ctrlRainSensor
  * Return:
  * Arguments:
- * Description: Kontrolle der Regensensor Eingänge
+ * Description: Rain sensor handling 
  * ===================================================================*/
 #ifdef DEBUG_OUTPUT_RAIN
 const char dbgCtrlRainSensor[] PROGMEM = "ctrlRainSensor  - ";
@@ -1490,19 +1520,20 @@ void ctrlRainSensor(void)
 	const char *strMode;
 	#endif
 
-	// Eingänge entprellen
+	// Debounce inputs
 	debEnable.update();
 	debInput.update();
 
-	// Entprellte Eingangssignale lesen
-	sensRainEnable = (debEnable.read() == RAIN_ENABLE_AKTIV);
-	sensRainInput  = (debInput.read()  == RAIN_INPUT_AKTIV);
+	// Read debounced inputs
+	sensRainEnable = (debEnable.read() == RAIN_ENABLE_ACTIVE);
+	sensRainInput  = (debInput.read()  == RAIN_INPUT_ACTIVE);
 
 	if( firstRun ) {
 		prevRainEnableInput = sensRainEnable;
 	}
 
-	// AUTO Modus aktivieren, wenn Enable-Eingang sich ändert
+	/* If enable input has changed, activate AUTO mode
+	 * regardless what user has set with RAIN DISABLE/ENABLE command */
 	if( prevRainEnableInput != sensRainEnable ) {
 		#ifdef DEBUG_OUTPUT_RAIN
 		SerialTimePrintfln(F("%SsensRainEnable      = %d"), dbgCtrlRainSensor, sensRainEnable);
@@ -1513,17 +1544,17 @@ void ctrlRainSensor(void)
 		prevRainEnableInput = sensRainEnable;
 	}
 
-	// Regensensor Enable/Disable abhängig vom Modus lesen
+	// Read rain "input" related to mode
 	if ( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
-		// AUTO Modus aktiv, Enable/Disable vom Eingangssignal lesen
+		// AUTO mode active: Read rain enable signal from input
 		RainEnable = sensRainEnable;
 	}
 	else {
-		// Modus manuell, Enable/Disable vom Softwarestatus lesen
+		// MANUAL mode active: Read rain enable status from setting
 		RainEnable = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
 	}
 
-	// Regensensor ist aktiv, wenn Eingang aktiv oder Softeinstellung aktiv
+	// Rain is active if settings set to rain or rain sensor input is active
 	RainInput  = (sensRainInput || softRainInput);
 
 	if( firstRun ) {
@@ -1638,7 +1669,7 @@ void ctrlRainSensor(void)
  * Function:    beAlive()
  * Return:
  * Arguments:
- * Description: Lebenszeichen (watchdog bedienen, debug output)
+ * Description: Alive timer (watchdog trigger)
  * ===================================================================*/
 void beAlive(void)
 {
@@ -1647,7 +1678,7 @@ void beAlive(void)
 	static byte liveDots = 80;
 	#endif
 
-	// Live timer und watchdog handling
+	// Live timer and watchdog handling
 	if ( (long)( millis() - runTimer) >= 0 ) {
 		runTimer += ALIVE_TIMER;
 		watchdogReset();
@@ -1670,7 +1701,8 @@ void beAlive(void)
  * Function:    blinkLED()
  * Return:
  * Arguments:
- * Description: LED Blinken, um anzuzeigen, dass die Hauptschleife läuft
+ * Description: LED blinking (to show that controller works and run
+ *              in main loop)
  * ===================================================================*/
 void blinkLED(void)
 {
@@ -1694,12 +1726,12 @@ void blinkLED(void)
 }
 
 /* ===================================================================
- * Function:    operatonHours()
+ * Function:    operationHours()
  * Return:
  * Arguments:	millisSet true, if system timer was changed manually
- * Description: Merkt sich die Betriebsstunden im EEPROM
+ * Description: Remember operation hours in EEPROM
  * ===================================================================*/
-void operatonHours(bool millisSet)
+void operationHours(bool millisSet)
 {
 	static unsigned long opHour;
 
@@ -1724,38 +1756,40 @@ void operatonHours(bool millisSet)
  * ===================================================================*/
 void loop()
 {
-	// MPC Interrupt-Behandlung außerhalb extISR
+	// MPC IRQ handling outside IRQ routine
 	handleMPCInt();
 
-	// Auslesen der Eingangssignale von SM8
+	// FS20-SM8 channel output handling
 	ctrlSM8Status();
 
-	// Auslesen der Wandtaster
-	// Wandtaster haben Vorrang vor SM8 Ausgänge,
-	// daher Auslesen nach SM8
-	ctrlWallButton();
+	/* Pushbuttons are higher priorisized than FS20-SM8 channel outputs
+	 * so we handle pushbuttons after FS20-SM8 channel outputs to 
+	 * possibly overrule FS20-SM8 */
 
-	// Kontrolle der Motor Ausgangssignale
+	// Pushbutton handling
+	ctrlPushButton();
+
+	// Motor relais output bit handling
 	ctrlMotorRelais();
 
-	// Kontrolle der SM8 Tastensteuerung
+	// FS20-SM8 key button handling
 	ctrlSM8Button();
 
-	// Regensensor abfragen
+	// Rain sensor handling 
 	ctrlRainSensor();
 
-	// Motor OFF Status aus IRQ senden
+	// Output motor OFF status (set within IRQ)
 	sendMotorOffStatus();
 
-	// Lebenszeichen (watchdog bedienen, debug output)
+	// Alive timer (watchdog trigger)
 	beAlive();
 
-	// LED Blinken, um anzuzeigen, dass die Hauptschleife läuft
+	// LED blinking
 	blinkLED();
 
-	// Serielles User-Interface bedienen
+	// Handle serial interface
 	processSerialCommand();
 
-	// Merkt sich die Betriebsstunden im EEPROM
-	operatonHours(false);
+	// Remember operation hours in EEPROM
+	operationHours(false);
 }

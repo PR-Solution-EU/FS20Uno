@@ -154,20 +154,20 @@ unsigned long sec(uint16_t *milli)
 {
 	unsigned long t;
 
-	/* max of millis() (unsigned long) ist 49 days 17:02:47.295 */
+	/* max of millis() (unsigned long) is 49 days 17:02:47.295 */
 	t = millis();
 
-	/* ms zurückliefern, falls Zeiger auf Variable vorhanden */
+	/* return ms, if return var pointer exists */
 	if ( milli != NULL ) {
 		*milli = (uint16_t)(t % 1000UL);
 	}
-	// t in Sek.
+	// t in sec
 	t /= 1000;
-	/* Benötigt jetzt nur noch 3 Byte:
+	/* Compressed the current uptime to 3 bytes:
 	 * 4294967295                  = 0xFFFFFFFF
 	 * 4294967295 / 1000 = 4294967 = 0x418937
-	 * So können wir die Tage aufmultiplizieren
-	 * Ein Überlauf findet nun erst in 134 Jahren statt */
+	 * Now we are able to add the days
+	 * Overflow of running time will be after ~134 years */
 	return t + ((unsigned long)millisOverflow * 4294967L);
 }
 
@@ -238,30 +238,18 @@ void SerialTimePrintfln(const __FlashStringHelper *fmt, ... )
 /* ===================================================================
  * Function:    sendStatus
  * Return:
- * Arguments:	str - Statusmeldung, die ausgegeben werden soll
- * Description: Statusmeldungen via RS232 senden, falls
- *              Statusmeldungen 'enabled'.
- *              Format: t type status
- *                t       Status Typ Nr
- *                        0: Systemmeldung
- *                        1: Motormeldungen
- *                        2: FS20 Ausgang Meldungen
- *                        3: FS20 Eingang Meldungen
- *                        4: Wandtaster Meldungen
- *                        5: Regensensor Meldungen
- *                type    Status Typ in Textform
- *                        0: SYSTEM
- *                        1: MOTOR 01..xx
- *                        2: FS20OUT 01..xx
- *                        3: FS20IN 01..xx
- *                        4: PUSHBUTTON 01..xx
- *                        5: RAIN
- *                status  0: FS20Uno version|START|RUNNING xx h
- *                        1: TIMEOUT xx|OPENING [DELAYED]|CLOSING [DELAYED]|OFF
- *                        2: ON|OFF
- *                        3: ON|OFF
- *                        4: ON|OFF
- *                        5: AUTO|MANUAL ENABLED|DISABLED DRY|WET
+ * Arguments:	send  if true, message will be send regardless
+ *                    if eeprom.SendStatus is false
+ *              type  statusType enum
+ *              fmt   variable format string like printf
+ * Description: Send status using serial interface
+ *              type    Status type text output
+ *                      0: SYSTEM
+ *                      1: MOTOR 01..xx
+ *                      2: FS20OUT 01..xx
+ *                      3: FS20IN 01..xx
+ *                      4: PUSHBUTTON 01..xx
+ *                      5: RAIN
  * ===================================================================*/
 void sendStatus(bool send, statusType type, const __FlashStringHelper *fmt, ... )
 {
@@ -297,10 +285,13 @@ void sendStatus(bool send, statusType type, const __FlashStringHelper *fmt, ... 
 }
 
 /* ===================================================================
- * Function:     sendMotorStatus
+ * Function:    sendMotorStatus
  * Return:
- * Arguments:
- * Description:  Motor OFF Status aus IRQ senden
+ * Arguments:	send   if true, message will be send regardless
+ *                     if eeprom.SendStatus is false
+ *              motor  motor number 0..x
+ * Description: Send motor OFF status for a given motor from
+ *              IRQ subroutine
  * ===================================================================*/
 void sendMotorStatus(bool send, int motor)
 {
@@ -324,7 +315,8 @@ void sendMotorStatus(bool send, int motor)
  * Function:     sendMotorOffStatus
  * Return:
  * Arguments:
- * Description:  Motor OFF Status aus IRQ senden
+ * Description:  Send motor OFF status for all motors from
+ *               IRQ subroutine
  * ===================================================================*/
 void sendMotorOffStatus(void)
 {
@@ -339,11 +331,11 @@ void sendMotorOffStatus(void)
 /* ===================================================================
  * Function:    setMotorPosition
  * Return:
- * Arguments:   motorNum    - Motornummer [0..x]
- *              destPercent - Zielposition [0..100]
- *                            wobei  0 = CLOSE
- *                            und  100 = OPEN
- * Description: Motor auf bestimmte Position schalten
+ * Arguments:   motorNum    - motor # [0..x]
+ *              destPercent - destinaton position in percent [0..100]
+ *                              0% means CLOSE
+ *                            100% means OPEN
+ * Description: Set motor to a defined percent position
  * ===================================================================*/
 void setMotorPosition(byte motorNum, byte destPercent)
 {
@@ -375,8 +367,11 @@ void setMotorPosition(byte motorNum, byte destPercent)
 /* ===================================================================
  * Function:    setMotorDirection
  * Return:
- * Arguments:
- * Description: Motor in neue Laufrichtung (oder AUS) schalten
+ * Arguments:   motorNum      motor # [0..x]
+ *              newDirection  MOTOR_OPEN
+ *                            MOTOR_CLOSE
+ *                            MOTOR_OFF
+ * Description: Set motor direction
  * ===================================================================*/
 void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 {
@@ -435,12 +430,12 @@ void setMotorDirection(byte motorNum, MOTOR_CTRL newDirection)
 
 /* ===================================================================
  * Function:    getMotorDirection
- * Return:		Laufrichtung
- *              MOTOR_OPEN, MOTOR_OPEN_DELAYED
- *              MOTOR_CLOSE, MOTOR_CLOSE_DELAYED
- *              MOTOR_OFF
- * Arguments:	motorNum - die Motorennummer [0..x]
- * Description: Motor Laufrichtung zurückgeben
+ * Return:		Motor direction:
+ *                MOTOR_OPEN,  MOTOR_OPEN_DELAYED
+ *                MOTOR_CLOSE, MOTOR_CLOSE_DELAYED
+ *                MOTOR_OFF
+ * Arguments:   motorNum      motor # [0..x]
+ * Description: Get motor direction
  * ===================================================================*/
 char getMotorDirection(byte motorNum)
 {
@@ -462,9 +457,9 @@ char getMotorDirection(byte motorNum)
 /* ===================================================================
  * Function:    setMotorType
  * Return:
- * Arguments:	motorNum - die Motorennummer [0..x]
- *              mType    - Motortyp: WINDOW, JALOUSIE
- * Description: Motortyp setzen
+ * Arguments:   motorNum   motor # [0..x]
+ *              mType      type (WINDOW, JALOUSIE)
+ * Description: Set motor type
  * ===================================================================*/
 void setMotorType(byte motorNum, mtype mType)
 {
@@ -477,11 +472,11 @@ void setMotorType(byte motorNum, mtype mType)
 }
 
 /* ===================================================================
- * Function:    setMotorType
- * Return:
- * Arguments:	motorNum - die Motorennummer [0..x]
- *              mType    - Motortyp: WINDOW, JALOUSIE
- * Description: Motortyp setzen
+ * Function:    getMotorType
+ * Return:      mtype      type (WINDOW, JALOUSIE)
+ * Arguments:   motorNum   motor # [0..x]
+ *              
+ * Description: Get motor type
  * ===================================================================*/
 mtype getMotorType(byte motorNum)
 {
