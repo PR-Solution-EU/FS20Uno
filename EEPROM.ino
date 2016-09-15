@@ -10,9 +10,10 @@
 /* ===================================================================
  * Function:	CalcCRC
  * Return:
- * Arguments:	addr - Startadresse des Bereichs
- * 				size - Größe des Bereichs in Byte
- * Description: Berechnet CRC32 Summe über alle RAM Daten
+ * Arguments:	type - type of memory to get data from
+ *              addr - start address
+ * 				size - size of the sum range
+ * Description: Calcluate a CRC32 sum from RAM/EEPROM range
  * ===================================================================*/
 // CRC table
 const PROGMEM unsigned long ccrc_table[16] = {
@@ -53,8 +54,8 @@ unsigned long CalcCRC(crcType type, byte *addr, size_t size)
  * Function:	eepromInitVars
  * Return:
  * Arguments:
- * Description: Initalisiere Standard Werte einiger Programmvariablen
- *              aus EEPROM-Daten
+ * Description: Initalize program settings from EEPROM
+ *              Set default values if EEPROM data are invalid
  * ===================================================================*/
 void eepromInitVars()
 {
@@ -63,15 +64,16 @@ void eepromInitVars()
 	unsigned long eepromCRC;
 
 	// Write data version into EEPROM before checking CRC32
+	// so if DATAVERSION is not equal stored value, EEPROM
+	// settings will become invalid in next step
 	byte dataversion = DATAVERSION;
 	EEPROM.put(EEPROM_ADDR_DATAVERSION, dataversion);
 
-	// Vergleiche kalkulierte CRC32 mit gespeicherter CRC32
+	// Compare calculated CRC32 with stored CRC32
 	dataCRC = CalcCRC(EEPROMCRC, (byte *)(EEPROM_ADDR_CRC32+4), EEPROM.length()-4);
 	EEPROM.get(EEPROM_ADDR_CRC32, eepromCRC);
 
 	#ifdef DEBUG_OUTPUT_EEPROM
-	//Print the result of calling eepromCRC()
 	SerialTimePrintfln(F("EEPROM - values CRC32: 0x%08lx"), dataCRC);
 	SerialTimePrintfln(F("EEPROM - stored CRC32: 0x%08lx"), eepromCRC);
 	#endif
@@ -98,7 +100,7 @@ void eepromInitVars()
 				sprintf_P((char *)eeprom.MotorName[i], PSTR("Jalousie %d"), jalousie);
 				jalousie++;
 			}
-			// Annahme: Fenster sind geschlossen, Jalousien offen
+			// assumtion: windows are closed, jalousie are opened
 			eeprom.MotorPosition[i] = getMotorType(i)==WINDOW ? 0 : (eeprom.MaxRuntime[i]/TIMER_MS);
 		}
 		bitSet(eeprom.Rain,   RAIN_BIT_AUTO);
@@ -160,7 +162,7 @@ void eepromInitVars()
  * Function:    eepromWriteVars()
  * Return:
  * Arguments:
- * Description: Schreibt ggf. geänderte EEPROM Daten ins EEPROM
+ * Description: Writes program settings into EEPROM (if changed)
  * ===================================================================*/
 void eepromWriteVars(void)
 {

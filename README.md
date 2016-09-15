@@ -1,5 +1,4 @@
 # FS20Uno
-Arduino Uno Dachflächenfenster/-Jalousie Steuerung für bis zu 4 Fenster (jeweils 2 Motoren)
-und FS20-Anbindung.
+Arduino Uno controller for electric rooflight window and shutter using pushbuttons and FS20-SM8 receiver.
 
-Eine detailierte Beschreibung in Deutsch findet sich im Wiki unter https://github.com/curzon01/FS20Uno/wiki.
+Detailed description under Wiki https://github.com/curzon01/FS20Uno/wiki.

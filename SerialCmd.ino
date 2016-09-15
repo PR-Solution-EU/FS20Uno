@@ -327,15 +327,6 @@ int printHelp(byte cmd, printCmdType type, const char *postfix)
 		case PRINT_PDESC:
 			p = pgm_read_word(&(sCmdTable[cmd][type]));
 			break;
-		//~ case PRINT_PARM:
-			//~ p = pgm_read_word(&(sParmTable[cmd]));
-			//~ break;
-		//~ case PRINT_DESC:
-			//~ p = pgm_read_word(&(sDescTable[cmd]));
-			//~ break;
-		//~ case PRINT_PDESC:
-			//~ p = pgm_read_word(&(sPDescTable[cmd]));
-			//~ break;
 	}
 	if ( p!=NULL ) {
 		unsigned char c;
@@ -472,7 +463,7 @@ void cmdUptime()
 		cli(); //halt the interrupts
 		timer0_millis =  (unsigned long)atol(arg);
 		sei(); //re-enable the interrupts
-		operatonHours(true);
+		operationHours(true);
 
 		arg = SCmd.next();
 		if (arg != NULL) {
@@ -922,8 +913,8 @@ void cmdFS20()
 }
 
 /* PUSHBUTTON [<b> [ON|OFF]]
- *   Wall pushbutton status
- *     <b>    Wall button number [1..IOBITS_CNT]
+ *   Pushbutton status
+ *     <b>    Pushbutton number [1..IOBITS_CNT]
  *     ON|OFF set <b> ON or OFF
  */
 void cmdPushButton()
@@ -934,7 +925,7 @@ void cmdPushButton()
 	arg = SCmd.next();
 	if (arg == NULL) {
 		for(button=0; button<IOBITS_CNT; button++) {
-			sendStatus(true,PUSHBUTTON, F("%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
+			sendStatus(true,PUSHBUTTON, F("%02d %S"), button+1, bitRead(curPushButton, button)?fstrON:fstrOFF);
 		}
 		cmdOK();
 	}
@@ -950,11 +941,11 @@ void cmdPushButton()
 			if (arg != NULL) {
 				// ON|OFF entered?
 				if      ( strnicmp_P(arg, fstrON,2)==0 ) {
-					bitSet(curWallButton, button);
+					bitSet(curPushButton, button);
 					cmdOK();
 				}
 				else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
-					bitClear(curWallButton, button);
+					bitClear(curPushButton, button);
 					cmdOK();
 				}
 				else {
@@ -962,7 +953,7 @@ void cmdPushButton()
 				}
 			}
 			else {
-				sendStatus(true,PUSHBUTTON, F("%02d %S"), button+1, bitRead(curWallButton, button)?fstrON:fstrOFF);
+				sendStatus(true,PUSHBUTTON, F("%02d %S"), button+1, bitRead(curPushButton, button)?fstrON:fstrOFF);
 				cmdOK();
 			}
 		}
@@ -1057,16 +1048,16 @@ void cmdRainSensorPrintStatus()
 	debInput.update();
 
 	if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
-		sensorEnabled = (debEnable.read() == RAIN_ENABLE_AKTIV);
+		sensorEnabled = (debEnable.read() == RAIN_ENABLE_ACTIVE);
 	}
 	else {
 		sensorEnabled = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
 	}
 
 	sendStatus(true,RAIN,F("%S MODE:%S IN:%S SET:%S RAIN:%SD FROM:%S POS:%S DELAY:%d")
-				,sensorEnabled && ((debInput.read()==RAIN_INPUT_AKTIV) || softRainInput) ? fstrWET : fstrDRY
+				,sensorEnabled && ((debInput.read()==RAIN_INPUT_ACTIVE) || softRainInput) ? fstrWET : fstrDRY
 				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? fstrAUTO : fstrMANUAL
-				,(debInput.read()==RAIN_INPUT_AKTIV) ? fstrWET : fstrDRY
+				,(debInput.read()==RAIN_INPUT_ACTIVE) ? fstrWET : fstrDRY
 				,softRainInput ? fstrWET : fstrDRY
 				,sensorEnabled ? fstrENABLE : fstrDISABLE
 				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? F("INPUT") : F("SET")
@@ -1228,8 +1219,13 @@ void cmdReboot(void)
 {
 	cmdOK();
 
-	sendStatus(true,SYSTEM,F("REBOOT (in %d s)"), (WATCHDOG_TIME/1000));
-	for(byte d=0; d<(FS20_SM8_IN_PROGRAMMODE/1000); d++) {
+	#if WATCHDOG_REBOOT_DELAY >= 1000
+		sendStatus(true,SYSTEM,F("REBOOT (in %d s)"), (WATCHDOG_REBOOT_DELAY/1000));
+	#else
+		sendStatus(true,SYSTEM,F("REBOOT now"));
+	#endif
+	Watchdog.enable(WATCHDOG_REBOOT_DELAY);
+	for(byte d=0; d<(WATCHDOG_REBOOT_DELAY/1000); d++) {
 		Serial.print(F("."));
 		delay(1000);
 	}
