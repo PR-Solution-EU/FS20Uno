@@ -142,7 +142,7 @@ void SerialCommand::readSerial()
 				}
 			}
 			if (matched==false) {
-				(*defaultHandler)();
+				(*defaultHandler)(token);
 				clearBuffer();
 			}
 
@@ -204,7 +204,7 @@ char SerialCommand::getTerm(void)
 
 // This sets up a handler to be called in the event that the receveived command string
 // isn't in the list of things with handlers.
-void SerialCommand::addDefaultHandler(void (*function)())
+void SerialCommand::addDefaultHandler(void (*function)(char*))
 {
 	defaultHandler = function;
 }

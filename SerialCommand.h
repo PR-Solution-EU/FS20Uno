@@ -88,7 +88,7 @@ class SerialCommand
 		void setEcho(unsigned char fEcho);
 		void setTerm(char cTerm);
 		char getTerm(void);
-		void addDefaultHandler(void (*function)());    // A handler to call when no valid command received.
+		void addDefaultHandler(void (*function)(char *));    // A handler to call when no valid command received.
 
 	private:
 		char inChar;          				// A character read from the serial stream
@@ -105,7 +105,7 @@ class SerialCommand
 		} SerialCommandCallback;            // Data structure to hold Command/Handler function key-value pairs
 		int numCommand;
 		SerialCommandCallback CommandList[MAXSERIALCOMMANDS];   // Actual definition for command/handler array
-		void (*defaultHandler)();           // Pointer to the default handler function
+		void (*defaultHandler)(char*);           // Pointer to the default handler function
 		int usingSoftwareSerial;            // Used as boolean to see if we're using SoftwareSerial object or not
 		#ifndef SERIALCOMMAND_HARDWAREONLY
 		SoftwareSerial *SoftSerial;         // Pointer to a user-created SoftwareSerial object

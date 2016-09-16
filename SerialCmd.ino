@@ -31,7 +31,7 @@ enum commands
  * ===================================================================*/
 const char fstrCR[]				PROGMEM = "CR";
 const char fstrLF[]				PROGMEM = "LF";
-const char fstrENABLE[] 		PROGMEM = "ENSABLE";
+const char fstrENABLE[] 		PROGMEM = "ENABLE";
 const char fstrDISABLE[]		PROGMEM = "DISABLE";
 const char fstrAUTO[] 			PROGMEM = "AUTO";
 const char fstrMANUAL[]			PROGMEM = "MANUAL";
@@ -70,7 +70,7 @@ const char sParmLED[]			PROGMEM = "[<len> [<count> [<normal> [<rain>]]]]";
 const char sParmMOTOR[]			PROGMEM = "[<m> [[T]OPEN|[T]CLOSE|TOOGLE|[GOTO ]<pos>|OFF|SYNC|STATUS]";
 const char sParmMOTORNAME[]		PROGMEM = "[<m> [<name>]";
 const char sParmMOTORTIME[]		PROGMEM = "[<m> [<sec> [<overtravel>]]";
-const char sParmMOTORTYPE[]		PROGMEM = "[<m> [<type>]";
+const char sParmMOTORTYPE[]		PROGMEM = "[<m> [WIN|JAL]";
 const char sParmFS20[]			PROGMEM = "[<ch> [ON|OFF|PRG]]";
 const char sParmPUSHBUTTON[]	PROGMEM = "[<b> [ON|OFF]]";
 const char sParmRAIN[]			PROGMEM = "[AUTO|ENABLE|DISABLE|WET|ON|DRY|OFF|RESUME [<delay>]|FORGET]";
@@ -104,7 +104,8 @@ const char sPDescINFO[]			PROGMEM = "";
 const char sPDescECHO[]			PROGMEM = "    ON|OFF  set local echo ON or OFF";
 const char sPDescTERM[]			PROGMEM = "    CR|LF   set terminator to CR or LF";
 const char sPDescSTATUS[]		PROGMEM = "    ON|OFF  set status messages ON or OFF";
-const char sPDescUPTIME[]		PROGMEM = "    <uptime>  set uptime (in ms since start)\r\n";
+const char sPDescUPTIME[]		PROGMEM = "    <uptime>  set uptime (in ms since start)\r\n"
+                                          "    <h>       set operation hours";
 const char sPDescLED[]			PROGMEM = "    <len>     pattern bit time in ms\r\n"
 								          "    <count>   pattern bit count [1.." TOSTRING(MAX_LEDPATTERN_BITS) "]\r\n"
 								          "    <normal>  normal blink pattern\r\n"
@@ -120,13 +121,13 @@ const char sPDescMOTOR[]		PROGMEM = "    <m>    motor number [1.." TOSTRING(MAX_
 								          "      OFF        stop motor\r\n"
 								          "      SYNC       set motor in a defined state\r\n"
 								          "      STATUS     get the current status";
-const char sPDescMOTORNAME[]	PROGMEM = "    <m>   motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
-								          "    <name motor name";
+const char sPDescMOTORNAME[]	PROGMEM = "    <m>     motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
+								          "    <name>  motor name";
 const char sPDescMOTORTIME[]	PROGMEM = "    <m>          motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
 								          "    <sec>        maximum runtime [s]\r\n"
 								          "    <overtravel> overtravel time [s]";
-const char sPDescMOTORTYPE[]	PROGMEM = "    <m>     motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
-								          "    <type>  WINDOW or JALOUSIE";
+const char sPDescMOTORTYPE[]	PROGMEM = "    <m>      motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
+								          "    WIN|JAL  motor type";
 const char sPDescFS20[]			PROGMEM = "    <ch>    FS20 channel number [1.." TOSTRING(IOBITS_CNT) "]\r\n"
 								          "    ON|OFF  set <ch> ON or OFF\r\n"
 								          "    PRG     set <ch> into programming mode";
@@ -259,9 +260,9 @@ void cmdErrorOutOfRange(const __FlashStringHelper *str)
 	Serial.println(F(" out of range"));
 }
 
-void unrecognized()
+void unrecognized(char *token)
 {
-	SerialPrintfln(F("Unknown command, try HELP"));
+	SerialPrintfln(F("ERROR: Unknown command '%s', try HELP"), token);
 }
 
 /* ===================================================================
@@ -1054,15 +1055,27 @@ void cmdRainSensorPrintStatus()
 		sensorEnabled = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
 	}
 
-	sendStatus(true,RAIN,F("%S MODE:%S IN:%S SET:%S RAIN:%SD FROM:%S POS:%S DELAY:%d")
+	// 5 RAIN DRY [<DRY>:DRY] ENABLED [<ON>|OFF] 
+	sendStatus(true,RAIN,F("%S [%s%S:%s%S] %SD [%s%S:%s%S] %S %S %s%d%s")
 				,sensorEnabled && ((debInput.read()==RAIN_INPUT_ACTIVE) || softRainInput) ? fstrWET : fstrDRY
-				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? fstrAUTO : fstrMANUAL
-				,(debInput.read()==RAIN_INPUT_ACTIVE) ? fstrWET : fstrDRY
-				,softRainInput ? fstrWET : fstrDRY
-				,sensorEnabled ? fstrENABLE : fstrDISABLE
-				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? F("INPUT") : F("SET")
-				,bitRead(eeprom.Rain, RAIN_BIT_RESUME) ? fstrRESUME : fstrFORGET
-				,eeprom.RainResumeTime
+				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? "*" : ""
+				,(debInput.read()==RAIN_INPUT_ACTIVE) ? fstrWET : fstrDRY			// IN
+				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? "" : "*"
+				,softRainInput ? fstrWET : fstrDRY									// SET
+
+				,sensorEnabled ? fstrENABLE : fstrDISABLE							// STATUS
+				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? "*" : ""
+				,(debEnable.read() == RAIN_ENABLE_ACTIVE) ? fstrON : fstrOFF		// IN
+				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? "" : "*"
+				,bitRead(eeprom.Rain, RAIN_BIT_ENABLE) ? fstrON : fstrOFF			// SET
+
+				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? fstrAUTO : fstrMANUAL		// MODE
+				
+				,bitRead(eeprom.Rain, RAIN_BIT_RESUME) ? fstrRESUME : fstrFORGET	// POS
+				
+				,bitRead(eeprom.Rain, RAIN_BIT_RESUME) ? "" : "("
+				,eeprom.RainResumeTime												// DELAY
+				,bitRead(eeprom.Rain, RAIN_BIT_RESUME) ? " s" : " s)"
 				);
 }
 

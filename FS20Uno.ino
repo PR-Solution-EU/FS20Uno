@@ -218,7 +218,7 @@
 #include "I2C.h"
 
 #define PROGRAM F("FS20Uno")	// program name
-#define VERSION F("3.41")		// program version
+#define VERSION F("3.42")		// program version
 #include "REVISION.h"			// Build (changed from git hook)
 #define DATAVERSION 125			// can be used to invalidate EEPROM data
 
@@ -249,7 +249,7 @@
 #undef DEBUG_RUNTIME			// 0.4 kB: enable runtime debugging
 #undef DEBUG_OUTPUT_SETUP		// 0.1 kB: enable setup related outputs
 #undef DEBUG_OUTPUT_WATCHDOG	// 0.2 kB: enable watchdog related outputs
-#define DEBUG_OUTPUT_EEPROM		// 2.0 kB: enable EEPROM related outputs
+#undef DEBUG_OUTPUT_EEPROM		// 2.0 kB: enable EEPROM related outputs
 #undef DEBUG_OUTPUT_CMD_RESTORE	// 0.1 kB: enable CMD RESTORE related outputs
 #undef DEBUG_OUTPUT_SM8STATUS	// 1.1 kB: enable FS20-SM8-output related output
 #undef DEBUG_OUTPUT_PUSHBUTTON	// 0.9 kB: enable pushbutton related output
@@ -348,9 +348,9 @@ volatile char debPushButton[IOBITS_CNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 /* Motor control values:
  *  0: Motor off
- * >0: Motor opening    1=immediately, >1=delay in ms before opening)
- * <0: Motor closeing  -1=immediately, <1=abs(delay) in ms before closing)
- *                        delay values are in ms/TIMER_MS
+ * >0: Motor opening   1=immediately, >1=delay in ms before opening)
+ * <0: Motor closing  -1=immediately, <1=abs(delay) in ms before closing)
+ *                       delay values are in ms/TIMER_MS
  */
 volatile MOTOR_CTRL  MotorCtrl[MAX_MOTORS]	= {MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF,MOTOR_OFF};
 // Bitmask for motors which are switch off during IRQ
@@ -371,7 +371,7 @@ volatile byte resumeMotorPosition[MAX_MOTORS] = {NO_RESUME_POSITION,NO_RESUME_PO
 /* Delay to count down before resumes window position after rain */
 volatile WORD resumeDelay = NO_RESUME_DELAY;
 
-/* Timer for auto learn function: Counts the time of pressed pushbutton */
+/* Timer for auto-learn function: Counts the time of pressed pushbutton */
 TIMER PushButtonTimer[MAX_MOTORS] = {0,0,0,0,0,0,0,0};
 
 /* SM8 key control "pushed"-time */
@@ -513,13 +513,13 @@ void setup()
 
 	// Input pins pulled-up
 	pinMode(RAIN_ENABLE, INPUT_PULLUP);
-	digitalWrite(RAIN_ENABLE, RAIN_ENABLE_ACTIVE==0?HIGH:LOW);
+	digitalWrite(RAIN_ENABLE, RAIN_ENABLE_ACTIVE==0 ? LOW:HIGH );
 	// After setting up the button, setup the Bounce instance
 	debEnable.attach(RAIN_ENABLE);
 	debEnable.interval(RAIN_DEBOUNCE_TIME); // interval in ms
 
 	pinMode(RAIN_INPUT, INPUT_PULLUP);
-	digitalWrite(RAIN_INPUT, RAIN_INPUT_ACTIVE==0?HIGH:LOW);
+	digitalWrite(RAIN_INPUT, RAIN_INPUT_ACTIVE==0 ? HIGH:LOW);
 	// After setting up the button, setup the Bounce instance
 	debInput.attach(RAIN_INPUT);
 	debInput.interval(RAIN_DEBOUNCE_TIME);
@@ -1516,9 +1516,6 @@ void ctrlRainSensor(void)
 	static bool prevRainInput;
 	static bool prevRainEnable;
 	static bool prevRainEnableInput;
-	#ifdef DEBUG_OUTPUT_RAIN
-	const char *strMode;
-	#endif
 
 	// Debounce inputs
 	debEnable.update();
@@ -1563,20 +1560,12 @@ void ctrlRainSensor(void)
 		firstRun = false;
 	}
 
-	#ifdef DEBUG_OUTPUT_RAIN
-	if ( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
-		strMode = "AUTO";
-	}
-	else {
-		strMode = "MANUAL";
-	}
-	#endif
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable ) {
 		#ifdef DEBUG_OUTPUT_RAIN
 		SerialTimePrintfln(F("%S----------------------------------------"), dbgCtrlRainSensor);
 		SerialTimePrintfln(F("%SdigitalRead(%d): %d"), dbgCtrlRainSensor, RAIN_INPUT, digitalRead(RAIN_INPUT));
 		SerialTimePrintfln(F("%SdigitalRead(%d): %d"), dbgCtrlRainSensor, RAIN_ENABLE, digitalRead(RAIN_ENABLE));
-		SerialTimePrintfln(F("%SRainMode:   %s"), dbgCtrlRainSensor, strMode);
+		SerialTimePrintfln(F("%SRainMode:   %s"), dbgCtrlRainSensor, bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? "AUTO" : "MANUAL" );
 		SerialTimePrintfln(F("%SRainEnable: %d"), dbgCtrlRainSensor, RainEnable);
 		SerialTimePrintfln(F("%SRainInput:  %d"), dbgCtrlRainSensor, RainInput);
 		#endif
