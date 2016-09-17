@@ -932,12 +932,10 @@ void cmdMotorTime()
 }
 void cmdMotorTimePrintStatus(int motor)
 {
-	sendStatus(true,MOTOR,F("%02d TIME %d.%03d %d.%03d (%s)")
+	sendStatus(true,MOTOR,F("%02d TIME %6ld %6ld (%s)")
 				,(int)(motor+1)
-				,(int)(eeprom.MaxRuntime[motor] / 1000)
-				,(int)(eeprom.MaxRuntime[motor] % 1000)
-				,(int)(eeprom.OvertravelTime[motor] / 1000)
-				,(int)(eeprom.OvertravelTime[motor] % 1000)
+				,eeprom.MaxRuntime[motor]
+				,eeprom.OvertravelTime[motor]
 				,(char *)eeprom.MotorName[motor]
 				);
 }
@@ -1317,8 +1315,7 @@ void cmdBackup(void)
 	if( cmdUnlocked ) {
 		byte m;
 
-		SerialPrintf(F("Binary data (%d byte):\r\n"), (int)sizeof(eeprom));
-
+		SerialPrintfln(F("Binary data (%d byte):"), (int)sizeof(eeprom));
 		for(size_t i=0; i<sizeof(eeprom)+4; i++) {
 			if ( (i % 16)==0 ) {
 				SerialPrintf(F("RESTORE %04x "), i);
@@ -1332,15 +1329,15 @@ void cmdBackup(void)
 		printCRLF();
 
 		// ECHO
-		SerialPrintf(F("ECHO %S\r\n"), eeprom.Echo?fstrON:fstrOFF);
+		SerialPrintfln(F("ECHO %S"), eeprom.Echo?fstrON:fstrOFF);
 		// TERM
-		SerialPrintf(F("TERM %S\r\n"), eeprom.Term=='\r'?fstrCR:fstrLF);
+		SerialPrintfln(F("TERM %S"), eeprom.Term=='\r'?fstrCR:fstrLF);
 		// STATUS
-		SerialPrintf(F("STATUS %S\r\n"), eeprom.SendStatus?fstrON:fstrOFF);
+		SerialPrintfln(F("STATUS %S"), eeprom.SendStatus?fstrON:fstrOFF);
 		// UPTIME
-		SerialPrintf(F("UPTIME %ld %ld\r\n"), millis(), eeprom.OperatingHours);
+		SerialPrintfln(F("UPTIME %ld %ld"), millis(), eeprom.OperatingHours);
 		// LED
-		SerialPrintf(F("LED %d %d 0x%08lx 0x%08lx")
+		SerialPrintfln(F("LED %d %d 0x%08lx 0x%08lx")
 						,eeprom.LEDBitLenght
 						,eeprom.LEDBitCount
 						,eeprom.LEDPatternNormal
@@ -1348,13 +1345,13 @@ void cmdBackup(void)
 						);
 
 		// RAIN
-		SerialPrintf(F("RAIN RESUME %d\r\n"), eeprom.RainResumeTime);
+		SerialPrintfln(F("RAIN RESUME %d"), eeprom.RainResumeTime);
 		if( !bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
-			SerialPrintf(F("RAIN FORGET\r\n"));
+			SerialPrintfln(F("RAIN FORGET"));
 		}
-		SerialPrintf(F("RAIN %S\r\n"), bitRead(eeprom.Rain, RAIN_BIT_ENABLE) ? fstrENABLE : fstrDISABLE);
+		SerialPrintfln(F("RAIN %S"), bitRead(eeprom.Rain, RAIN_BIT_ENABLE) ? fstrENABLE : fstrDISABLE);
 		if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
-			SerialPrintf(F("RAIN %S\r\n"), fstrAUTO);
+			SerialPrintfln(F("RAIN %S"), fstrAUTO);
 		}
 
 		// MOTORNAME
@@ -1363,26 +1360,24 @@ void cmdBackup(void)
 
 			strcpy(sName, eeprom.MotorName[m]);
 			strReplaceChar(sName, ' ', '_');
-			SerialPrintf(F("MOTORNAME %d %s\r\n"), m+1, sName);
+			SerialPrintfln(F("MOTORNAME %d %s"), m+1, sName);
 		}
 		// MOTORTYPE
 		for(m=0; m<MAX_MOTORS; m++) {
-			SerialPrintf(F("MOTORTYPE %d %S\r\n"), m+1, bitRead(MTYPE_BITMASK,m)!=0?F("WIN"):F("JAL"));
+			SerialPrintfln(F("MOTORTYPE %d %S"), m+1, bitRead(MTYPE_BITMASK,m)!=0?F("WIN"):F("JAL"));
 		}
 		// MOTORTIME
 		for(m=0; m<MAX_MOTORS; m++) {
-			SerialPrintf(F("MOTORTIME %d %d.%03d %d.%03d\r\n")
+			SerialPrintfln(F("MOTORTIME %d %ld %ld")
 				,m+1
-				,(int)(eeprom.MaxRuntime[m] / 1000)
-				,(int)(eeprom.MaxRuntime[m] % 1000)
-				,(int)(eeprom.OvertravelTime[m] / 1000)
-				,(int)(eeprom.OvertravelTime[m] % 1000)
+				,eeprom.MaxRuntime[m]
+				,eeprom.OvertravelTime[m]
 				);
 		}
 
 		// MOTOR POSITIONS
 		for(m=0; m<MAX_MOTORS; m++) {
-			SerialPrintf(F("MOTOR %d SYNC\r\n"), m+1);
+			SerialPrintfln(F("MOTOR %d SYNC"), m+1);
 		}
 
 		cmdOK();
