@@ -57,6 +57,11 @@
 // Alive timer period in ms
 #define ALIVE_TIMER					500
 
+// Defines analog inputs which are unused to init random generator
+#define RANDOM_SEED_ANALOG_READ1	0
+#define RANDOM_SEED_ANALOG_READ2	1
+#define RANDOM_SEED_ANALOG_READ3	2
+
 /* ===================================================================
  * Default values
  * ===================================================================*/
@@ -124,7 +129,6 @@ typedef unsigned long 	DWORD;
 typedef unsigned long	TIMER;
 
 
-
 // EEPROM data addresses
 #define EEPROM_ADDR_CRC32				0
 #define EEPROM_ADDR_DATAVERSION			(EEPROM_ADDR_CRC32				+sizeof(unsigned long) )
@@ -133,9 +137,11 @@ typedef unsigned long	TIMER;
 /* Rain dry window resume position delay */
 #define DEFAULT_RAINRESUMETIME		30
 
-#define DEFAULT_SendStatus		false
-#define DEFAULT_Echo				false
-#define DEFAULT_Term				'\r'
+#define DEFAULT_SENDSTATUS			false
+#define DEFAULT_ECHO				false
+#define DEFAULT_TERM				'\r'
+#define DEFAULT_LOGIN_TIMEOUT		60
+#define DEFAULT_PASSWORD			PSTR("31415")
 
 #if MAX_MOTORS<=4
 	#define IOBITS_ZERO		0x00
@@ -215,6 +221,8 @@ enum printCmdType
 	,PRINT_DESC
 	,PRINT_PDESC
 } PRINTCMDTYPE;
+
+enum CRYPT_MODE{ ENCRYPT, DECRYPT };
 
 
 // external millis() timer variable

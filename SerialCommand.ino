@@ -1,66 +1,43 @@
-/*******************************************************************************
-SerialCommand - An Arduino library to tokenize and parse commands received over
-a serial port.
-Copyright (C) 2011-2013 Steven Cogswell  <steven.cogswell@gmail.com>
-http://awtfy.com
-
-See SerialCommand.h for version history.
-
-This library is free software; you can redistribute it and/or
-modify it under the DEFAULT_TERMINATORs of the GNU Lesser General Public
-License as published by the Free Software Foundation; either
-version 2.1 of the License, or (at your option) any later version.
-
-This library is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public
-License along with this library; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
-***********************************************************************************/
+/***********************************************************************
+ * Fork of SerialCommand Arduino library
+ * from Steven Cogswell  <steven.cogswell@gmail.com>
+ * http://awtfy.com
+ * 
+ * This software is free software; you can redistribute it and/or
+ * modify it under the DEFAULT_TERMINATORs of the 
+ * GNU Lesser General Public License as published by the
+ * Free Software Foundation; either version 2.1 of the License, or
+ * (at your option) any later version.
+ * 
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, 
+ * MA 02110-1301 USA
+ **********************************************************************/
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
 #else
 #include "WProgram.h"
 #endif
-
 #include "SerialCommand.h"
-
-
-#include <string.h>
-#ifndef SERIALCOMMAND_HARDWAREONLY
-#include <SoftwareSerial.h>
-#endif
 
 
 // Constructor makes sure some things are set.
 SerialCommand::SerialCommand()
 {
 	usingSoftwareSerial=0;
-	strncpy_P(delim, PSTR(" "), sizeof(delim)-1);  // strtok_r needs a null-DEFAULT_TERMINATORinated string
+	strncpy_P(delim, PSTR(" "), sizeof(delim)-1);  // strtok_r needs a null-terminatedinated string
 	term=DEFAULT_TERMINATOR;   // return character, default DEFAULT_TERMINATORinator for commands
 	isEcho=DEFAULT_ECHO;	// echo flag
 	numCommand=0;    		// Number of callback handlers installed
 	clearBuffer();
 }
-
-#ifndef SERIALCOMMAND_HARDWAREONLY
-// Constructor to use a SoftwareSerial object
-SerialCommand::SerialCommand(SoftwareSerial &_SoftSer)
-{
-	usingSoftwareSerial=1;
-	SoftSerial = &_SoftSer;
-	strncpy_P(delim, PSTR(" "), sizeof(delim)-1);  // strtok_r needs a null-DEFAULT_TERMINATORinated string
-	term=DEFAULT_TERMINATOR;   // return character, default DEFAULT_TERMINATORinator for commands
-	isEcho=DEFAULT_ECHO;	// echo flag
-	numCommand=0;    // Number of callback handlers installed
-	clearBuffer();
-}
-#endif
-
 
 //
 // Initialize the command buffer being processed to all null characters
@@ -86,22 +63,13 @@ char *SerialCommand::next()
 void SerialCommand::readSerial()
 {
 	// If we're using the Hardware port, check it.   Otherwise check the user-created SoftwareSerial Port
-	#ifdef SERIALCOMMAND_HARDWAREONLY
 	while (Serial.available() > 0)
-	#else
-	while ((usingSoftwareSerial==0 && Serial.available() > 0) || (usingSoftwareSerial==1 && SoftSerial->available() > 0) )
-	#endif
 	{
 		int i;
 		boolean matched;
 		if (usingSoftwareSerial==0) {
 			// Hardware serial port
 			inChar=Serial.read();   // Read single available character, there may be more waiting
-		} else {
-			#ifndef SERIALCOMMAND_HARDWAREONLY
-			// SoftwareSerial port
-			inChar = SoftSerial->read();   // Read single available character, there may be more waiting
-			#endif
 		}
 		if ( isEcho ) {
 			// Echo back to serial stream
@@ -109,30 +77,24 @@ void SerialCommand::readSerial()
 		}
 		if (inChar==term) {     // Check for the DEFAULT_TERMINATORinator (default '\r') meaning end of command
 			if ( isEcho ) {
-				Serial.println();   // Echo back to serial stream
+				printCRLF();   // Echo back to serial stream
 			}
-			#ifdef SERIALCOMMANDDEBUG
-			Serial.print(F("Received: "));
-			Serial.println(buffer);
+			#ifdef DEBUG_SERIALCMD
+			SerialPrintfln(F("Received: %s"));
 		    #endif
 			bufPos=0;           // Reset to start of buffer
 			token = strtok_r(buffer,delim,&last);   // Search for command at start of buffer
 			if (token == NULL) return;
 			matched=false;
 			for (i=0; i<numCommand; i++) {
-				#ifdef SERIALCOMMANDDEBUG
-				Serial.print(F("Comparing ["));
-				Serial.print(token);
-				Serial.print(F("] to ["));
-				Serial.print(CommandList[i].command);
-				Serial.println(F("]"));
+				#ifdef DEBUG_SERIALCMD
+				SerialPrintfln(F("Comparing '%s' to '%s'"), token, CommandList[i].command);
 				#endif
 				// Compare the found command against the list of known commands for a match
 				if (strncasecmp(token,CommandList[i].command,MAXSERIALCOMMANDLEN) == 0)
 				{
-					#ifdef SERIALCOMMANDDEBUG
-					Serial.print(F("Matched Command: "));
-					Serial.println(token);
+					#ifdef DEBUG_SERIALCMD
+					SerialPrintfln(F("Matched Command '%s'"), token);
 					#endif
 					// Execute the stored handler function for the command
 					(*CommandList[i].function)();
@@ -164,11 +126,9 @@ void SerialCommand::readSerial()
 void SerialCommand::addCommand(const char *command, void (*function)())
 {
 	if (numCommand < MAXSERIALCOMMANDS) {
-		#ifdef SERIALCOMMANDDEBUG
-		Serial.print(numCommand);
-		Serial.print(F("-"));
-		Serial.print(F("Adding command for "));
-		Serial.println(command);
+		#ifdef DEBUG_SERIALCMD
+		SerialPrintfln(F("%d-Adding command for %s"), numCommand, command);
+
 		#endif
 
 		strncpy_P(CommandList[numCommand].command, command, MAXSERIALCOMMANDLEN);
@@ -178,8 +138,8 @@ void SerialCommand::addCommand(const char *command, void (*function)())
 		// In this case, you tried to push more commands into the buffer than it is compiled to hold.
 		// Not much we can do since there is no real visible error assertion, we just ignore adding
 		// the command
-		#ifdef SERIALCOMMANDDEBUG
-		Serial.println(F("Too many handlers - recompile changing MAXSERIALCOMMANDS"));
+		#ifdef DEBUG_SERIALCMD
+		SerialPrintfln(F("Too many handlers - recompile changing MAXSERIALCOMMANDS"));
 		#endif
 	}
 }

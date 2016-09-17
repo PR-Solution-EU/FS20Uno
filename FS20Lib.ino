@@ -44,7 +44,7 @@ void printProgramInfo(bool copyright)
 	SerialPrintfln(F("compiled on %s %s (GnuC%S %s)"), __DATE__, __TIME__, __GNUG__?F("++ "):F(" "), __VERSION__);
 	SerialPrintfln(F("using avr library %s (%s)"),  __AVR_LIBC_VERSION_STRING__, __AVR_LIBC_DATE_STRING__);
 	if( copyright ) {
-		SerialPrintfln(F("(c) 2016 www.p-r-solution.de - Norbert Richter <n.richter@p-r-solution.de>"));
+		SerialPrintfln(F("(c) 2016 www.p-r-solution.de - Norbert Richter <norbert.richter@p-r-solution.de>"));
 	}
 }
 
@@ -58,7 +58,7 @@ void printProgramInfo(bool copyright)
 void watchdogInit(void)
 {
 	#ifdef WATCHDOG_ENABLED
-	#ifndef DEBUG_OUTPUT_WATCHDOG
+	#ifndef DEBUG_WATCHDOG
 	Watchdog.enable(WATCHDOG_TIME);
 	#else
 	int countdownMS = Watchdog.enable(WATCHDOG_TIME);
@@ -79,6 +79,48 @@ void watchdogReset(void)
 	#ifdef WATCHDOG_ENABLED
 	Watchdog.reset();
 	#endif
+}
+
+/* ===================================================================
+ * Function:    cmdGetString
+ * Return:		number of character read
+ * Arguments:	buf       pointer to the char buffer to store the chars
+ *              buflen    max number of chars to read
+ *              term      terminate character
+ *              echo      true: echos input char
+ *              hideEcho  true: display an asterisk instead of input char
+ * Description: Reads an input string from serial interface until
+ *              a terminate character is read
+ * ===================================================================*/
+size_t SerialGetString(char *buf, size_t buflen, char term, bool echo, bool hideEcho)
+{
+	char inChar;
+	char *ptr = buf;
+
+	while ( true ) {
+		watchdogReset();
+
+		while (Serial.available() > 0) {
+			inChar=Serial.read();   // Read single available character, there may be more waiting
+
+			if ( echo ) {
+				if( hideEcho ) {
+					Serial.print(F("*"));
+				}
+				else {
+					Serial.print(inChar);
+				}
+			}
+			if ( inChar==term ) {
+				return (ptr - buf);
+			}
+			else {
+				if ( (size_t)(ptr - buf) < buflen ) {
+					*ptr++ = inChar;
+				}
+			}
+		}
+	}
 }
 
 /* ===================================================================
@@ -339,13 +381,13 @@ void sendMotorOffStatus(void)
  * ===================================================================*/
 void setMotorPosition(byte motorNum, byte destPercent)
 {
-	#ifdef DEBUG_OUTPUT_MOTOR
+	#ifdef DEBUG_MOTOR
 	SerialTimePrintfln(F("setMotorPosition- Motor %d current pos=%d, destPercent=%d%%"), motorNum+1, MotorPosition[motorNum], destPercent);
 	#endif
 	if ( destPercent>0 && destPercent<100 ) {
 		destMotorPosition[motorNum] = (MOTOR_TIMER)((long)(eeprom.MaxRuntime[motorNum] / TIMER_MS) * (long)destPercent / 100L);
 
-		#ifdef DEBUG_OUTPUT_MOTOR
+		#ifdef DEBUG_MOTOR
 		SerialTimePrintfln(F("setMotorPosition- Motor %d current pos=%d, destMotorPosition=%d"), motorNum+1, MotorPosition[motorNum], destMotorPosition[motorNum]);
 		#endif
 

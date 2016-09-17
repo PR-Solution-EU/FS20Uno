@@ -200,9 +200,6 @@
  *     rain has gone.
  * ===================================================================*/
 
-/* ===================================================================
- * ===================================================================*/
-
 #include <Arduino.h>
 #include <errno.h>
 #include <EEPROM.h>				// https://www.arduino.cc/en/Reference/EEPROM
@@ -210,17 +207,17 @@
 #include <MsTimer2.h>			// http://playground.arduino.cc/Main/MsTimer2
 #include <Bounce2.h>			// https://github.com/thomasfredericks/Bounce2
 #include <Adafruit_SleepyDog.h> // https://github.com/adafruit/Adafruit_SleepyDog
-//#include <PrintEx.h>			// https://github.com/Chris--A/PrintEx#printex-library-for-arduino-
 
 // Eigene includes
 #include "SerialCommand.h"		// https://github.com/scogswell/ArduinoSerialCommand
+#include "Xtea.h"
 #include "FS20Uno.h"
 #include "I2C.h"
 
 #define PROGRAM F("FS20Uno")	// program name
-#define VERSION F("3.42")		// program version
+#define VERSION F("4.01")		// program version
 #include "REVISION.h"			// Build (changed from git hook)
-#define DATAVERSION 125			// can be used to invalidate EEPROM data
+#define DATAVERSION 126			// can be used to invalidate EEPROM data
 
 
 #define WATCHDOG_ENABLED		// #undef to disable watchdog function
@@ -236,44 +233,44 @@
  */
 //#define TEST_MILLIS_TIMER	30000L	// start with 30 sec before overflow
 
-/* Global debug switch.
- * #undef to disable debugging at all regardless other settings below */
-#undef DEBUG_OUTPUT
-
-/* Fine tune debug outputs with next defines:
+/* Debug outputs:
  * You can not use all debug outputs together because default program
  * size is to big. Use the debug code size value to estimate which
  * debug may be enabled together.
  * Note: Debugging disables all the build-in online help */
-#undef DEBUG_PINS				// 0,2 kB: enable debug output pins
-#undef DEBUG_RUNTIME			// 0.4 kB: enable runtime debugging
-#undef DEBUG_OUTPUT_SETUP		// 0.1 kB: enable setup related outputs
-#undef DEBUG_OUTPUT_WATCHDOG	// 0.2 kB: enable watchdog related outputs
-#undef DEBUG_OUTPUT_EEPROM		// 2.0 kB: enable EEPROM related outputs
-#undef DEBUG_OUTPUT_CMD_RESTORE	// 0.1 kB: enable CMD RESTORE related outputs
-#undef DEBUG_OUTPUT_SM8STATUS	// 1.1 kB: enable FS20-SM8-output related output
-#undef DEBUG_OUTPUT_PUSHBUTTON	// 0.9 kB: enable pushbutton related output
-#undef DEBUG_OUTPUT_SM8OUTPUT	// 0.5 kB: enable FS20-SM8-key related output
-#undef DEBUG_OUTPUT_MOTOR		// 1.7 kB: enable motor control related output
-#undef DEBUG_OUTPUT_MOTOR_DETAILS// 0.5 kB: enable motor control details output
-#undef DEBUG_OUTPUT_RAIN		// 1.0 kB: enable rain sensor related output
-#undef DEBUG_OUTPUT_ALIVE		// 0.1 kB: enable program alive signal output
+#undef DEBUG_PINS			// 0,2 kB: enable debug output pins
+#undef DEBUG_RUNTIME		// 0.4 kB: enable runtime debugging
+#undef DEBUG_SETUP			// 0.1 kB: enable setup related outputs
+#undef DEBUG_WATCHDOG		// 0.2 kB: enable watchdog related outputs
+#undef DEBUG_EEPROM			// 2.0 kB: enable EEPROM related outputs
+#undef DEBUG_SERIALCMD		// 0.3 kB: enable Serial cmd interface related outputs
+#undef DEBUG_PASSWD		// 0.5 kB: enable password related outputs
+#undef DEBUG_CMD_RESTORE	// 0.1 kB: enable CMD RESTORE related outputs
+#undef DEBUG_SM8STATUS		// 1.1 kB: enable FS20-SM8-output related output
+#undef DEBUG_PUSHBUTTON		// 0.9 kB: enable pushbutton related output
+#undef DEBUG_SM8OUTPUT		// 0.5 kB: enable FS20-SM8-key related output
+#undef DEBUG_MOTOR			// 1.7 kB: enable motor control related output
+#undef DEBUG_MOTOR_DETAILS	// 0.5 kB: enable motor control details output
+#undef DEBUG_RAIN			// 1.0 kB: enable rain sensor related output
+#undef DEBUG_ALIVE			// 0.1 kB: enable program alive signal output
 
-#ifndef DEBUG_OUTPUT
-	#undef DEBUG_PINS
-	#undef DEBUG_RUNTIME
-	#undef DEBUG_OUTPUT_SETUP
-	#undef DEBUG_OUTPUT_WATCHDOG
-	#undef DEBUG_OUTPUT_EEPROM
-	#undef DEBUG_OUTPUT_CMD_RESTORE
-	#undef DEBUG_OUTPUT_SM8STATUS
-	#undef DEBUG_OUTPUT_PUSHBUTTON
-	#undef DEBUG_OUTPUT_SM8OUTPUT
-	#undef DEBUG_OUTPUT_MOTOR
-	#undef DEBUG_OUTPUT_MOTOR_DETAILS
-	#undef DEBUG_OUTPUT_RAIN
-	#undef DEBUG_OUTPUT_ALIVE
-	#define WATCHDOG_ENABLED
+#if defined(DEBUG_PINS) || \
+	defined(DEBUG_RUNTIME) || \
+	defined(DEBUG_SETUP) || \
+	defined(DEBUG_WATCHDOG) || \
+	defined(DEBUG_EEPROM) || \
+	defined(DEBUG_SERIALCMD) || \
+	defined(DEBUG_PASSWD) || \
+	defined(DEBUG_CMD_RESTORE) || \
+	defined(DEBUG_SM8STATUS) || \
+	defined(DEBUG_PUSHBUTTON) || \
+	defined(DEBUG_SM8OUTPUT) || \
+	defined(DEBUG_MOTOR) || \
+	defined(DEBUG_MOTOR_DETAILS) || \
+	defined(DEBUG_RAIN) || \
+	defined(DEBUG_ALIVE) 
+	#define DEBUG_OUTPUT
+	#undef WATCHDOG_ENABLED
 #endif
 
 #ifdef DEBUG_PINS
@@ -308,11 +305,19 @@ volatile bool extISREnabled   = false;
 volatile bool timerISREnabled = false;
 volatile bool isrTrigger      = false;
 
-// loop() timer vars
+// timer vars
 TIMER ledTimer;
 LEDPATTERN currentLEDPattern;
 byte     currentLEDBitCount;
-TIMER runTimer;
+TIMER 	runTimer;
+#if (1000/TIMER_MS)<=UINT8_MAX
+byte	secTimerCount;
+#elif (1000/TIMER_MS)<=UINT16_MAX
+WORD	secTimerCount;
+#else
+DWORD	secTimerCount;
+#endif
+
 
 
 // MPC output data
@@ -396,8 +401,8 @@ struct EEPROM {
 	 * right-sifted <LEDBitCount> times with a delay of <LEDBitLenght>
 	 * between each bit.
 	 * Default pattern: 0010.0000  0000.1000  0000.0010  0000.0000
-	 * using 30 bits and 100 ms delay each bit
-	 */
+	 * using 30 bits and 100 ms delay each bit */
+
 	// LED normal pattern
 	LEDPATTERN 	LEDPatternNormal;
 	// LED rain pattern
@@ -434,8 +439,16 @@ struct EEPROM {
 	bool 		SendStatus;
 	// Opration timer
 	DWORD		OperatingHours;
+	// Login auto timeout (0=function disabled)
+	WORD		LoginTimeout;
+	// Password
+	DWORD		EncryptKey[4];
+	char		Password[17];
 } eeprom;
 
+// Command interface unlocked flag
+bool cmdUnlocked;
+WORD cmdLoginTimeout;
 
 /* Strings in PROGMEM */
 const char fstrON[]			PROGMEM = "ON";
@@ -617,14 +630,46 @@ void setup()
 	extISREnabled   = true;
 	timerISREnabled = true;
 
+	// Init random generator
+	long r = millis();
+	#ifdef DEBUG_SETUP
+	SerialTimePrintfln(F("setup - r=%ld"), r);
+	#endif
+	int an = 0;
+	#ifdef RANDOM_SEED_ANALOG_READ1
+	an = analogRead(RANDOM_SEED_ANALOG_READ1);
+	r *= an;
+	#ifdef DEBUG_SETUP
+	SerialTimePrintfln(F("setup - AN1: %d"), an);
+	#endif
+	#endif
+	#ifdef RANDOM_SEED_ANALOG_READ2
+	an = analogRead(RANDOM_SEED_ANALOG_READ2);
+	r *= an;
+	#ifdef DEBUG_SETUP
+	SerialTimePrintfln(F("setup - AN2: %d"), an);
+	#endif
+	#endif
+	#ifdef RANDOM_SEED_ANALOG_READ3
+	an = analogRead(RANDOM_SEED_ANALOG_READ3);
+	r *= an;
+	#ifdef DEBUG_SETUP
+	SerialTimePrintfln(F("setup - AN3: %d"), an);
+	#endif
+	#endif
+	#ifdef DEBUG_SETUP
+	SerialTimePrintfln(F("setup - randomSeed(%ld)"), r);
+	#endif
+	randomSeed(r);
+
 	prevMillis = millis();
 
 	// Finished
 	digitalWrite(STATUS_LED, LOW);
 
-#ifdef DEBUG_OUTPUT_SETUP
+	#ifdef DEBUG_SETUP
 	SerialTimePrintfln(F("setup - Setup done, starting main loop()"));
-#endif
+	#endif
 	DEBUG_RUNTIME_END("setup()",msSetup);
 
 	// Manual settings of single EEPROM vars
@@ -632,6 +677,7 @@ void setup()
 	//~ eepromWriteVars();
 
 	sendStatus(false,SYSTEM, F("START"));
+	
 }
 
 /* ===================================================================
@@ -654,8 +700,13 @@ void initVars()
 	ledTimer = millis() + eeprom.LEDBitLenght;
 
 	runTimer = millis() + ALIVE_TIMER;
+	
+	secTimerCount = 0;
 
 	sendStatusMOTOR_OFF = 0;
+	
+	cmdUnlocked = false;
+	cmdLoginTimeout = 0;
 }
 
 
@@ -814,6 +865,20 @@ void timerISR()
 				}
 			}
 		}
+		
+		// Timer in sec steps
+		if ( ++secTimerCount>=(1000/TIMER_MS) ) {
+			// executed every second
+			
+			if ( cmdLoginTimeout>0 ) {
+				cmdLoginTimeout--;
+				if ( cmdLoginTimeout == 0 ) {
+					cmdUnlocked = false;
+				}
+			}
+			// Reset second counter
+			secTimerCount = 0;
+		}
 		#ifdef DEBUG_PINS
 		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	
 		#endif
@@ -862,12 +927,12 @@ void handleMPCInt()
 			digitalWrite(DBG_MPC, HIGH);	
 			#endif
 			irqPushButton = expanderReadWord(MPC_PUSHBUTTON, GPIO);
-			#ifdef DEBUG_OUTPUT_PUSHBUTTON
+			#ifdef DEBUG_PUSHBUTTON
 			SerialTimePrintfln(F("handleMPCInt    - IRQ - irqPushButton: 0x%04x"), irqPushButton);
 			#endif
 			for (i = 0; i < IOBITS_CNT; i++) {
 				if ( bitRead(tmpPushButton,i) != bitRead(irqPushButton,i) ) {
-					#ifdef DEBUG_OUTPUT_PUSHBUTTON
+					#ifdef DEBUG_PUSHBUTTON
 					SerialTimePrintfln(F("handleMPCInt    - IRQ - debounce key %d"), i);
 					#endif
 					debPushButton[i] = WPB_DEBOUNCE_TIME / TIMER_MS;
@@ -888,7 +953,7 @@ void handleMPCInt()
 
 
 
-#if defined(DEBUG_OUTPUT_MOTOR) || defined(DEBUG_OUTPUT_MOTOR_DETAILS)
+#if defined(DEBUG_MOTOR) || defined(DEBUG_MOTOR_DETAILS)
 void debugPrintMotorStatus(bool from)
 {
 	static MOTOR_CTRL prevMotorCtrl[MAX_MOTORS] = {MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF, MOTOR_OFF};
@@ -967,7 +1032,7 @@ void ctrlSM8Status(void)
 	static IOBITS prevSM8Status = IOBITS_ZERO;
 
 	if ( (tmpSM8Status != curSM8Status) ) {
-		#ifdef DEBUG_OUTPUT_SM8STATUS
+		#ifdef DEBUG_SM8STATUS
 		SerialTimePrintfln(F("ctrlSM8Status   - ----------------------------------------"));
 		SerialTimePrintfln(F("ctrlSM8Status   - SM8 Input Status changed"));
 		#endif
@@ -997,7 +1062,7 @@ void ctrlSM8Status(void)
 			SM8StatusSlope   = ~prevSM8Status & SM8Status;
 			SM8StatusChange  =  prevSM8Status ^ SM8Status;
 
-			#ifdef DEBUG_OUTPUT_SM8STATUS
+			#ifdef DEBUG_SM8STATUS
 			SerialTimePrintfln(F("ctrlSM8Status   - prevSM8Status:   0x%04x"), prevSM8Status);
 			SerialTimePrintfln(F("ctrlSM8Status   - SM8Status:       0x%04x"), SM8Status);
 			SerialTimePrintfln(F("ctrlSM8Status   - SM8StatusSlope:  0x%04x"), SM8StatusSlope);
@@ -1008,7 +1073,7 @@ void ctrlSM8Status(void)
 			SM8StatusChange &= ~SM8StatusIgnore;
 			SM8StatusIgnore = 0;
 
-			#ifdef DEBUG_OUTPUT_SM8STATUS
+			#ifdef DEBUG_SM8STATUS
 			SerialTimePrintfln(F("ctrlSM8Status   - SM8StatusChange: 0x%04x"), SM8StatusChange);
 			#endif
 
@@ -1021,18 +1086,18 @@ void ctrlSM8Status(void)
 			for (i = 0; i < MAX_MOTORS; i++) {
 				// Motor opening
 				if ( bitRead(SM8StatusChange, i) != 0 && bitRead(SM8StatusChange, i + MAX_MOTORS) == 0 ) {
-					#ifdef DEBUG_OUTPUT_SM8STATUS
+					#ifdef DEBUG_SM8STATUS
 					SerialTimePrintfln(F("ctrlSM8Status   - Motor %i should be opened"), i);
 					#endif
 					if ( bitRead(SM8StatusSlope, i) != 0 ) {
-						#ifdef DEBUG_OUTPUT_SM8STATUS
+						#ifdef DEBUG_SM8STATUS
 						SerialTimePrintfln(F("ctrlSM8Status   - Motor %i set to OPEN"), i);
 						#endif
 						// Slope from 0 to 1 means: Motor on
 						setMotorDirection(i, MOTOR_OPEN);
 						// FS20-SM8 key for "Close" active?
 						if ( bitRead(SM8Status, i + MAX_MOTORS) != 0 ) {
-							#ifdef DEBUG_OUTPUT_SM8STATUS
+							#ifdef DEBUG_SM8STATUS
 							SerialTimePrintfln(F("ctrlSM8Status   - Reset FS20 'close' key %i"), i + MAX_MOTORS);
 							#endif
 							// Clear FS20-SM8 key for "Close"
@@ -1042,7 +1107,7 @@ void ctrlSM8Status(void)
 					}
 					else {
 						// Slope from 1 to 0 means: Motor off
-						#ifdef DEBUG_OUTPUT_SM8STATUS
+						#ifdef DEBUG_SM8STATUS
 						SerialTimePrintfln(F("ctrlSM8Status   - Open 0>1 Slope - Motor %i off"), i);
 						#endif
 						setMotorDirection(i, MOTOR_OFF);
@@ -1050,18 +1115,18 @@ void ctrlSM8Status(void)
 				}
 				// Motor closing
 				else if ( bitRead(SM8StatusChange, i) == 0 && bitRead(SM8StatusChange, i + MAX_MOTORS) != 0 ) {
-					#ifdef DEBUG_OUTPUT_SM8STATUS
+					#ifdef DEBUG_SM8STATUS
 					SerialTimePrintfln(F("ctrlSM8Status   - Motor %i should be closed"), i);
 					#endif
 					if ( bitRead(SM8StatusSlope, i + MAX_MOTORS) != 0 ) {
-						#ifdef DEBUG_OUTPUT_SM8STATUS
+						#ifdef DEBUG_SM8STATUS
 						SerialTimePrintfln(F("ctrlSM8Status   - Motor %i set to CLOSE"), i);
 						#endif
 						// Slope from 0 to 1 means: Motor on
 						setMotorDirection(i, MOTOR_CLOSE);
 						// FS20-SM8 key for "Open" active?
 						if ( bitRead(SM8Status, i) != 0 ) {
-							#ifdef DEBUG_OUTPUT_SM8STATUS
+							#ifdef DEBUG_SM8STATUS
 							SerialTimePrintfln(F("ctrlSM8Status   - Reset FS20 'open' key %i"), i);
 							#endif
 							// Clear FS20-SM8 key for "Close"
@@ -1071,7 +1136,7 @@ void ctrlSM8Status(void)
 					}
 					else {
 						// Slope from 1 to 0 means: Motor off
-						#ifdef DEBUG_OUTPUT_SM8STATUS
+						#ifdef DEBUG_SM8STATUS
 						SerialTimePrintfln(F("ctrlSM8Status   - Close 0>1 Slope - Motor %i off"), i);
 						#endif
 						setMotorDirection(i, MOTOR_OFF);;
@@ -1079,7 +1144,7 @@ void ctrlSM8Status(void)
 				}
 				// Ignored (illegal state)
 				else if ( bitRead(SM8StatusChange, i) != 0 && bitRead(SM8StatusChange, i + MAX_MOTORS) != 0 ) {
-					#ifdef DEBUG_OUTPUT_SM8STATUS
+					#ifdef DEBUG_SM8STATUS
 					SerialTimePrintfln(F("ctrlSM8Status   - Invalid 0>1 Slope, reset key %i and %i"), i, i+MAX_MOTORS);
 					#endif
 					// Clear both FS20-SM8 key for "Open" and "Close"
@@ -1094,7 +1159,7 @@ void ctrlSM8Status(void)
 			prevSM8Status = curSM8Status;
 		}
 
-		#ifdef DEBUG_OUTPUT_MOTOR
+		#ifdef DEBUG_MOTOR
 		debugPrintMotorStatus(false);
 		#endif
 
@@ -1129,7 +1194,7 @@ void ctrlPushButton(void)
 			 - Level for "Open" and "Close" button are together 0:
 				- Unlock button pair
 		*/
-		#ifdef DEBUG_OUTPUT_PUSHBUTTON
+		#ifdef DEBUG_PUSHBUTTON
 		SerialTimePrintfln(F("ctrlPushButton  - tmpPushButton: 0x%04x"), tmpPushButton);
 		SerialTimePrintfln(F("ctrlPushButton  - curPushButton: 0x%04x"), curPushButton);
 		#endif
@@ -1159,11 +1224,11 @@ void ctrlPushButton(void)
 							maxTime /= TIMER_MS;
 							maxTime *= TIMER_MS;
 						}
-						#ifdef DEBUG_OUTPUT_PUSHBUTTON
+						#ifdef DEBUG_PUSHBUTTON
 						SerialTimePrintfln(F("ctrlPushButton  - motor %d: delta_t=%ld ms"), i % MAX_MOTORS, dt);
 						#endif
 						if( maxTime > 10000 ) {
-							#ifdef DEBUG_OUTPUT_PUSHBUTTON
+							#ifdef DEBUG_PUSHBUTTON
 							SerialTimePrintfln(F("ctrlPushButton  - Setting new timeout for motor %d: %ld ms"), i % MAX_MOTORS, maxTime);
 							#endif
 							sendStatus(false,MOTOR, F("%02d TIMEOUT %ld"), (i % MAX_MOTORS)+1, maxTime);
@@ -1190,7 +1255,7 @@ void ctrlPushButton(void)
 				watchdogReset();
 			}
 
-			#ifdef DEBUG_OUTPUT_PUSHBUTTON
+			#ifdef DEBUG_PUSHBUTTON
 			SerialTimePrintfln(F("ctrlPushButton  - ----------------------------------------"));
 			SerialTimePrintfln(F("ctrlPushButton  - prevPushButton:   0x%04x"), prevPushButton);
 			SerialTimePrintfln(F("ctrlPushButton  - PushButton:       0x%04x"), PushButton);
@@ -1201,7 +1266,7 @@ void ctrlPushButton(void)
 			prevPushButton = curPushButton;
 		}
 
-		#ifdef DEBUG_OUTPUT_MOTOR
+		#ifdef DEBUG_MOTOR
 		debugPrintMotorStatus(true);
 		#endif
 
@@ -1223,7 +1288,7 @@ void ctrlSM8Button(void)
 	byte i;
 
 	if ( tmpSM8Button != valSM8Button ) {
-		#ifdef DEBUG_OUTPUT_SM8OUTPUT
+		#ifdef DEBUG_SM8OUTPUT
 		SerialTimePrintfln(F("ctrlSM8Button   - ----------------------------------------"));
 		SerialTimePrintfln(F("ctrlSM8Button   - SM8 key output changed"));
 		#endif
@@ -1236,7 +1301,7 @@ void ctrlSM8Button(void)
 
 			// If key output just activated, set FS20-SM8 key timeout
 			if ( (bitRead(tmpSM8Button, i) != bitRead(valSM8Button, i)) && (bitRead(valSM8Button, i) == 0) ) {
-				#ifdef DEBUG_OUTPUT_SM8OUTPUT
+				#ifdef DEBUG_SM8OUTPUT
 				SerialTimePrintfln(F("ctrlSM8Button   - SM8 key %d output set timeout to %d ms"), i+1, FS20_SM8_IN_RESPONSE/TIMER_MS);
 				#endif
 				SM8Timeout[i] = FS20_SM8_IN_RESPONSE / TIMER_MS;
@@ -1274,7 +1339,7 @@ void ctrlMotorRelais(void)
 		byte targetSteps;
 		byte targetStep[4];
 
-		#ifdef DEBUG_OUTPUT_MOTOR
+		#ifdef DEBUG_MOTOR
 		SerialTimePrintfln(F("ctrlMotorRelais - ----------------------------------------"));
 		SerialTimePrintfln(F("ctrlMotorRelais - Motor output change test"));
 		SerialTimePrintfln(F("ctrlMotorRelais -   tmpMotorRelais: 0x%04X"), tmpMotorRelais);
@@ -1365,13 +1430,13 @@ void ctrlMotorRelais(void)
 				case 0b1111:
 					break;
 			}
-			#ifdef DEBUG_OUTPUT_MOTOR_DETAILS
+			#ifdef DEBUG_MOTOR_DETAILS
 			SerialTimePrintfln(F("ctrlMotorRelais -   Motor %d, curTarget 0x%02X, Steps %d"), i, curTarget, targetSteps);
 			#endif
 
 			// Copy all steps to final mask
 			for(k=targetSteps; k>0; k--) {
-				#ifdef DEBUG_OUTPUT_MOTOR_DETAILS
+				#ifdef DEBUG_MOTOR_DETAILS
 				SerialTimePrintfln(F("ctrlMotorRelais -     targetStep[%d]=0x%02X"), k, targetStep[k]);
 				#endif
 				// mask bits of the current motor
@@ -1387,7 +1452,7 @@ void ctrlMotorRelais(void)
 				preMotorCount = targetSteps;
 			}
 		}
-		#ifdef DEBUG_OUTPUT_MOTOR_DETAILS
+		#ifdef DEBUG_MOTOR_DETAILS
 		SerialTimePrintfln(F("ctrlMotorRelais -   preMotorCount=%d"), preMotorCount);
 		for(i=0; i<preMotorCount; i++) {
 			SerialTimePrintfln(F("ctrlMotorRelais -     preMotorRelais[%d] =0x%04X"), i, preMotorRelais[i]);
@@ -1407,11 +1472,11 @@ void ctrlMotorRelais(void)
 		outMotorRelais = preMotorRelais[preMotorCount];
 
 		if ( preMotorCount>0 ) {
-			#ifdef DEBUG_OUTPUT_MOTOR_DETAILS
+			#ifdef DEBUG_MOTOR_DETAILS
 			SerialTimePrintfln(F("ctrlMotorRelais - D   a)preMotorCount=%d"), preMotorCount);
 			#endif
 			preMotorCount--;
-			#ifdef DEBUG_OUTPUT_MOTOR_DETAILS
+			#ifdef DEBUG_MOTOR_DETAILS
 			SerialTimePrintfln(F("ctrlMotorRelais - D   b)preMotorCount=%d"), preMotorCount);
 			#endif
 			preMotorTimer += RELAIS_OPERATE_TIME;
@@ -1419,7 +1484,7 @@ void ctrlMotorRelais(void)
 		}
 
 		if ( tmpOutMotorRelais != outMotorRelais ) {
-			#ifdef DEBUG_OUTPUT_MOTOR
+			#ifdef DEBUG_MOTOR
 			SerialTimePrintfln(F("ctrlMotorRelais -     Output outMotorRelais 0x%04X"), outMotorRelais);
 			#endif
 			regMotorRelais = outMotorRelais;
@@ -1433,7 +1498,7 @@ void ctrlMotorRelais(void)
 						// - or still running but direction changed
 						 || ( bitRead(outMotorRelais, i) &&
 							  bitRead(tmpOutMotorRelais, i+MAX_MOTORS)!=bitRead(outMotorRelais, i+MAX_MOTORS) ) ) {
-						#ifdef DEBUG_OUTPUT_MOTOR
+						#ifdef DEBUG_MOTOR
 						SerialTimePrintfln(F("ctrlMotorRelais -     Set motor %d timeout to %d.%-d s"), i+1, eeprom.MaxRuntime[i] / 1000, eeprom.MaxRuntime[i] % 1000);
 						#endif
 						MotorTimeout[i] = (eeprom.MaxRuntime[i] / TIMER_MS) + (eeprom.OvertravelTime[i] / TIMER_MS);
@@ -1442,7 +1507,7 @@ void ctrlMotorRelais(void)
 					if ( bitRead(curSM8Status, i)
 						 && (getMotorDirection(i)==MOTOR_OFF || getMotorDirection(i)==MOTOR_CLOSE) ) {
 						// Reset FS20-SM8 key for "Open"
-						#if defined(DEBUG_OUTPUT_MOTOR) || defined(DEBUG_OUTPUT_SM8OUTPUT)
+						#if defined(DEBUG_MOTOR) || defined(DEBUG_SM8OUTPUT)
 						SerialTimePrintfln(F("ctrlMotorRelais - SM8 Taste %d (für \"Öffnen\") zurücksetzen"), i);
 						#endif
 						bitSet(SM8StatusIgnore, i);
@@ -1453,7 +1518,7 @@ void ctrlMotorRelais(void)
 					if (    bitRead(curSM8Status, i+MAX_MOTORS)
 						 && (getMotorDirection(i)==MOTOR_OFF || getMotorDirection(i)==MOTOR_OPEN) ) {
 						// Reset FS20-SM8 key for "Close"
-						#if defined(DEBUG_OUTPUT_MOTOR) || defined(DEBUG_OUTPUT_SM8OUTPUT)
+						#if defined(DEBUG_MOTOR) || defined(DEBUG_SM8OUTPUT)
 						SerialTimePrintfln(F("ctrlMotorRelais - SM8 Taste %d (für \"Schliessen\") zurücksetzen"), i+MAX_MOTORS);
 						#endif
 						bitSet(SM8StatusIgnore, i+MAX_MOTORS);
@@ -1467,13 +1532,13 @@ void ctrlMotorRelais(void)
 			// Possibly remember motor position and write it to EEPROM
 			if ( prevRegMotorRelais != regMotorRelais ) {
 				bool changed = false;
-				#ifdef DEBUG_OUTPUT_MOTOR
+				#ifdef DEBUG_MOTOR
 				SerialTimePrintfln(F("ctrlMotorRelais -     regMotorRelais changed, check positions"));
 				#endif
 				for (i = 0; i < MAX_MOTORS; i++) {
 					if ( !bitRead(regMotorRelais, i) && (eeprom.MotorPosition[i] != MotorPosition[i]) ) {
 						// Only when motor is off, write position to EEPROM
-						#ifdef DEBUG_OUTPUT_MOTOR
+						#ifdef DEBUG_MOTOR
 						SerialTimePrintfln(F("ctrlMotorRelais -     Store motor %d position %d"), i, MotorPosition[i]);
 						#endif
 						eeprom.MotorPosition[i] = MotorPosition[i];
@@ -1488,7 +1553,7 @@ void ctrlMotorRelais(void)
 
 		}
 	}
-	#ifdef DEBUG_OUTPUT_MOTOR_DETAILS
+	#ifdef DEBUG_MOTOR_DETAILS
 	else {
 		SerialTimePrintfln(F("ctrlMotorRelais - Z   Timer waiting"));
 	}
@@ -1503,7 +1568,7 @@ void ctrlMotorRelais(void)
  * Arguments:
  * Description: Rain sensor handling 
  * ===================================================================*/
-#ifdef DEBUG_OUTPUT_RAIN
+#ifdef DEBUG_RAIN
 const char dbgCtrlRainSensor[] PROGMEM = "ctrlRainSensor  - ";
 #endif
 void ctrlRainSensor(void)
@@ -1532,7 +1597,7 @@ void ctrlRainSensor(void)
 	/* If enable input has changed, activate AUTO mode
 	 * regardless what user has set with RAIN DISABLE/ENABLE command */
 	if( prevRainEnableInput != sensRainEnable ) {
-		#ifdef DEBUG_OUTPUT_RAIN
+		#ifdef DEBUG_RAIN
 		SerialTimePrintfln(F("%SsensRainEnable      = %d"), dbgCtrlRainSensor, sensRainEnable);
 		SerialTimePrintfln(F("%SprevRainEnableInput = %d"), dbgCtrlRainSensor, prevRainEnableInput);
 		#endif
@@ -1561,7 +1626,7 @@ void ctrlRainSensor(void)
 	}
 
 	if ( prevRainInput != RainInput || prevRainEnable != RainEnable ) {
-		#ifdef DEBUG_OUTPUT_RAIN
+		#ifdef DEBUG_RAIN
 		SerialTimePrintfln(F("%S----------------------------------------"), dbgCtrlRainSensor);
 		SerialTimePrintfln(F("%SdigitalRead(%d): %d"), dbgCtrlRainSensor, RAIN_INPUT, digitalRead(RAIN_INPUT));
 		SerialTimePrintfln(F("%SdigitalRead(%d): %d"), dbgCtrlRainSensor, RAIN_ENABLE, digitalRead(RAIN_ENABLE));
@@ -1573,7 +1638,7 @@ void ctrlRainSensor(void)
 			if ( RainInput ) {
 				byte i;
 
-				#ifdef DEBUG_OUTPUT_RAIN
+				#ifdef DEBUG_RAIN
 				SerialTimePrintfln(F("%SRain enabled, wet"), dbgCtrlRainSensor);
 				#endif
 
@@ -1583,12 +1648,12 @@ void ctrlRainSensor(void)
 							&& getMotorDirection(i)==MOTOR_OFF
 							&& MotorPosition[i]!=0 ) {
 							resumeMotorPosition[i] = (MOTOR_TIMER)(((unsigned long)MotorPosition[i]*100L) / (unsigned long)(eeprom.MaxRuntime[i] / TIMER_MS));
-							#ifdef DEBUG_OUTPUT_RAIN
+							#ifdef DEBUG_RAIN
 							SerialTimePrintfln(F("%SRemember window %d position %d%% (%d)"), dbgCtrlRainSensor, i, resumeMotorPosition[i], MotorPosition[i]);
 							#endif
 						}
 						if ( getMotorDirection(i)!=MOTOR_CLOSE && getMotorDirection(i)!=MOTOR_CLOSE_DELAYED) {
-							#ifdef DEBUG_OUTPUT_RAIN
+							#ifdef DEBUG_RAIN
 							SerialTimePrintfln(F("%SClose window %d"), dbgCtrlRainSensor, i);
 							#endif
 							setMotorDirection(i, MOTOR_CLOSE);
@@ -1600,7 +1665,7 @@ void ctrlRainSensor(void)
 				currentLEDPattern = eeprom.LEDPatternRain;
 			}
 			else {
-				#ifdef DEBUG_OUTPUT_RAIN
+				#ifdef DEBUG_RAIN
 				SerialTimePrintfln(F("%SRain enabled, dry"), dbgCtrlRainSensor);
 				#endif
 				if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
@@ -1613,13 +1678,13 @@ void ctrlRainSensor(void)
 		}
 		else {
 			if ( RainInput ) {
-				#ifdef DEBUG_OUTPUT_RAIN
+				#ifdef DEBUG_RAIN
 				SerialTimePrintfln(F("%SRain disabled, wet"), dbgCtrlRainSensor);
 				#endif
 				cmdRainSensorPrintStatus();
 			}
 			else {
-				#ifdef DEBUG_OUTPUT_RAIN
+				#ifdef DEBUG_RAIN
 				SerialTimePrintfln(F("%SRain disabled, dry"), dbgCtrlRainSensor);
 				#endif
 				cmdRainSensorPrintStatus();
@@ -1632,7 +1697,7 @@ void ctrlRainSensor(void)
 	}
 
 	if ( resumeDelay==0 ) {
-		#ifdef DEBUG_OUTPUT_RAIN
+		#ifdef DEBUG_RAIN
 		SerialTimePrintfln(F("%SResume delay expired"), dbgCtrlRainSensor);
 		#endif
 		for (byte i = 0; i < MAX_MOTORS; i++) {
@@ -1640,7 +1705,7 @@ void ctrlRainSensor(void)
 				&& getMotorType(i)==WINDOW
 				&& getMotorDirection(i)==MOTOR_OFF
 				&& resumeMotorPosition[i]!=NO_RESUME_POSITION ) {
-					#ifdef DEBUG_OUTPUT_RAIN
+					#ifdef DEBUG_RAIN
 					SerialTimePrintfln(F("%SResume motor %d to %d%%"), dbgCtrlRainSensor, i+1, resumeMotorPosition[i] );
 					#endif
 					setMotorPosition(i, resumeMotorPosition[i]);
@@ -1662,7 +1727,7 @@ void ctrlRainSensor(void)
  * ===================================================================*/
 void beAlive(void)
 {
-	#ifdef DEBUG_OUTPUT_ALIVE
+	#ifdef DEBUG_ALIVE
 	static char liveToogle = 0;
 	static byte liveDots = 80;
 	#endif
@@ -1671,7 +1736,7 @@ void beAlive(void)
 	if ( (long)( millis() - runTimer) >= 0 ) {
 		runTimer += ALIVE_TIMER;
 		watchdogReset();
-		#ifdef DEBUG_OUTPUT_ALIVE
+		#ifdef DEBUG_ALIVE
 		if ((liveToogle--) < 1) {
 			SerialPrintf(F("."));
 			liveToogle = 3;

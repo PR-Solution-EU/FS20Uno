@@ -38,7 +38,7 @@ unsigned long CalcCRC(crcType type, byte *addr, size_t size)
 		crc = ~crc;
 	}
 	DEBUG_RUNTIME_END("CalcCRC()",msCalcCRC);
-	#ifdef DEBUG_OUTPUT_EEPROM
+	#ifdef DEBUG_EEPROM
 	SerialTimePrintfln(F("EEPROM - CalcCRC(%p, %ld) returns 0x%08lx"), addr, (unsigned long)size, crc);
 	#endif
 	return crc;
@@ -73,13 +73,13 @@ void eepromInitVars()
 	dataCRC = CalcCRC(EEPROMCRC, (byte *)(EEPROM_ADDR_CRC32+4), EEPROM.length()-4);
 	EEPROM.get(EEPROM_ADDR_CRC32, eepromCRC);
 
-	#ifdef DEBUG_OUTPUT_EEPROM
+	#ifdef DEBUG_EEPROM
 	SerialTimePrintfln(F("EEPROM - values CRC32: 0x%08lx"), dataCRC);
 	SerialTimePrintfln(F("EEPROM - stored CRC32: 0x%08lx"), eepromCRC);
 	#endif
 
 	if ( dataCRC != eepromCRC ) {
-		#ifdef DEBUG_OUTPUT_EEPROM
+		#ifdef DEBUG_EEPROM
 		SerialTimePrintfln(F("EEPROM - CRC32 not matching, set defaults..."));
 		#endif
 		sendStatus(true,SYSTEM, F("SET DEFAULT VALUES"));
@@ -106,27 +106,34 @@ void eepromInitVars()
 		bitSet(eeprom.Rain,   RAIN_BIT_AUTO);
 		bitClear(eeprom.Rain, RAIN_BIT_ENABLE);
 		eeprom.RainResumeTime 	= DEFAULT_RAINRESUMETIME;
-		eeprom.SendStatus  		= DEFAULT_SendStatus;
-		eeprom.Echo        		= DEFAULT_Echo;
-		eeprom.Term        		= DEFAULT_Term;
+		eeprom.SendStatus  		= DEFAULT_SENDSTATUS;
+		eeprom.Echo        		= DEFAULT_ECHO;
+		eeprom.Term        		= DEFAULT_TERM;
 		eeprom.OperatingHours 	= 0;
+		eeprom.LoginTimeout		= DEFAULT_LOGIN_TIMEOUT;
+		for(size_t i=0; i<(sizeof(eeprom.EncryptKey)/sizeof(eeprom.EncryptKey[0])); i++) {
+			eeprom.EncryptKey[i] = random(0, INT32_MAX);
+		}
+		memset(eeprom.Password, 0, sizeof(eeprom.Password));
+		strncpy_P(eeprom.Password, DEFAULT_PASSWORD, sizeof(eeprom.Password));
+		cryptPassword(eeprom.Password, eeprom.EncryptKey, ENCRYPT);
 
 		eepromWriteVars();
 	}
-	#ifdef DEBUG_OUTPUT_EEPROM
+	#ifdef DEBUG_EEPROM
 	else {
 		SerialTimePrintfln(F("EEPROM - CRC232 is valid"));
 	}
 	#endif
 
-	#ifdef DEBUG_OUTPUT_EEPROM
+	#ifdef DEBUG_EEPROM
 	SerialTimePrintfln(F("EEPROM - read defaults..."));
 	#endif
 	DEBUG_RUNTIME_START(mseepromReadDefaults);
 	EEPROM.get(EEPROM_ADDR_EEPROMDATA, eeprom);
 	DEBUG_RUNTIME_END("eepromInitVars() read defaults",mseepromReadDefaults);
 
-	#ifdef DEBUG_OUTPUT_EEPROM
+	#ifdef DEBUG_EEPROM
 	SerialTimePrintfln(F("EEPROM - values:"));
 	SerialTimePrintfln(F("EEPROM -   eeprom.LEDPatternNormal:\t0x%08lx"),	eeprom.LEDPatternNormal);
 	SerialTimePrintfln(F("EEPROM -   eeprom.LEDPatternRain:\t0x%08lx"),		eeprom.LEDPatternRain);
@@ -154,6 +161,18 @@ void eepromInitVars()
 	SerialTimePrintfln(F("EEPROM -   eeprom.Echo:\t\t%s"), eeprom.Echo?"yes":"no");
 	SerialTimePrintfln(F("EEPROM -   eeprom.Term:\t\t%s"), eeprom.Term=='\r'?"CR":"LF");
 	SerialTimePrintfln(F("EEPROM -   eeprom.OperatingHours:\t%ld"), eeprom.OperatingHours);
+	SerialTimePrintfln(F("EEPROM -   eeprom.LoginTimeout:\t%d"), eeprom.LoginTimeout);
+	SerialTimePrintf(  F("EEPROM -   eeprom.EncryptKey:\r\n  ") );
+	for(size_t i=0; i<(sizeof(eeprom.EncryptKey)/sizeof(eeprom.EncryptKey[0])); i++) {
+		SerialPrintf(F("0x%08lx "), eeprom.EncryptKey[i]);
+	}
+	printCRLF();
+	SerialTimePrintf(  F("EEPROM -   eeprom.Password:\r\n  ") );
+	for(size_t i=0; i<(sizeof(eeprom.Password)/sizeof(eeprom.Password[0])); i++) {
+		SerialPrintf(F("%02x "), (byte)eeprom.Password[i]);
+	}
+	printCRLF();
+
 	#endif
 }
 
@@ -176,14 +195,14 @@ void eepromWriteVars(void)
 
 	EEPROM.get(EEPROM_ADDR_CRC32, eepromCRC);
 
-	#ifdef DEBUG_OUTPUT_EEPROM
+	#ifdef DEBUG_EEPROM
 	SerialTimePrintfln(F("EEPROM - prevEEPROMDataCRC32: 0x%08lx"), prevEEPROMDataCRC32);
 	SerialTimePrintfln(F("EEPROM - curEEPROMDataCRC32:  0x%08lx"), curEEPROMDataCRC32);
 	SerialTimePrintfln(F("EEPROM - eepromCRC:           0x%08lx"), eepromCRC);
 	#endif
 
 	if( curEEPROMDataCRC32 != prevEEPROMDataCRC32 ) {
-		#ifdef DEBUG_OUTPUT_EEPROM
+		#ifdef DEBUG_EEPROM
 		SerialTimePrintfln(F("EEPROM - Data changed, write EEPROM data"));
 		#endif
 		// Write new EEPROM data
@@ -192,7 +211,7 @@ void eepromWriteVars(void)
 		// Wire new CRC
 		eepromCRC = CalcCRC(EEPROMCRC, (byte *)(EEPROM_ADDR_CRC32+4), EEPROM.length()-4);
 		EEPROM.put(EEPROM_ADDR_CRC32, eepromCRC);
-		#ifdef DEBUG_OUTPUT_EEPROM
+		#ifdef DEBUG_EEPROM
 		SerialTimePrintfln(F("EEPROM - eepromCRC:           0x%08lx"), eepromCRC);
 		#endif
 

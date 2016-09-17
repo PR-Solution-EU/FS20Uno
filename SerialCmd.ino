@@ -3,11 +3,12 @@
  * ===================================================================*/
 SerialCommand SCmd;   		// SerialCommand object
 
-
 enum commands
 {
 	 CMD_HELP=0
 	,CMD_INFO
+	,CMD_LOGIN
+	,CMD_LOGOUT
 	,CMD_ECHO
 	,CMD_TERM
 	,CMD_STATUS
@@ -24,6 +25,7 @@ enum commands
 	,CMD_RESTORE
 	,CMD_FACTORY
 	,CMD_REBOOT
+	,CMD_PASSWD
 } COMMANDS;
 
 /* ===================================================================
@@ -42,6 +44,8 @@ const char fstrDRY[]			PROGMEM = "DRY";
 
 const char sCmdHELP[]			PROGMEM = "HELP";
 const char sCmdINFO[]			PROGMEM = "INFO";
+const char sCmdLOGIN[]			PROGMEM = "LOGIN";
+const char sCmdLOGOUT[]			PROGMEM = "LOGOUT";
 const char sCmdECHO[]			PROGMEM = "ECHO";
 const char sCmdTERM[]			PROGMEM = "TERM";
 const char sCmdSTATUS[]			PROGMEM = "STATUS";
@@ -58,10 +62,13 @@ const char sCmdBACKUP[]			PROGMEM = "BACKUP";
 const char sCmdRESTORE[]		PROGMEM = "RESTORE";
 const char sCmdFACTORY[]		PROGMEM = "FACTORY";
 const char sCmdREBOOT[]			PROGMEM = "REBOOT";
+const char sCmdPASSWD[]			PROGMEM = "PASSWD";
 
 #ifndef DEBUG_OUTPUT
 const char sParmHELP[]			PROGMEM = "[<cmd>|ALL]";
 const char sParmINFO[]			PROGMEM = "";
+const char sParmLOGIN[]			PROGMEM = "[<password> [<timeout>]]";
+const char sParmLOGOUT[]		PROGMEM = "";
 const char sParmECHO[]			PROGMEM = "[ON|OFF]";
 const char sParmTERM[]			PROGMEM = "[CR|LF]";
 const char sParmSTATUS[]		PROGMEM = "[ON|OFF]";
@@ -78,9 +85,12 @@ const char sParmBACKUP[]		PROGMEM = "";
 const char sParmRESTORE[]		PROGMEM = "<addr> <data>";
 const char sParmFACTORY[]		PROGMEM = "";
 const char sParmREBOOT[]		PROGMEM = "";
+const char sParmPASSWD[]		PROGMEM = "[<current> <new> <retype>]";
 
 const char sDescHELP[]			PROGMEM = "Print command help";
 const char sDescINFO[]			PROGMEM = "Print version";
+const char sDescLOGIN[]			PROGMEM = "Login";
+const char sDescLOGOUT[]		PROGMEM = "Logout";
 const char sDescECHO[]			PROGMEM = "Get/Set local echo";
 const char sDescTERM[]			PROGMEM = "Get/Set command terminator";
 const char sDescSTATUS[]		PROGMEM = "Get/Set status messages";
@@ -97,10 +107,14 @@ const char sDescBACKUP[]		PROGMEM = "Create backup from EEPROM";
 const char sDescRESTORE[]		PROGMEM = "Restore data into EEPROM";
 const char sDescFACTORY[]		PROGMEM = "Reset to factory defaults";
 const char sDescREBOOT[]		PROGMEM = "Restart controller";
+const char sDescPASSWD[]		PROGMEM = "Set password";
 
 const char sPDescHELP[]			PROGMEM = "    <cmd>  command for getting help\r\n"
 								          "    ALL    print full help\r\n";
 const char sPDescINFO[]			PROGMEM = "";
+const char sPDescLOGIN[]		PROGMEM = "    <password>  use password to login\r\n"
+                                          "    <timeout>   logout after <timeout> sec";
+const char sPDescLOGOUT[]		PROGMEM = "";
 const char sPDescECHO[]			PROGMEM = "    ON|OFF  set local echo ON or OFF";
 const char sPDescTERM[]			PROGMEM = "    CR|LF   set terminator to CR or LF";
 const char sPDescSTATUS[]		PROGMEM = "    ON|OFF  set status messages ON or OFF";
@@ -148,11 +162,16 @@ const char sPDescRESTORE[]		PROGMEM = "    <addr>  4-digit hex destination addre
 								          "    <data>  hex data to restore";
 const char sPDescFACTORY[]		PROGMEM = "";
 const char sPDescREBOOT[]		PROGMEM = "";
+const char sPDescPASSWD[]		PROGMEM = "    <current>  old password\r\n"
+								          "    <new>      new password\r\n"
+								          "    <retype>   retyped new password";
 
 
 const char* const sCmdTable[][4] PROGMEM = {
 	 {sCmdHELP		,sParmHELP		,sDescHELP		,sPDescHELP}
 	,{sCmdINFO		,sParmINFO		,sDescINFO		,sPDescINFO}
+	,{sCmdLOGIN		,sParmLOGIN		,sDescLOGIN		,sPDescLOGIN}
+	,{sCmdLOGOUT	,sParmLOGOUT	,sDescLOGOUT	,sPDescLOGOUT}
 	,{sCmdECHO		,sParmECHO		,sDescECHO		,sPDescECHO}
 	,{sCmdTERM		,sParmTERM		,sDescTERM		,sPDescTERM}
 	,{sCmdSTATUS	,sParmSTATUS	,sDescSTATUS	,sPDescSTATUS}
@@ -169,10 +188,13 @@ const char* const sCmdTable[][4] PROGMEM = {
 	,{sCmdRESTORE	,sParmRESTORE	,sDescRESTORE	,sPDescRESTORE}
 	,{sCmdFACTORY	,sParmFACTORY	,sDescFACTORY	,sPDescFACTORY}
 	,{sCmdREBOOT	,sParmREBOOT	,sDescREBOOT	,sPDescREBOOT}
+	,{sCmdPASSWD	,sParmPASSWD	,sDescPASSWD	,sPDescPASSWD}
 };
 const void (*cmdTable[])() = {
 	 (const void (*)())cmdHelp
 	,(const void (*)())cmdInfo
+	,(const void (*)())cmdLogin
+	,(const void (*)())cmdLogout
 	,(const void (*)())cmdEcho
 	,(const void (*)())cmdTerm
 	,(const void (*)())cmdStatus
@@ -189,6 +211,7 @@ const void (*cmdTable[])() = {
 	,(const void (*)())cmdRestore
 	,(const void (*)())cmdFactory
 	,(const void (*)())cmdReboot
+	,(const void (*)())cmdPassword
 };
 #endif
 
@@ -222,6 +245,7 @@ void setupSerialCommand(void)
 	SCmd.addCommand( sCmdRESTORE,	cmdRestore );
 	SCmd.addCommand( sCmdFACTORY,	cmdFactory );
 	SCmd.addCommand( sCmdREBOOT,	cmdReboot );
+	SCmd.addCommand( sCmdPASSWD,	cmdPassword );
 	#endif
 
 	SCmd.addDefaultHandler(unrecognized);   // Handler for command that isn't matched  (says "What?")
@@ -234,6 +258,71 @@ void processSerialCommand(void)
 	SCmd.readSerial();     // We don't do much, just process serial commands
 	watchdogReset();
 }
+
+
+void cryptPassword(char pw[16], unsigned long key[4], CRYPT_MODE mode)
+{
+	unsigned long v[2];
+
+	Xtea x(key);
+
+	#ifdef DEBUG_PASSWD
+	SerialTimePrintf(F("cryptPassword - Input:\r\n  "));
+	for( int i=0; i<16; i++) {
+		SerialPrintf(F("0x%02x "), (byte)pw[i]);
+	}
+	printCRLF();
+	#endif
+
+	for (int i=0; i<4; i+=2) {
+		memcpy(&v[0], pw+(4*i)  , 4);
+		memcpy(&v[1], pw+(4*i+4), 4);
+		if ( mode== ENCRYPT ) {
+			x.encrypt( v );
+		}
+		else {
+			x.decrypt( v );
+		}
+		memcpy(pw+(4*i)  ,&v[0], 4);
+		memcpy(pw+(4*i+4),&v[1], 4);
+	}
+	#ifdef DEBUG_PASSWD
+	SerialTimePrintf(F("cryptPassword - Result:\r\n  "));
+	for( int i=0; i<16; i++) {
+		SerialPrintf(F("0x%02x "), (byte)pw[i]);
+	}
+	printCRLF();
+	#endif
+}
+
+bool cmdGetPassword()
+{
+	char buffer[sizeof(eeprom.Password)];
+
+	memset(buffer, 0, sizeof(buffer));
+	SerialGetString(buffer, sizeof(buffer), eeprom.Term, eeprom.Echo, true);
+	printCRLF();
+
+	#ifdef DEBUG_PASSWD
+	SerialTimePrintfln(F("Entered password: %s"), buffer);
+	#endif
+
+	cryptPassword(buffer, eeprom.EncryptKey, ENCRYPT);
+
+	#ifdef DEBUG_PASSWD
+	SerialTimePrintf(F("Stored encrypted password:\r\n  "));
+	for( int i=0; i<16; i++) {
+		SerialPrintf(F("0x%02x "), (byte)eeprom.Password[i]);
+	}
+	printCRLF();
+	#endif
+
+	if ( memcmp(eeprom.Password, buffer, sizeof(buffer)-1 )==0 ) {
+		return true;
+	}
+	return false;
+}
+
 
 void cmdOK(void)
 {
@@ -258,6 +347,11 @@ void cmdErrorOutOfRange(const __FlashStringHelper *str)
 	Serial.print(F("ERROR: "));
 	Serial.print(str);
 	Serial.println(F(" out of range"));
+}
+
+void cmdErrorNotLoggedIn(void)
+{
+	cmdError(F("Login first"));
 }
 
 void unrecognized(char *token)
@@ -358,7 +452,70 @@ void cmdInfo()
 {
 	printProgramInfo(false);
 	cmdUptime();
-	SerialPrintfln(F("EEPROM CRC32: %08lx"), CalcCRC(RAMCRC, (byte *)&eeprom, sizeof(eeprom)));
+	cmdOK();
+}
+
+/* LOGIN [<password> [<timeout>]]
+ *   Login
+*/
+void cmdLogin()
+{
+	char *arg;
+
+	arg = SCmd.next();
+	if (arg == NULL) {
+		cmdLoginStatus();
+		cmdOK();
+	}
+	else {
+		// password given
+		char password[sizeof(eeprom.Password)];
+
+		memset(password, 0, sizeof(password));
+		strcpy(password, arg);
+		cryptPassword(password, eeprom.EncryptKey, ENCRYPT);
+		if ( memcmp(eeprom.Password, password, sizeof(password)-1 )==0 ) {
+			// Password check ok, unlock cmd interface
+			cmdUnlocked = true;
+			// set login timeout to stored value
+			cmdLoginTimeout = eeprom.LoginTimeout;
+
+			// get optionall new timeout value
+			arg = SCmd.next();
+			int timeout=atoi(arg);
+			if ( timeout<0 ) {
+				cmdError(F("<timeout> of range"));
+			}
+			else {
+				// store new timeout value
+				eeprom.LoginTimeout = timeout;
+				eepromWriteVars();
+				// set login timeout to stored value
+				cmdLoginTimeout = timeout;
+				cmdOK();
+			}
+		}
+		else {
+			cmdError(F("Wrong passcode"));
+		}
+	}
+}
+void cmdLoginStatus(void)
+{
+	if ( eeprom.LoginTimeout && cmdUnlocked ) {
+		sendStatus(true,SYSTEM,F("LOGGED IN (%d of %d s)"),cmdLoginTimeout, eeprom.LoginTimeout);
+	}
+	else {
+		sendStatus(true,SYSTEM,F("LOGGED %S"),cmdUnlocked ? F("IN"):F("OUT"));
+	}
+}
+
+/* LOGOUT
+ *   Logout
+ */ 
+void cmdLogout()
+{
+	cmdUnlocked = false;
 	cmdOK();
 }
 
@@ -662,16 +819,16 @@ void cmdMotor()
 	}
 }
 
-/* MOTORTIME [<m> [<sec> [<overtravel>]]
+/* MOTORTIME [<m> [<runtime> [<overtravel>]]
  *   Motor runtime
  *     <m>          Motor number [1..8]
- *     <sec>        Maximum runtime [s]
- *     <overtravel> Overtravel time [s]
+ *     <runtime>    Maximum runtime [ms]
+ *     <overtravel> Overtravel time [ms]
  */
 void cmdMotorTime()
 {
 	int motor;
-	double runtime;
+	DWORD runtime;
 	char *arg;
 
 	arg = SCmd.next();
@@ -696,12 +853,12 @@ void cmdMotorTime()
 			}
 			else {
 				// Set new runtime value
-				runtime = atof(arg);
-				if ( runtime<=0.0 || runtime>(double)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
-					cmdErrorOutOfRange(F("<sec>"));
+				runtime = strtoul(arg, NULL, 0);
+				if ( runtime==0 || runtime>(DWORD)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
+					cmdErrorOutOfRange(F("<runtime>"));
 				}
 				else {
-					eeprom.MaxRuntime[motor] = (DWORD)(runtime*1000.0);
+					eeprom.MaxRuntime[motor] = runtime;
 					eepromWriteVars();
 					arg = SCmd.next();
 					if (arg == NULL) {
@@ -709,12 +866,12 @@ void cmdMotorTime()
 						cmdOK();
 					}
 					else {
-						runtime = atof(arg);
-						if ( runtime<0.0 || runtime>(double)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
+						runtime = strtoul(arg, NULL, 0);
+						if ( runtime==0 || runtime>(DWORD)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
 							cmdErrorOutOfRange(F("<overtravel>"));
 						}
 						else {
-							eeprom.OvertravelTime[motor] = (DWORD)(runtime*1000.0);
+							eeprom.OvertravelTime[motor] = runtime;
 							eepromWriteVars();
 							cmdMotorTimePrintStatus(motor);
 							cmdOK();
@@ -1084,77 +1241,82 @@ void cmdRainSensorPrintStatus()
  */
 void cmdBackup(void)
 {
-	byte m;
+	if( cmdUnlocked ) {
+		byte m;
 
-	SerialPrintf(F("Binary data (%d byte):\r\n"), (int)sizeof(eeprom));
+		SerialPrintf(F("Binary data (%d byte):\r\n"), (int)sizeof(eeprom));
 
-	for(size_t i=0; i<sizeof(eeprom)+4; i++) {
-		if ( (i % 16)==0 ) {
-			SerialPrintf(F("RESTORE %04x "), i);
+		for(size_t i=0; i<sizeof(eeprom)+4; i++) {
+			if ( (i % 16)==0 ) {
+				SerialPrintf(F("RESTORE %04x "), i);
+			}
+			SerialPrintf(F("%02x"), EEPROM.read(i) );
+			if ( (i % 16)==15 ) {
+				printCRLF();
+			}
 		}
-		SerialPrintf(F("%02x"), EEPROM.read(i) );
-		if ( (i % 16)==15 ) {
-			printCRLF();
+		printCRLF();
+		printCRLF();
+
+		// ECHO
+		SerialPrintf(F("ECHO %S\r\n"), eeprom.Echo?fstrON:fstrOFF);
+		// TERM
+		SerialPrintf(F("TERM %S\r\n"), eeprom.Term=='\r'?fstrCR:fstrLF);
+		// STATUS
+		SerialPrintf(F("STATUS %S\r\n"), eeprom.SendStatus?fstrON:fstrOFF);
+		// UPTIME
+		SerialPrintf(F("UPTIME %ld %ld\r\n"), millis(), eeprom.OperatingHours);
+		// LED
+		SerialPrintf(F("LED %d %d 0x%08lx 0x%08lx")
+						,eeprom.LEDBitLenght
+						,eeprom.LEDBitCount
+						,eeprom.LEDPatternNormal
+						,eeprom.LEDPatternRain
+						);
+
+		// RAIN
+		SerialPrintf(F("RAIN RESUME %d\r\n"), eeprom.RainResumeTime);
+		if( !bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
+			SerialPrintf(F("RAIN FORGET\r\n"));
 		}
-	}
-	printCRLF();
-	printCRLF();
+		SerialPrintf(F("RAIN %S\r\n"), bitRead(eeprom.Rain, RAIN_BIT_ENABLE) ? fstrENABLE : fstrDISABLE);
+		if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
+			SerialPrintf(F("RAIN %S\r\n"), fstrAUTO);
+		}
 
-	// ECHO
-	SerialPrintf(F("ECHO %S\r\n"), eeprom.Echo?fstrON:fstrOFF);
-	// TERM
-	SerialPrintf(F("TERM %S\r\n"), eeprom.Term=='\r'?fstrCR:fstrLF);
-	// STATUS
-	SerialPrintf(F("STATUS %S\r\n"), eeprom.SendStatus?fstrON:fstrOFF);
-	// UPTIME
-	SerialPrintf(F("UPTIME %ld %ld\r\n"), millis(), eeprom.OperatingHours);
-	// LED
-	SerialPrintf(F("LED %d %d 0x%08lx 0x%08lx")
-					,eeprom.LEDBitLenght
-					,eeprom.LEDBitCount
-					,eeprom.LEDPatternNormal
-					,eeprom.LEDPatternRain
-					);
+		// MOTORNAME
+		for(m=0; m<MAX_MOTORS; m++) {
+			char sName[MAX_NAMELEN];
 
-	// RAIN
-	SerialPrintf(F("RAIN RESUME %d\r\n"), eeprom.RainResumeTime);
-	if( !bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
-		SerialPrintf(F("RAIN FORGET\r\n"));
-	}
-	SerialPrintf(F("RAIN %S\r\n"), bitRead(eeprom.Rain, RAIN_BIT_ENABLE) ? fstrENABLE : fstrDISABLE);
-	if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
-		SerialPrintf(F("RAIN %S\r\n"), fstrAUTO);
-	}
+			strcpy(sName, eeprom.MotorName[m]);
+			strReplaceChar(sName, ' ', '_');
+			SerialPrintf(F("MOTORNAME %d %s\r\n"), m+1, sName);
+		}
+		// MOTORTYPE
+		for(m=0; m<MAX_MOTORS; m++) {
+			SerialPrintf(F("MOTORTYPE %d %S\r\n"), m+1, bitRead(MTYPE_BITMASK,m)!=0?F("WIN"):F("JAL"));
+		}
+		// MOTORTIME
+		for(m=0; m<MAX_MOTORS; m++) {
+			SerialPrintf(F("MOTORTIME %d %d.%03d %d.%03d\r\n")
+				,m+1
+				,(int)(eeprom.MaxRuntime[m] / 1000)
+				,(int)(eeprom.MaxRuntime[m] % 1000)
+				,(int)(eeprom.OvertravelTime[m] / 1000)
+				,(int)(eeprom.OvertravelTime[m] % 1000)
+				);
+		}
 
-	// MOTORNAME
-	for(m=0; m<MAX_MOTORS; m++) {
-		char sName[MAX_NAMELEN];
+		// MOTOR POSITIONS
+		for(m=0; m<MAX_MOTORS; m++) {
+			SerialPrintf(F("MOTOR %d SYNC\r\n"), m+1);
+		}
 
-		strcpy(sName, eeprom.MotorName[m]);
-		strReplaceChar(sName, ' ', '_');
-		SerialPrintf(F("MOTORNAME %d %s\r\n"), m+1, sName);
+		cmdOK();
 	}
-	// MOTORTYPE
-	for(m=0; m<MAX_MOTORS; m++) {
-		SerialPrintf(F("MOTORTYPE %d %S\r\n"), m+1, bitRead(MTYPE_BITMASK,m)!=0?F("WIN"):F("JAL"));
+	else {
+		cmdErrorNotLoggedIn();
 	}
-	// MOTORTIME
-	for(m=0; m<MAX_MOTORS; m++) {
-		SerialPrintf(F("MOTORTIME %d %d.%03d %d.%03d\r\n")
-			,m+1
-			,(int)(eeprom.MaxRuntime[m] / 1000)
-			,(int)(eeprom.MaxRuntime[m] % 1000)
-			,(int)(eeprom.OvertravelTime[m] / 1000)
-			,(int)(eeprom.OvertravelTime[m] % 1000)
-			);
-	}
-
-	// MOTOR POSITIONS
-	for(m=0; m<MAX_MOTORS; m++) {
-		SerialPrintf(F("MOTOR %d SYNC\r\n"), m+1);
-	}
-
-	cmdOK();
 }
 
 /* RESTORE <addr> <data>
@@ -1164,53 +1326,58 @@ void cmdBackup(void)
  */
 void cmdRestore(void)
 {
-	char *arg;
+	if( cmdUnlocked ) {
+		char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL ) {
-		cmdError(F("Missing address"));
-	}
-	else {
-		unsigned int addr;
-		unsigned long strVal;
-
-		strVal = strtoul(arg, NULL, 16);
-		if ( errno == ERANGE ) {
-			cmdError(F("Wrong address syntax"));
+		arg = SCmd.next();
+		if (arg == NULL ) {
+			cmdError(F("Missing address"));
 		}
 		else {
-			addr = (unsigned int)strVal;
-			arg = SCmd.next();
-			if (arg == NULL || strlen(arg)<2 || (strlen(arg) % 2)!=0 ) {
-				cmdError(F("Wrong data"));
+			unsigned int addr;
+			unsigned long strVal;
+
+			strVal = strtoul(arg, NULL, 16);
+			if ( errno == ERANGE ) {
+				cmdError(F("Wrong address syntax"));
 			}
 			else {
-				bool fError = false;
-				for(byte i=0; i<strlen(arg) && !fError; i+=2) {
-					char sByte[3];
-					byte data;
-
-					sByte[0] = *(arg+i);
-					sByte[1] = *(arg+i+1);
-					sByte[2] = '\0';
-					strVal = strtoul(sByte, NULL, 16);
-					if ( errno == ERANGE ) {
-						cmdError(F("Wrong data"));
-						fError = true;
-					}
-					else {
-						data = (byte)strVal;
-						#ifdef DEBUG_OUTPUT_CMD_RESTORE
-						SerialTimePrintfln(F("RESTORE %04x: %02x"), addr, data);
-						#endif
-						EEPROM.put(addr++, data);
-					}
+				addr = (unsigned int)strVal;
+				arg = SCmd.next();
+				if (arg == NULL || strlen(arg)<2 || (strlen(arg) % 2)!=0 ) {
+					cmdError(F("Wrong data"));
 				}
-				if ( !fError ) {
-					cmdOK();
+				else {
+					bool fError = false;
+					for(byte i=0; i<strlen(arg) && !fError; i+=2) {
+						char sByte[3];
+						byte data;
+
+						sByte[0] = *(arg+i);
+						sByte[1] = *(arg+i+1);
+						sByte[2] = '\0';
+						strVal = strtoul(sByte, NULL, 16);
+						if ( errno == ERANGE ) {
+							cmdError(F("Wrong data"));
+							fError = true;
+						}
+						else {
+							data = (byte)strVal;
+							#ifdef DEBUG_CMD_RESTORE
+							SerialTimePrintfln(F("RESTORE %04x: %02x"), addr, data);
+							#endif
+							EEPROM.put(addr++, data);
+						}
+					}
+					if ( !fError ) {
+						cmdOK();
+					}
 				}
 			}
 		}
+	}
+	else {
+		cmdErrorNotLoggedIn();
 	}
 }
 
@@ -1219,10 +1386,15 @@ void cmdRestore(void)
  */
 void cmdFactory()
 {
-	unsigned long eepromCRC = CalcCRC(EEPROMCRC, (byte *)(EEPROM_ADDR_CRC32+4), EEPROM.length()-4) - 1;
-	EEPROM.put(EEPROM_ADDR_CRC32, eepromCRC);
-	eepromInitVars();
-	cmdOK();
+	if( cmdUnlocked ) {
+		unsigned long eepromCRC = CalcCRC(EEPROMCRC, (byte *)(EEPROM_ADDR_CRC32+4), EEPROM.length()-4) - 1;
+		EEPROM.put(EEPROM_ADDR_CRC32, eepromCRC);
+		eepromInitVars();
+		cmdOK();
+	}
+	else {
+		cmdErrorNotLoggedIn();
+	}
 }
 
 /* REBOOT 
@@ -1230,17 +1402,110 @@ void cmdFactory()
  */
 void cmdReboot(void)
 {
-	cmdOK();
-
-	#if WATCHDOG_REBOOT_DELAY >= 1000
-		sendStatus(true,SYSTEM,F("REBOOT (in %d s)"), (WATCHDOG_REBOOT_DELAY/1000));
-	#else
-		sendStatus(true,SYSTEM,F("REBOOT now"));
-	#endif
-	Watchdog.enable(WATCHDOG_REBOOT_DELAY);
-	for(byte d=0; d<(WATCHDOG_REBOOT_DELAY/1000); d++) {
-		Serial.print(F("."));
-		delay(1000);
+	if( cmdUnlocked ) {
+		cmdOK();
+		#if WATCHDOG_REBOOT_DELAY >= 1000
+			sendStatus(true,SYSTEM,F("REBOOT (in %d s)"), (WATCHDOG_REBOOT_DELAY/1000));
+		#else
+			sendStatus(true,SYSTEM,F("REBOOT now"));
+		#endif
+		Watchdog.enable(WATCHDOG_REBOOT_DELAY);
+		for(byte d=0; d<(WATCHDOG_REBOOT_DELAY/1000); d++) {
+			Serial.print(F("."));
+			delay(1000);
+		}
+		while(true) {};
 	}
-	while(true) {};
+	else {
+		cmdErrorNotLoggedIn();
+	}
+}
+
+/* PASSWD [<current> <new> <retype>]
+ *   Set password
+ *     <current>  old password
+ *     <new>      new password
+ *     <retype>   retyped new password
+ */
+void cmdPassword()
+{
+	char newPassword[sizeof(eeprom.Password)];
+	char renewPassword[sizeof(eeprom.Password)];
+	char *oldPw;
+	char *newPw;
+	char *renewPw;
+
+	memset(newPassword, 0, sizeof(newPassword));
+	memset(renewPassword, 0, sizeof(renewPassword));
+
+	oldPw = SCmd.next();
+	if (oldPw == NULL ) {
+		// no parameter given, get it direct from user
+		
+		// Query current password
+		Serial.print(F("Current password: "));
+		if( cmdGetPassword() ) {
+			// Password check for current pw correct
+
+			// Query new password
+			Serial.print(F("New password: "));
+			SerialGetString(newPassword, sizeof(newPassword), eeprom.Term, eeprom.Echo, true);
+			printCRLF();
+
+			// Query new password again
+			Serial.print(F("Retype new password: "));
+			SerialGetString(renewPassword, sizeof(renewPassword), eeprom.Term, eeprom.Echo, true);
+			printCRLF();
+
+			cmdStorePassword(newPassword, renewPassword);
+		}
+		else {
+			cmdError(F("Wrong password, password unchanged"));
+		}
+	}
+	else { 
+		// Parameter given
+		
+		// Check if old password matches stored crypted one
+		strcpy(newPassword, oldPw);
+		cryptPassword(newPassword, eeprom.EncryptKey, ENCRYPT);
+		if ( memcmp(eeprom.Password, newPassword, sizeof(newPassword)-1 )==0 ) {
+			// Password check ok, go on
+			
+			// New password must given twice
+			newPw = SCmd.next();
+			if (newPw == NULL ) {
+				cmdErrorParameter(F("'HELP PASSWD'"));
+			}
+			else {
+				strcpy(newPassword, newPw);
+				renewPw = SCmd.next();
+				if (renewPw == NULL ) {
+					cmdErrorParameter(F("'HELP PASSWD'"));
+				}
+				else {
+					strcpy(renewPassword, renewPw);
+					cmdStorePassword(newPassword, renewPassword);
+				}
+			}
+		}
+		else {
+			cmdError(F("Wrong password, password unchanged"));
+		}
+	}
+}
+void cmdStorePassword(char *newPassword, char *renewPassword)
+{
+	// Only if new passwords are same
+	if ( strcmp(newPassword, renewPassword)==0 ) {
+		// Store new password encrypted
+		memset(eeprom.Password, 0, sizeof(eeprom.Password));
+		strcpy(eeprom.Password, newPassword);
+		cryptPassword(eeprom.Password, eeprom.EncryptKey, ENCRYPT);
+		eepromWriteVars();
+		cmdOK();
+	}
+	else {
+		cmdError(F("Sorry, passwords do not match. Password unchanged"));
+	}
 }
