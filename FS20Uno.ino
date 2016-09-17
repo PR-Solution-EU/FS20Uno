@@ -215,7 +215,7 @@
 #include "I2C.h"
 
 #define PROGRAM F("FS20Uno")	// program name
-#define VERSION F("4.01")		// program version
+#define VERSION F("4.02")		// program version
 #include "REVISION.h"			// Build (changed from git hook)
 #define DATAVERSION 126			// can be used to invalidate EEPROM data
 
@@ -446,9 +446,12 @@ struct EEPROM {
 	char		Password[17];
 } eeprom;
 
-// Command interface unlocked flag
-bool cmdUnlocked;
-WORD cmdLoginTimeout;
+
+// Command interface login status
+bool prevUnlocked;				// remember value for output new status
+volatile bool cmdUnlocked;		// global cmd interface unlock state
+volatile WORD cmdLoginTimeout;	// auto logout timer
+
 
 /* Strings in PROGMEM */
 const char fstrON[]			PROGMEM = "ON";
@@ -706,6 +709,7 @@ void initVars()
 	sendStatusMOTOR_OFF = 0;
 	
 	cmdUnlocked = false;
+	prevUnlocked = false;
 	cmdLoginTimeout = 0;
 }
 
@@ -1803,6 +1807,21 @@ void operationHours(bool millisSet)
 }
 
 /* ===================================================================
+ * Function:    loginStatus()
+ * Return:
+ * Arguments:	
+ * Description: call sendStatus with new login value when it was change
+ *              during IRQ
+ * ===================================================================*/
+void loginStatus(void)
+{
+	if ( prevUnlocked != cmdUnlocked ) {
+		cmdLoginStatus(false);
+		prevUnlocked = cmdUnlocked;
+	}
+}
+
+/* ===================================================================
  * Function:    loop()
  * Return:
  * Arguments:
@@ -1832,9 +1851,12 @@ void loop()
 	// Rain sensor handling 
 	ctrlRainSensor();
 
-	// Output motor OFF status (set within IRQ)
+	// Output motor OFF status if it has changed during IRQ
 	sendMotorOffStatus();
-
+	
+	// Output login status if it has changed during IRQ
+	loginStatus();
+	
 	// Alive timer (watchdog trigger)
 	beAlive();
 

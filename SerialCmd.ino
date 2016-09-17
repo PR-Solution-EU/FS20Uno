@@ -126,15 +126,15 @@ const char sPDescLED[]			PROGMEM = "    <len>     pattern bit time in ms\r\n"
 								          "    <rain>    rain blink pattern";
 const char sPDescMOTOR[]		PROGMEM = "    <m>    motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
 								          "    <cmd>  can be\r\n"
-								          "      OPEN       start motor opening\r\n"
-								          "      CLOSE      start motor closing\r\n"
+								          "      OPEN       start opening\r\n"
+								          "      CLOSE      start closing\r\n"
 								          "      TOPEN      toogle opening\r\n"
 								          "      TCLOSE     toogle closing\r\n"
-								          "      TOOGLE     Toogle anyway\r\n"
+								          "      TOOGLE     toogle\r\n"
 								          "      [GOTO] <p> goto position <p> (in %, 0-100)\r\n"
-								          "      OFF        stop motor\r\n"
-								          "      SYNC       set motor in a defined state\r\n"
-								          "      STATUS     get the current status";
+								          "      OFF        stop\r\n"
+								          "      SYNC       set a defined state\r\n"
+								          "      STATUS     get status";
 const char sPDescMOTORNAME[]	PROGMEM = "    <m>     motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
 								          "    <name>  motor name";
 const char sPDescMOTORTIME[]	PROGMEM = "    <m>          motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
@@ -167,28 +167,28 @@ const char sPDescPASSWD[]		PROGMEM = "    <current>  old password\r\n"
 								          "    <retype>   retyped new password";
 
 
-const char* const sCmdTable[][4] PROGMEM = {
-	 {sCmdHELP		,sParmHELP		,sDescHELP		,sPDescHELP}
-	,{sCmdINFO		,sParmINFO		,sDescINFO		,sPDescINFO}
-	,{sCmdLOGIN		,sParmLOGIN		,sDescLOGIN		,sPDescLOGIN}
-	,{sCmdLOGOUT	,sParmLOGOUT	,sDescLOGOUT	,sPDescLOGOUT}
-	,{sCmdECHO		,sParmECHO		,sDescECHO		,sPDescECHO}
-	,{sCmdTERM		,sParmTERM		,sDescTERM		,sPDescTERM}
-	,{sCmdSTATUS	,sParmSTATUS	,sDescSTATUS	,sPDescSTATUS}
-	,{sCmdUPTIME	,sParmUPTIME	,sDescUPTIME	,sPDescUPTIME}
-	,{sCmdLED		,sParmLED		,sDescLED		,sPDescLED}
-	,{sCmdMOTOR		,sParmMOTOR		,sDescMOTOR		,sPDescMOTOR}
-	,{sCmdMOTORNAME	,sParmMOTORNAME	,sDescMOTORNAME	,sPDescMOTORNAME}
-	,{sCmdMOTORTIME	,sParmMOTORTIME	,sDescMOTORTIME	,sPDescMOTORTIME}
-	,{sCmdMOTORTYPE	,sParmMOTORTYPE	,sDescMOTORTYPE	,sPDescMOTORTYPE}
-	,{sCmdFS20		,sParmFS20		,sDescFS20		,sPDescFS20}
-	,{sCmdPUSHBUTTON,sParmPUSHBUTTON,sDescPUSHBUTTON,sPDescPUSHBUTTON}
-	,{sCmdRAIN		,sParmRAIN		,sDescRAIN		,sPDescRAIN}
-	,{sCmdBACKUP	,sParmBACKUP	,sDescBACKUP	,sPDescBACKUP}
-	,{sCmdRESTORE	,sParmRESTORE	,sDescRESTORE	,sPDescRESTORE}
-	,{sCmdFACTORY	,sParmFACTORY	,sDescFACTORY	,sPDescFACTORY}
-	,{sCmdREBOOT	,sParmREBOOT	,sDescREBOOT	,sPDescREBOOT}
-	,{sCmdPASSWD	,sParmPASSWD	,sDescPASSWD	,sPDescPASSWD}
+const char* const sCmdTable[][5] PROGMEM = {
+	 {sCmdHELP		,sParmHELP		,sDescHELP		,sPDescHELP		,(const char *)0}
+	,{sCmdINFO		,sParmINFO		,sDescINFO		,sPDescINFO		,(const char *)0}
+	,{sCmdLOGIN		,sParmLOGIN		,sDescLOGIN		,sPDescLOGIN	,(const char *)0}
+	,{sCmdLOGOUT	,sParmLOGOUT	,sDescLOGOUT	,sPDescLOGOUT	,(const char *)0}
+	,{sCmdECHO		,sParmECHO		,sDescECHO		,sPDescECHO		,(const char *)1}
+	,{sCmdTERM		,sParmTERM		,sDescTERM		,sPDescTERM		,(const char *)1}
+	,{sCmdSTATUS	,sParmSTATUS	,sDescSTATUS	,sPDescSTATUS	,(const char *)1}
+	,{sCmdUPTIME	,sParmUPTIME	,sDescUPTIME	,sPDescUPTIME	,(const char *)1}
+	,{sCmdLED		,sParmLED		,sDescLED		,sPDescLED		,(const char *)1}
+	,{sCmdMOTOR		,sParmMOTOR		,sDescMOTOR		,sPDescMOTOR	,(const char *)1}
+	,{sCmdMOTORNAME	,sParmMOTORNAME	,sDescMOTORNAME	,sPDescMOTORNAME,(const char *)1}
+	,{sCmdMOTORTIME	,sParmMOTORTIME	,sDescMOTORTIME	,sPDescMOTORTIME,(const char *)1}
+	,{sCmdMOTORTYPE	,sParmMOTORTYPE	,sDescMOTORTYPE	,sPDescMOTORTYPE,(const char *)1}
+	,{sCmdFS20		,sParmFS20		,sDescFS20		,sPDescFS20		,(const char *)1}
+	,{sCmdPUSHBUTTON,sParmPUSHBUTTON,sDescPUSHBUTTON,sPDescPUSHBUTTON,(const char *)1}
+	,{sCmdRAIN		,sParmRAIN		,sDescRAIN		,sPDescRAIN		,(const char *)1}
+	,{sCmdBACKUP	,sParmBACKUP	,sDescBACKUP	,sPDescBACKUP	,(const char *)1}
+	,{sCmdRESTORE	,sParmRESTORE	,sDescRESTORE	,sPDescRESTORE	,(const char *)1}
+	,{sCmdFACTORY	,sParmFACTORY	,sDescFACTORY	,sPDescFACTORY	,(const char *)1}
+	,{sCmdREBOOT	,sParmREBOOT	,sDescREBOOT	,sPDescREBOOT	,(const char *)1}
+	,{sCmdPASSWD	,sParmPASSWD	,sDescPASSWD	,sPDescPASSWD	,(const char *)1}
 };
 const void (*cmdTable[])() = {
 	 (const void (*)())cmdHelp
@@ -369,7 +369,7 @@ void unrecognized(char *token)
 void cmdHelp()
 {
 	#ifdef DEBUG_OUTPUT
-	Serial.print(F("No HELP when debug is enabled!"));
+	Serial.print(F("No HELP availbale during debug is enabled!"));
 	#else
 	char *arg;
 
@@ -381,7 +381,8 @@ void cmdHelp()
 			printHelp(i, PRINT_PARM, "\r\n  ");
 			printHelp(i, PRINT_DESC, "\r\n");
 			if ( arg != NULL ) {
-				printHelp(i, PRINT_PDESC, "\r\n\r\n");
+				printHelp(i, PRINT_PDESC, "\r\n");
+				printCRLF();
 			}
 		}
 		if ( arg == NULL ) {
@@ -389,7 +390,6 @@ void cmdHelp()
 		}
 	}
 	else {
-
 		bool cmdFound=false;
 		for(byte i=0; !cmdFound && i<sizeof(sCmdTable)/sizeof(sCmdTable[0]); i++) {
 			if( strcasecmp_P(arg, (char *)pgm_read_word(&(sCmdTable[i][PRINT_CMD])))==0 ) {
@@ -413,46 +413,54 @@ void cmdHelp()
 #ifndef DEBUG_OUTPUT
 int printHelp(byte cmd, printCmdType type, const char *postfix)
 {
-	char *p = NULL;
+	if ( cmdUnlocked || pgm_read_word(&(sCmdTable[cmd][PRINT_PROTECT])) == 0 ) {
+		char *p = NULL;
 
-	switch ( type ) {
-		case PRINT_CMD:
-		case PRINT_PARM:
-		case PRINT_DESC:
-		case PRINT_PDESC:
-			p = pgm_read_word(&(sCmdTable[cmd][type]));
-			break;
-	}
-	if ( p!=NULL ) {
-		unsigned char c;
-		
-		while( (c = pgm_read_byte(p++)) != 0 ) {
-			Serial.write(c);
+		switch ( type ) {
+			case PRINT_CMD:
+			case PRINT_PARM:
+			case PRINT_DESC:
+			case PRINT_PDESC:
+				p = pgm_read_word(&(sCmdTable[cmd][type]));
+				break;
+			default:
+				break;
 		}
-		if ( postfix!=NULL ) {
-			Serial.print(postfix);
+		if ( p!=NULL ) {
+			unsigned char c;
+
+			if ( type!=PRINT_PDESC || pgm_read_byte(p) != 0 ) {
+				while( (c = pgm_read_byte(p++)) != 0 ) {
+					Serial.write(c);
+				}
+				if ( postfix!=NULL ) {
+					Serial.print(postfix);
+				}
+			}
+			return strlen_P(p);
 		}
-		return strlen_P(p);
+		return 0;
 	}
-	
 	return 0;
+
 }
 void helpHeader()
 {
 	SerialPrintfln(F("\r\n"
 					 "%S COMMAND LIST\r\n"
-					 "--------------------"), PROGRAM);
+					 "\r\n"), PROGRAM);
 }
 #endif
 
-/* INFO 
+/* INFO
  *   Print version
  */
 void cmdInfo()
 {
 	printProgramInfo(false);
-	cmdUptime();
-	cmdOK();
+	if ( cmdUnlocked ) {
+		cmdUptime();
+	}
 }
 
 /* LOGIN [<password> [<timeout>]]
@@ -464,7 +472,7 @@ void cmdLogin()
 
 	arg = SCmd.next();
 	if (arg == NULL) {
-		cmdLoginStatus();
+		cmdLoginStatus(true);
 		cmdOK();
 	}
 	else {
@@ -480,18 +488,23 @@ void cmdLogin()
 			// set login timeout to stored value
 			cmdLoginTimeout = eeprom.LoginTimeout;
 
-			// get optionall new timeout value
+			// get optional new timeout value
 			arg = SCmd.next();
-			int timeout=atoi(arg);
-			if ( timeout<0 ) {
-				cmdError(F("<timeout> of range"));
+			if (arg != NULL) {
+				int timeout=atoi(arg);
+				if ( timeout<0 ) {
+					cmdError(F("<timeout> of range"));
+				}
+				else {
+					// store new timeout value
+					eeprom.LoginTimeout = timeout;
+					eepromWriteVars();
+					// set login timeout to stored value
+					cmdLoginTimeout = timeout;
+					cmdOK();
+				}
 			}
 			else {
-				// store new timeout value
-				eeprom.LoginTimeout = timeout;
-				eepromWriteVars();
-				// set login timeout to stored value
-				cmdLoginTimeout = timeout;
 				cmdOK();
 			}
 		}
@@ -500,19 +513,19 @@ void cmdLogin()
 		}
 	}
 }
-void cmdLoginStatus(void)
+void cmdLoginStatus(bool send)
 {
 	if ( eeprom.LoginTimeout && cmdUnlocked ) {
-		sendStatus(true,SYSTEM,F("LOGGED IN (%d of %d s)"),cmdLoginTimeout, eeprom.LoginTimeout);
+		sendStatus(send,SYSTEM,F("LOGGED IN (%d s)"),cmdLoginTimeout);
 	}
 	else {
-		sendStatus(true,SYSTEM,F("LOGGED %S"),cmdUnlocked ? F("IN"):F("OUT"));
+		sendStatus(send,SYSTEM,F("LOGGED %S"),cmdUnlocked ? F("IN"):F("OUT"));
 	}
 }
 
 /* LOGOUT
  *   Logout
- */ 
+ */
 void cmdLogout()
 {
 	cmdUnlocked = false;
@@ -524,27 +537,32 @@ void cmdLogout()
  */
 void cmdEcho(void)
 {
-	char *arg;
+	if( cmdUnlocked ) {
+		char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		sendStatus(true,SYSTEM,F("ECHO %S"), eeprom.Echo?fstrON:fstrOFF);
-		cmdOK();
-	}
-	else if ( strnicmp_P(arg, fstrON,2)==0 ) {
-		eeprom.Echo = true;
-		SCmd.setEcho(eeprom.Echo);
-		eepromWriteVars();
-		cmdOK();
-	}
-	else if ( strnicmp_P(arg, fstrOFF,2)==0 ) {
-		eeprom.Echo = false;
-		SCmd.setEcho(eeprom.Echo);
-		eepromWriteVars();
-		cmdOK();
+		arg = SCmd.next();
+		if (arg == NULL) {
+			sendStatus(true,SYSTEM,F("ECHO %S"), eeprom.Echo?fstrON:fstrOFF);
+			cmdOK();
+		}
+		else if ( strnicmp_P(arg, fstrON,2)==0 ) {
+			eeprom.Echo = true;
+			SCmd.setEcho(eeprom.Echo);
+			eepromWriteVars();
+			cmdOK();
+		}
+		else if ( strnicmp_P(arg, fstrOFF,2)==0 ) {
+			eeprom.Echo = false;
+			SCmd.setEcho(eeprom.Echo);
+			eepromWriteVars();
+			cmdOK();
+		}
+		else {
+			cmdErrorParameter(F("'ON' or 'OFF'"));
+		}
 	}
 	else {
-		cmdErrorParameter(F("'ON' or 'OFF'"));
+		cmdErrorNotLoggedIn();
 	}
 }
 
@@ -553,27 +571,32 @@ void cmdEcho(void)
  */
 void cmdTerm(void)
 {
-	char *arg;
+	if( cmdUnlocked ) {
+		char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		sendStatus(true,SYSTEM,F("TERM %S"),eeprom.Term=='\r'?fstrCR:fstrLF);
-		cmdOK();
-	}
-	else if ( strnicmp_P(arg, fstrCR,2)==0 ) {
-		eeprom.Term = '\r';
-		SCmd.setTerm(eeprom.Term);
-		eepromWriteVars();
-		cmdOK();
-	}
-	else if ( strnicmp_P(arg, fstrLF,2)==0 ) {
-		eeprom.Term = '\n';
-		SCmd.setTerm(eeprom.Term);
-		eepromWriteVars();
-		cmdOK();
+		arg = SCmd.next();
+		if (arg == NULL) {
+			sendStatus(true,SYSTEM,F("TERM %S"),eeprom.Term=='\r'?fstrCR:fstrLF);
+			cmdOK();
+		}
+		else if ( strnicmp_P(arg, fstrCR,2)==0 ) {
+			eeprom.Term = '\r';
+			SCmd.setTerm(eeprom.Term);
+			eepromWriteVars();
+			cmdOK();
+		}
+		else if ( strnicmp_P(arg, fstrLF,2)==0 ) {
+			eeprom.Term = '\n';
+			SCmd.setTerm(eeprom.Term);
+			eepromWriteVars();
+			cmdOK();
+		}
+		else {
+			cmdErrorParameter(F("'CR' or 'LF'"));
+		}
 	}
 	else {
-		cmdErrorParameter(F("'CR' or 'LF'"));
+		cmdErrorNotLoggedIn();
 	}
 }
 
@@ -582,27 +605,32 @@ void cmdTerm(void)
  */
 void cmdStatus()
 {
-	char *arg;
+	if( cmdUnlocked ) {
+		char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		sendStatus(true,SYSTEM,F("STATUS %S"), eeprom.SendStatus?fstrON:fstrOFF);
-		cmdOK();
-	}
-	else {
-		if ( strnicmp_P(arg, fstrON,2)==0 ) {
-			eeprom.SendStatus = true;
-			eepromWriteVars();
-			cmdOK();
-		}
-		else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
-			eeprom.SendStatus = false;
-			eepromWriteVars();
+		arg = SCmd.next();
+		if (arg == NULL) {
+			sendStatus(true,SYSTEM,F("STATUS %S"), eeprom.SendStatus?fstrON:fstrOFF);
 			cmdOK();
 		}
 		else {
-			cmdErrorParameter(F("'ON' or 'OFF'"));
+			if ( strnicmp_P(arg, fstrON,2)==0 ) {
+				eeprom.SendStatus = true;
+				eepromWriteVars();
+				cmdOK();
+			}
+			else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
+				eeprom.SendStatus = false;
+				eepromWriteVars();
+				cmdOK();
+			}
+			else {
+				cmdErrorParameter(F("'ON' or 'OFF'"));
+			}
 		}
+	}
+	else {
+		cmdErrorNotLoggedIn();
 	}
 }
 
@@ -613,27 +641,32 @@ void cmdStatus()
  */
 void cmdUptime()
 {
-	char *arg;
-
-	arg = SCmd.next();
-	if (arg != NULL) {
-
-		cli(); //halt the interrupts
-		timer0_millis =  (unsigned long)atol(arg);
-		sei(); //re-enable the interrupts
-		operationHours(true);
+	if( cmdUnlocked ) {
+		char *arg;
 
 		arg = SCmd.next();
 		if (arg != NULL) {
-			eeprom.OperatingHours=atol(arg);
-			eepromWriteVars();
+
+			cli(); //halt the interrupts
+			timer0_millis =  (unsigned long)atol(arg);
+			sei(); //re-enable the interrupts
+			operationHours(true);
+
+			arg = SCmd.next();
+			if (arg != NULL) {
+				eeprom.OperatingHours=atol(arg);
+				eepromWriteVars();
+			}
 		}
+		SerialPrintf(  F("Uptime:       "));
+		SerialPrintUptime();;
+		printCRLF();
+		SerialPrintfln(F("Operating:    %ld h"), eeprom.OperatingHours);
+		cmdOK();
 	}
-	SerialPrintf(  F("Uptime:       "));
-	SerialPrintUptime();;
-	printCRLF();
-	SerialPrintfln(F("Operating:    %ld h"), eeprom.OperatingHours);
-	cmdOK();
+	else {
+		cmdErrorNotLoggedIn();
+	}
 }
 
 /* LED [<len> [<count> [<normal> [<rain>]]]]
@@ -645,63 +678,68 @@ void cmdUptime()
  */
 void cmdLed()
 {
-	LEDPATTERN 	LEDPatternNormal;
-	LEDPATTERN 	LEDPatternRain;
-	byte 		LEDBitCount;
-	WORD 		LEDBitLenght;					
+	if( cmdUnlocked ) {
+		LEDPATTERN 	LEDPatternNormal;
+		LEDPATTERN 	LEDPatternRain;
+		byte 		LEDBitCount;
+		WORD 		LEDBitLenght;
 
-	char *argLEDPatternNormal;
-	char *argLEDPatternRain;
-	char *argLEDBitCount;
-	char *argLEDBitLenght;
+		char *argLEDPatternNormal;
+		char *argLEDPatternRain;
+		char *argLEDBitCount;
+		char *argLEDBitLenght;
 
-	LEDBitLenght		= eeprom.LEDBitLenght;
-	LEDBitCount			= eeprom.LEDBitCount;
-	LEDPatternNormal	= eeprom.LEDPatternNormal;
-	LEDPatternRain		= eeprom.LEDPatternRain;
+		LEDBitLenght		= eeprom.LEDBitLenght;
+		LEDBitCount			= eeprom.LEDBitCount;
+		LEDPatternNormal	= eeprom.LEDPatternNormal;
+		LEDPatternRain		= eeprom.LEDPatternRain;
 
-	argLEDBitLenght		= SCmd.next();
-	argLEDBitCount		= SCmd.next();
-	argLEDPatternNormal	= SCmd.next();
-	argLEDPatternRain	= SCmd.next();
-	if ( argLEDBitLenght == NULL ) {
-		sendStatus(true,SYSTEM,F("LED %d %d 0x%08lx 0x%08lx")
-					,eeprom.LEDBitLenght
-					,eeprom.LEDBitCount
-					,eeprom.LEDPatternNormal
-					,eeprom.LEDPatternRain
-					);
-		cmdOK();
+		argLEDBitLenght		= SCmd.next();
+		argLEDBitCount		= SCmd.next();
+		argLEDPatternNormal	= SCmd.next();
+		argLEDPatternRain	= SCmd.next();
+		if ( argLEDBitLenght == NULL ) {
+			sendStatus(true,SYSTEM,F("LED %d %d 0x%08lx 0x%08lx")
+						,eeprom.LEDBitLenght
+						,eeprom.LEDBitCount
+						,eeprom.LEDPatternNormal
+						,eeprom.LEDPatternRain
+						);
+			cmdOK();
+		}
+		else {
+			LEDBitLenght	= (WORD)atoi(argLEDBitLenght);
+			if ( argLEDBitCount!=NULL ) {
+				LEDBitCount		= (byte)atoi(argLEDBitCount);
+				if ( LEDBitCount<1 || LEDBitCount>MAX_LEDPATTERN_BITS ) {
+					cmdErrorOutOfRange(F("<bits>"));
+					return;
+				}
+			}
+			if ( argLEDPatternNormal!=NULL ) {
+				LEDPatternNormal = (LEDPATTERN)strtoul(argLEDPatternNormal, NULL, 0);
+				if ( errno == ERANGE ) {
+					cmdErrorOutOfRange(F("<normal>"));
+					return;
+				}
+			}
+			if ( argLEDBitCount!=NULL ) {
+				LEDPatternRain = (LEDPATTERN)strtoul(argLEDPatternRain, NULL, 0);
+				if ( errno == ERANGE ) {
+					cmdErrorOutOfRange(F("<rain>"));
+					return;
+				}
+			}
+			eeprom.LEDPatternNormal	= LEDPatternNormal;
+			eeprom.LEDPatternRain	= LEDPatternRain;
+			eeprom.LEDBitCount		= LEDBitCount;
+			eeprom.LEDBitLenght		= LEDBitLenght;
+			eepromWriteVars();
+			cmdOK();
+		}
 	}
 	else {
-		LEDBitLenght	= (WORD)atoi(argLEDBitLenght);
-		if ( argLEDBitCount!=NULL ) {
-			LEDBitCount		= (byte)atoi(argLEDBitCount);
-			if ( LEDBitCount<1 || LEDBitCount>MAX_LEDPATTERN_BITS ) {
-				cmdErrorOutOfRange(F("<bits>"));
-				return;
-			}
-		}
-		if ( argLEDPatternNormal!=NULL ) {
-			LEDPatternNormal = (LEDPATTERN)strtoul(argLEDPatternNormal, NULL, 0);
-			if ( errno == ERANGE ) {
-				cmdErrorOutOfRange(F("<normal>"));
-				return;
-			}
-		}
-		if ( argLEDBitCount!=NULL ) {
-			LEDPatternRain = (LEDPATTERN)strtoul(argLEDPatternRain, NULL, 0);
-			if ( errno == ERANGE ) {
-				cmdErrorOutOfRange(F("<rain>"));
-				return;
-			}
-		}
-		eeprom.LEDPatternNormal	= LEDPatternNormal;
-		eeprom.LEDPatternRain	= LEDPatternRain;
-		eeprom.LEDBitCount		= LEDBitCount;
-		eeprom.LEDBitLenght		= LEDBitLenght;
-		eepromWriteVars();
-		cmdOK();
+		cmdErrorNotLoggedIn();
 	}
 }
 
@@ -721,101 +759,106 @@ void cmdLed()
  */
 void cmdMotor()
 {
-	int motor;
-	char *arg;
+	if( cmdUnlocked ) {
+		int motor;
+		char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		for(motor=0; motor<MAX_MOTORS; motor++) {
-			sendMotorStatus(true,motor);
-		}
-		cmdOK();
-	}
-	else {
-		motor=atoi(arg)-1;
-		if ( motor<0 || motor>=MAX_MOTORS ) {
-			cmdErrorOutOfRange(F("<m>"));
+		arg = SCmd.next();
+		if (arg == NULL) {
+			for(motor=0; motor<MAX_MOTORS; motor++) {
+				sendMotorStatus(true,motor);
+			}
+			cmdOK();
 		}
 		else {
-			arg = SCmd.next();
-			if (arg != NULL) {
-				if      ( strnicmp_P(arg, PSTR("OP"),2)==0 ) {
-					if( getMotorDirection(motor)<MOTOR_OPEN ) {
-						setMotorDirection(motor, MOTOR_OPEN);
-					}
-					cmdOK();
-				}
-				else if ( strnicmp_P(arg, PSTR("CL"),2)==0 ) {
-					if( getMotorDirection(motor)>MOTOR_CLOSE ) {
-						setMotorDirection(motor, MOTOR_CLOSE);
-					}
-					cmdOK();
-				}
-				else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
-					if( getMotorDirection(motor)!=MOTOR_OFF ) {
-						setMotorDirection(motor, MOTOR_OFF);
-					}
-					cmdOK();
-				}
-				else if ( strnicmp_P(arg, PSTR("GO"),2)==0 ) {
-					arg = SCmd.next();
-					int percent=atoi(arg);
-
-					if ( percent<0 || percent>100 ) {
-						cmdError(F("<p> of range"));
-					}
-					else {
-						setMotorPosition(motor, percent);
+			motor=atoi(arg)-1;
+			if ( motor<0 || motor>=MAX_MOTORS ) {
+				cmdErrorOutOfRange(F("<m>"));
+			}
+			else {
+				arg = SCmd.next();
+				if (arg != NULL) {
+					if      ( strnicmp_P(arg, PSTR("OP"),2)==0 ) {
+						if( getMotorDirection(motor)<MOTOR_OPEN ) {
+							setMotorDirection(motor, MOTOR_OPEN);
+						}
 						cmdOK();
 					}
-				}
-				else if ( strnicmp_P(arg, PSTR("TOP"),3)==0 ) {
-					if( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)<=MOTOR_CLOSE ) {
-						setMotorDirection(motor, MOTOR_OPEN);
+					else if ( strnicmp_P(arg, PSTR("CL"),2)==0 ) {
+						if( getMotorDirection(motor)>MOTOR_CLOSE ) {
+							setMotorDirection(motor, MOTOR_CLOSE);
+						}
+						cmdOK();
+					}
+					else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
+						if( getMotorDirection(motor)!=MOTOR_OFF ) {
+							setMotorDirection(motor, MOTOR_OFF);
+						}
+						cmdOK();
+					}
+					else if ( strnicmp_P(arg, PSTR("GO"),2)==0 ) {
+						arg = SCmd.next();
+						int percent=atoi(arg);
+
+						if ( percent<0 || percent>100 ) {
+							cmdError(F("<p> of range"));
+						}
+						else {
+							setMotorPosition(motor, percent);
+							cmdOK();
+						}
+					}
+					else if ( strnicmp_P(arg, PSTR("TOP"),3)==0 ) {
+						if( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)<=MOTOR_CLOSE ) {
+							setMotorDirection(motor, MOTOR_OPEN);
+						}
+						else {
+							setMotorDirection(motor, MOTOR_OFF);
+						}
+						cmdOK();
+					}
+					else if ( strnicmp_P(arg, PSTR("TCL"),3)==0 ) {
+						if( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)>=MOTOR_OPEN  ) {
+							setMotorDirection(motor, MOTOR_CLOSE);
+						}
+						else {
+							setMotorDirection(motor, MOTOR_OFF);
+						}
+						cmdOK();
+					}
+					else if ( strnicmp_P(arg, PSTR("TOG"),3)==0 ) {
+						if( getMotorDirection(motor)==MOTOR_OFF ) {
+							setMotorDirection(motor, MOTOR_OPEN);
+						}
+						else if( getMotorDirection(motor)>MOTOR_CLOSE ) {
+							setMotorDirection(motor, MOTOR_CLOSE);
+						}
+						else if( getMotorDirection(motor)<MOTOR_OPEN ) {
+							setMotorDirection(motor, MOTOR_OPEN);
+						}
+						cmdOK();
+					}
+					else if ( strnicmp_P(arg, PSTR("SY"),2)==0 ) {
+						setMotorDirection(motor, MOTOR_CLOSE);
+						cmdOK();
+					}
+					else if ( (atoi(arg)>=0 && atoi(arg)<=100) ) {
+						setMotorPosition(motor, (byte)atoi(arg) );
+						cmdOK();
 					}
 					else {
-						setMotorDirection(motor, MOTOR_OFF);
+						cmdErrorParameter(F("'HELP MOTOR' for more info"));
 					}
+				}
+				if (arg == NULL || strnicmp_P(arg, PSTR("ST"),2)==0 ) {
+					sendMotorStatus(true,motor);
 					cmdOK();
 				}
-				else if ( strnicmp_P(arg, PSTR("TCL"),3)==0 ) {
-					if( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)>=MOTOR_OPEN  ) {
-						setMotorDirection(motor, MOTOR_CLOSE);
-					}
-					else {
-						setMotorDirection(motor, MOTOR_OFF);
-					}
-					cmdOK();
-				}
-				else if ( strnicmp_P(arg, PSTR("TOG"),3)==0 ) {
-					if( getMotorDirection(motor)==MOTOR_OFF ) {
-						setMotorDirection(motor, MOTOR_OPEN);
-					}
-					else if( getMotorDirection(motor)>MOTOR_CLOSE ) {
-						setMotorDirection(motor, MOTOR_CLOSE);
-					}
-					else if( getMotorDirection(motor)<MOTOR_OPEN ) {
-						setMotorDirection(motor, MOTOR_OPEN);
-					}
-					cmdOK();
-				}
-				else if ( strnicmp_P(arg, PSTR("SY"),2)==0 ) {
-					setMotorDirection(motor, MOTOR_CLOSE);
-					cmdOK();
-				}
-				else if ( (atoi(arg)>=0 && atoi(arg)<=100) ) {
-					setMotorPosition(motor, (byte)atoi(arg) );
-					cmdOK();
-				}
-				else {
-					cmdErrorParameter(F("'HELP MOTOR' for more info"));
-				}
-			}
-			if (arg == NULL || strnicmp_P(arg, PSTR("ST"),2)==0 ) {
-				sendMotorStatus(true,motor);
-				cmdOK();
 			}
 		}
+	}
+	else {
+		cmdErrorNotLoggedIn();
 	}
 }
 
@@ -827,59 +870,64 @@ void cmdMotor()
  */
 void cmdMotorTime()
 {
-	int motor;
-	DWORD runtime;
-	char *arg;
+	if( cmdUnlocked ) {
+		int motor;
+		DWORD runtime;
+		char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		for(motor=0; motor<MAX_MOTORS; motor++) {
-			cmdMotorTimePrintStatus(motor);
-		}
-		cmdOK();
-	}
-	else {
-		motor=atoi(arg)-1;
-		if ( motor<0 || motor>=MAX_MOTORS ) {
-			cmdErrorOutOfRange(F("<m>"));
+		arg = SCmd.next();
+		if (arg == NULL) {
+			for(motor=0; motor<MAX_MOTORS; motor++) {
+				cmdMotorTimePrintStatus(motor);
+			}
+			cmdOK();
 		}
 		else {
-			arg = SCmd.next();
-
-			if (arg == NULL) {
-				// Status
-				cmdMotorTimePrintStatus(motor);
-				cmdOK();
+			motor=atoi(arg)-1;
+			if ( motor<0 || motor>=MAX_MOTORS ) {
+				cmdErrorOutOfRange(F("<m>"));
 			}
 			else {
-				// Set new runtime value
-				runtime = strtoul(arg, NULL, 0);
-				if ( runtime==0 || runtime>(DWORD)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
-					cmdErrorOutOfRange(F("<runtime>"));
+				arg = SCmd.next();
+
+				if (arg == NULL) {
+					// Status
+					cmdMotorTimePrintStatus(motor);
+					cmdOK();
 				}
 				else {
-					eeprom.MaxRuntime[motor] = runtime;
-					eepromWriteVars();
-					arg = SCmd.next();
-					if (arg == NULL) {
-						cmdMotorTimePrintStatus(motor);
-						cmdOK();
+					// Set new runtime value
+					runtime = strtoul(arg, NULL, 0);
+					if ( runtime==0 || runtime>(DWORD)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
+						cmdErrorOutOfRange(F("<runtime>"));
 					}
 					else {
-						runtime = strtoul(arg, NULL, 0);
-						if ( runtime==0 || runtime>(DWORD)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
-							cmdErrorOutOfRange(F("<overtravel>"));
-						}
-						else {
-							eeprom.OvertravelTime[motor] = runtime;
-							eepromWriteVars();
+						eeprom.MaxRuntime[motor] = runtime;
+						eepromWriteVars();
+						arg = SCmd.next();
+						if (arg == NULL) {
 							cmdMotorTimePrintStatus(motor);
 							cmdOK();
 						}
+						else {
+							runtime = strtoul(arg, NULL, 0);
+							if ( runtime==0 || runtime>(DWORD)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
+								cmdErrorOutOfRange(F("<overtravel>"));
+							}
+							else {
+								eeprom.OvertravelTime[motor] = runtime;
+								eepromWriteVars();
+								cmdMotorTimePrintStatus(motor);
+								cmdOK();
+							}
+						}
 					}
 				}
 			}
 		}
+	}
+	else {
+		cmdErrorNotLoggedIn();
 	}
 }
 void cmdMotorTimePrintStatus(int motor)
@@ -901,44 +949,49 @@ void cmdMotorTimePrintStatus(int motor)
  */
 void cmdMotorName()
 {
-	int motor;
-	char *arg;
+	if( cmdUnlocked ) {
+		int motor;
+		char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		for(motor=0; motor<MAX_MOTORS; motor++) {
-			cmdMotorNamePrintStatus(motor);
-		}
-		cmdOK();
-	}
-	else {
-		motor=atoi(arg)-1;
-		if ( motor<0 || motor>=MAX_MOTORS ) {
-			cmdErrorOutOfRange(F("<m>"));
+		arg = SCmd.next();
+		if (arg == NULL) {
+			for(motor=0; motor<MAX_MOTORS; motor++) {
+				cmdMotorNamePrintStatus(motor);
+			}
+			cmdOK();
 		}
 		else {
-			arg = SCmd.next();
-			if (arg != NULL) {
-				char sName[MAX_NAMELEN];
-
-				#ifdef DEBUG_OUTPUT
-				SerialTimePrintfln(F("cmdMotorName arg=%s"), arg);
-				SerialTimePrintfln(F("cmdMotorName sizeof(eeprom.MotorName[motor])=%d"), sizeof(eeprom.MotorName[motor]) );
-				SerialTimePrintfln(F("cmdMotorName &eeprom.MotorName[motor]=%p"), &eeprom.MotorName[motor] );
-				#endif
-
-				strncpy(sName, arg, sizeof(sName)-1);
-				strReplaceChar(sName, '_', ' ');
-				strcpy(eeprom.MotorName[motor], sName);
-				eeprom.MotorName[motor][sizeof(eeprom.MotorName[motor])-1]='\0';
-				eepromWriteVars();
-				cmdOK();
+			motor=atoi(arg)-1;
+			if ( motor<0 || motor>=MAX_MOTORS ) {
+				cmdErrorOutOfRange(F("<m>"));
 			}
 			else {
-				cmdMotorNamePrintStatus(motor);
-				cmdOK();
+				arg = SCmd.next();
+				if (arg != NULL) {
+					char sName[MAX_NAMELEN];
+
+					#ifdef DEBUG_OUTPUT
+					SerialTimePrintfln(F("cmdMotorName arg=%s"), arg);
+					SerialTimePrintfln(F("cmdMotorName sizeof(eeprom.MotorName[motor])=%d"), sizeof(eeprom.MotorName[motor]) );
+					SerialTimePrintfln(F("cmdMotorName &eeprom.MotorName[motor]=%p"), &eeprom.MotorName[motor] );
+					#endif
+
+					strncpy(sName, arg, sizeof(sName)-1);
+					strReplaceChar(sName, '_', ' ');
+					strcpy(eeprom.MotorName[motor], sName);
+					eeprom.MotorName[motor][sizeof(eeprom.MotorName[motor])-1]='\0';
+					eepromWriteVars();
+					cmdOK();
+				}
+				else {
+					cmdMotorNamePrintStatus(motor);
+					cmdOK();
+				}
 			}
 		}
+	}
+	else {
+		cmdErrorNotLoggedIn();
 	}
 }
 void cmdMotorNamePrintStatus(int motor)
@@ -953,43 +1006,48 @@ void cmdMotorNamePrintStatus(int motor)
  */
 void cmdMotorType()
 {
-	int motor;
-	char *arg;
+	if( cmdUnlocked ) {
+		int motor;
+		char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		for(motor=0; motor<MAX_MOTORS; motor++) {
-			cmdMotorTypePrintStatus(motor);
-		}
-		cmdOK();
-	}
-	else {
-		motor=atoi(arg)-1;
-		if ( motor<0 || motor>=MAX_MOTORS ) {
-			cmdErrorOutOfRange(F("<m>"));
+		arg = SCmd.next();
+		if (arg == NULL) {
+			for(motor=0; motor<MAX_MOTORS; motor++) {
+				cmdMotorTypePrintStatus(motor);
+			}
+			cmdOK();
 		}
 		else {
-			arg = SCmd.next();
-			if (arg != NULL) {
-				if      ( strnicmp_P(arg, F("WIN"),3)==0 ) {
-					setMotorType(motor, WINDOW);
-					eepromWriteVars();
-					cmdOK();
-				}
-				else if ( strnicmp_P(arg, F("JAL"),3)==0 ) {
-					setMotorType(motor, JALOUSIE);
-					eepromWriteVars();
-					cmdOK();
-				}
-				else {
-					cmdErrorParameter(F("'WINDOW' or 'JALOUSIE'"));
-				}
+			motor=atoi(arg)-1;
+			if ( motor<0 || motor>=MAX_MOTORS ) {
+				cmdErrorOutOfRange(F("<m>"));
 			}
 			else {
-				cmdMotorTypePrintStatus(motor);
-				cmdOK();
+				arg = SCmd.next();
+				if (arg != NULL) {
+					if      ( strnicmp_P(arg, F("WIN"),3)==0 ) {
+						setMotorType(motor, WINDOW);
+						eepromWriteVars();
+						cmdOK();
+					}
+					else if ( strnicmp_P(arg, F("JAL"),3)==0 ) {
+						setMotorType(motor, JALOUSIE);
+						eepromWriteVars();
+						cmdOK();
+					}
+					else {
+						cmdErrorParameter(F("'WINDOW' or 'JALOUSIE'"));
+					}
+				}
+				else {
+					cmdMotorTypePrintStatus(motor);
+					cmdOK();
+				}
 			}
 		}
+	}
+	else {
+		cmdErrorNotLoggedIn();
 	}
 }
 void cmdMotorTypePrintStatus(int motor)
@@ -1009,64 +1067,69 @@ void cmdMotorTypePrintStatus(int motor)
  */
 void cmdFS20()
 {
-	int channel;
-	char *arg;
+	if( cmdUnlocked ) {
+		int channel;
+		char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		for(channel=0; channel<IOBITS_CNT; channel++) {
-			sendStatus(true,FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
-		}
-		cmdOK();
-	}
-	else {
-		// Channel number entered
-		channel=atoi(arg)-1;
-		if ( channel<0 || channel>=IOBITS_CNT ) {
-			cmdErrorOutOfRange(F("<ch>"));
+		arg = SCmd.next();
+		if (arg == NULL) {
+			for(channel=0; channel<IOBITS_CNT; channel++) {
+				sendStatus(true,FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
+			}
+			cmdOK();
 		}
 		else {
-			// Channel number ok
-			arg = SCmd.next();
-			if (arg != NULL) {
-				// ON|OFF entered?
-				if      ( strnicmp_P(arg, fstrON, 2)==0 ) {
-					if( !bitRead(curSM8Status, channel) ) {
-						bitClear(valSM8Button, channel);
-					}
-					cmdOK();
-				}
-				else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
-					if( bitRead(curSM8Status, channel) ) {
-						bitClear(valSM8Button, channel);
-					}
-					cmdOK();
-				}
-				else if ( strnicmp_P(arg, PSTR("PRG"),3)==0 ) {
-					bitSet(SM8StatusIgnore, channel);
-					bitClear(valSM8Button, channel);
-					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
-					SerialPrintf(F("Setting FS20 %d into program mode, please wait:  "), channel+1);
-					for(byte d=0; d<(FS20_SM8_IN_PROGRAMMODE/1000); d++) {
-						SerialPrintf(F("\b%1d"), (FS20_SM8_IN_PROGRAMMODE/1000)-d);
-						delay(1000);
-						watchdogReset();
-					}
-					bitSet(SM8StatusIgnore, channel);
-					bitClear(valSM8Button, channel);
-					expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
-					SerialPrintfln(F("\r\nFS20 %d now in programming mode"), channel+1);
-					cmdOK();
-				}
-				else {
-					cmdErrorParameter(F("'ON', 'OFF' or 'PRG'"));
-				}
+			// Channel number entered
+			channel=atoi(arg)-1;
+			if ( channel<0 || channel>=IOBITS_CNT ) {
+				cmdErrorOutOfRange(F("<ch>"));
 			}
 			else {
-				sendStatus(true,FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
-				cmdOK();
+				// Channel number ok
+				arg = SCmd.next();
+				if (arg != NULL) {
+					// ON|OFF entered?
+					if      ( strnicmp_P(arg, fstrON, 2)==0 ) {
+						if( !bitRead(curSM8Status, channel) ) {
+							bitClear(valSM8Button, channel);
+						}
+						cmdOK();
+					}
+					else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
+						if( bitRead(curSM8Status, channel) ) {
+							bitClear(valSM8Button, channel);
+						}
+						cmdOK();
+					}
+					else if ( strnicmp_P(arg, PSTR("PRG"),3)==0 ) {
+						bitSet(SM8StatusIgnore, channel);
+						bitClear(valSM8Button, channel);
+						expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
+						SerialPrintf(F("Setting FS20 %d into program mode, please wait:  "), channel+1);
+						for(byte d=0; d<(FS20_SM8_IN_PROGRAMMODE/1000); d++) {
+							SerialPrintf(F("\b%1d"), (FS20_SM8_IN_PROGRAMMODE/1000)-d);
+							delay(1000);
+							watchdogReset();
+						}
+						bitSet(SM8StatusIgnore, channel);
+						bitClear(valSM8Button, channel);
+						expanderWriteWord(MPC_SM8BUTTON,   GPIO, valSM8Button);
+						SerialPrintfln(F("\r\nFS20 %d now in programming mode"), channel+1);
+						cmdOK();
+					}
+					else {
+						cmdErrorParameter(F("'ON', 'OFF' or 'PRG'"));
+					}
+				}
+				else {
+					sendStatus(true,FS20IN, F("%02d %S"), channel+1, bitRead(curSM8Status,channel)?fstrON:fstrOFF);
+					cmdOK();
+				}
 			}
 		}
+	}
+	else {
+		cmdErrorNotLoggedIn();
 	}
 }
 
@@ -1077,44 +1140,49 @@ void cmdFS20()
  */
 void cmdPushButton()
 {
-	int button;
-	char *arg;
+	if( cmdUnlocked ) {
+		int button;
+		char *arg;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		for(button=0; button<IOBITS_CNT; button++) {
-			sendStatus(true,PUSHBUTTON, F("%02d %S"), button+1, bitRead(curPushButton, button)?fstrON:fstrOFF);
-		}
-		cmdOK();
-	}
-	else {
-		// Button number entered
-		button=atoi(arg)-1;
-		if ( button<0 || button>=IOBITS_CNT ) {
-			cmdErrorOutOfRange(F("<b>"));
+		arg = SCmd.next();
+		if (arg == NULL) {
+			for(button=0; button<IOBITS_CNT; button++) {
+				sendStatus(true,PUSHBUTTON, F("%02d %S"), button+1, bitRead(curPushButton, button)?fstrON:fstrOFF);
+			}
+			cmdOK();
 		}
 		else {
-			// Button number ok
-			arg = SCmd.next();
-			if (arg != NULL) {
-				// ON|OFF entered?
-				if      ( strnicmp_P(arg, fstrON,2)==0 ) {
-					bitSet(curPushButton, button);
-					cmdOK();
-				}
-				else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
-					bitClear(curPushButton, button);
-					cmdOK();
-				}
-				else {
-					cmdErrorParameter(F("'ON' or 'OFF'"));
-				}
+			// Button number entered
+			button=atoi(arg)-1;
+			if ( button<0 || button>=IOBITS_CNT ) {
+				cmdErrorOutOfRange(F("<b>"));
 			}
 			else {
-				sendStatus(true,PUSHBUTTON, F("%02d %S"), button+1, bitRead(curPushButton, button)?fstrON:fstrOFF);
-				cmdOK();
+				// Button number ok
+				arg = SCmd.next();
+				if (arg != NULL) {
+					// ON|OFF entered?
+					if      ( strnicmp_P(arg, fstrON,2)==0 ) {
+						bitSet(curPushButton, button);
+						cmdOK();
+					}
+					else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
+						bitClear(curPushButton, button);
+						cmdOK();
+					}
+					else {
+						cmdErrorParameter(F("'ON' or 'OFF'"));
+					}
+				}
+				else {
+					sendStatus(true,PUSHBUTTON, F("%02d %S"), button+1, bitRead(curPushButton, button)?fstrON:fstrOFF);
+					cmdOK();
+				}
 			}
 		}
+	}
+	else {
+		cmdErrorNotLoggedIn();
 	}
 }
 
@@ -1133,69 +1201,74 @@ void cmdPushButton()
  */
 void cmdRain()
 {
-	char *arg;
-	bool cmd = false;
+	if( cmdUnlocked ) {
+		char *arg;
+		bool cmd = false;
 
-	arg = SCmd.next();
-	if (arg == NULL) {
-		cmdRainSensorPrintStatus();
-		cmdOK();
-	}
-	else {
-		if ( strnicmp_P(arg, fstrON,2)==0 || strnicmp_P(arg, fstrWET,3)==0 ) {
-			softRainInput = true;
-			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
-			cmd = true;
-		}
-		if ( strnicmp_P(arg, fstrOFF,2)==0 || strnicmp_P(arg, fstrDRY,3)==0 ) {
-			softRainInput = false;
-			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
-			cmd = true;
-		}
-		else if ( strnicmp_P(arg, fstrENABLE,2)==0 ) {
-			bitSet(eeprom.Rain, RAIN_BIT_ENABLE);
-			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
-			cmd = true;
-		}
-		else if ( strnicmp_P(arg, fstrDISABLE,2)==0 ) {
-			bitClear(eeprom.Rain, RAIN_BIT_ENABLE);
-			bitClear(eeprom.Rain, RAIN_BIT_AUTO);
-			cmd = true;
-		}
-		else if ( strnicmp_P(arg, fstrAUTO,2)==0 ) {
-			bitSet(eeprom.Rain, RAIN_BIT_AUTO);
-			cmd = true;
-		}
-		else if ( strnicmp_P(arg, fstrRESUME,2)==0 ) {
-			int delay = eeprom.RainResumeTime;
-			arg = SCmd.next();
-			if( arg!=NULL ) {
-				delay=atoi(arg);
-			}
-			if ( delay<0 || delay>6000 ) {
-				cmdError(F("<s> (max 6000) of range"));
-			}
-			else {
-				eeprom.RainResumeTime = delay;
-				bitSet(eeprom.Rain, RAIN_BIT_RESUME);
-				cmd = true;
-			}
-		}
-		else if ( strnicmp_P(arg, fstrFORGET,2)==0 ) {
-			// Clear resumeMotorPosition[]
-			for(size_t i=0; i<(sizeof(resumeMotorPosition)/sizeof(resumeMotorPosition[0])); i++) {
-				resumeMotorPosition[i] = NO_RESUME_POSITION;
-			}
-			bitClear(eeprom.Rain, RAIN_BIT_RESUME);
-			cmd = true;
-		}
-		if ( cmd ) {
-			eepromWriteVars();
+		arg = SCmd.next();
+		if (arg == NULL) {
+			cmdRainSensorPrintStatus();
 			cmdOK();
 		}
 		else {
-			cmdErrorParameter(F("'ENABLE', 'DISABLE', 'AUTO', 'ON' or 'OFF'"));
+			if ( strnicmp_P(arg, fstrON,2)==0 || strnicmp_P(arg, fstrWET,3)==0 ) {
+				softRainInput = true;
+				bitClear(eeprom.Rain, RAIN_BIT_AUTO);
+				cmd = true;
+			}
+			if ( strnicmp_P(arg, fstrOFF,2)==0 || strnicmp_P(arg, fstrDRY,3)==0 ) {
+				softRainInput = false;
+				bitClear(eeprom.Rain, RAIN_BIT_AUTO);
+				cmd = true;
+			}
+			else if ( strnicmp_P(arg, fstrENABLE,2)==0 ) {
+				bitSet(eeprom.Rain, RAIN_BIT_ENABLE);
+				bitClear(eeprom.Rain, RAIN_BIT_AUTO);
+				cmd = true;
+			}
+			else if ( strnicmp_P(arg, fstrDISABLE,2)==0 ) {
+				bitClear(eeprom.Rain, RAIN_BIT_ENABLE);
+				bitClear(eeprom.Rain, RAIN_BIT_AUTO);
+				cmd = true;
+			}
+			else if ( strnicmp_P(arg, fstrAUTO,2)==0 ) {
+				bitSet(eeprom.Rain, RAIN_BIT_AUTO);
+				cmd = true;
+			}
+			else if ( strnicmp_P(arg, fstrRESUME,2)==0 ) {
+				int delay = eeprom.RainResumeTime;
+				arg = SCmd.next();
+				if( arg!=NULL ) {
+					delay=atoi(arg);
+				}
+				if ( delay<0 || delay>6000 ) {
+					cmdError(F("<s> (max 6000) of range"));
+				}
+				else {
+					eeprom.RainResumeTime = delay;
+					bitSet(eeprom.Rain, RAIN_BIT_RESUME);
+					cmd = true;
+				}
+			}
+			else if ( strnicmp_P(arg, fstrFORGET,2)==0 ) {
+				// Clear resumeMotorPosition[]
+				for(size_t i=0; i<(sizeof(resumeMotorPosition)/sizeof(resumeMotorPosition[0])); i++) {
+					resumeMotorPosition[i] = NO_RESUME_POSITION;
+				}
+				bitClear(eeprom.Rain, RAIN_BIT_RESUME);
+				cmd = true;
+			}
+			if ( cmd ) {
+				eepromWriteVars();
+				cmdOK();
+			}
+			else {
+				cmdErrorParameter(F("'ENABLE', 'DISABLE', 'AUTO', 'ON' or 'OFF'"));
+			}
 		}
+	}
+	else {
+		cmdErrorNotLoggedIn();
 	}
 }
 void cmdRainSensorPrintStatus()
@@ -1212,7 +1285,7 @@ void cmdRainSensorPrintStatus()
 		sensorEnabled = bitRead(eeprom.Rain, RAIN_BIT_ENABLE);
 	}
 
-	// 5 RAIN DRY [<DRY>:DRY] ENABLED [<ON>|OFF] 
+	// 5 RAIN DRY [<DRY>:DRY] ENABLED [<ON>|OFF]
 	sendStatus(true,RAIN,F("%S [%s%S:%s%S] %SD [%s%S:%s%S] %S %S %s%d%s")
 				,sensorEnabled && ((debInput.read()==RAIN_INPUT_ACTIVE) || softRainInput) ? fstrWET : fstrDRY
 				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? "*" : ""
@@ -1227,16 +1300,16 @@ void cmdRainSensorPrintStatus()
 				,bitRead(eeprom.Rain, RAIN_BIT_ENABLE) ? fstrON : fstrOFF			// SET
 
 				,bitRead(eeprom.Rain, RAIN_BIT_AUTO) ? fstrAUTO : fstrMANUAL		// MODE
-				
+
 				,bitRead(eeprom.Rain, RAIN_BIT_RESUME) ? fstrRESUME : fstrFORGET	// POS
-				
+
 				,bitRead(eeprom.Rain, RAIN_BIT_RESUME) ? "" : "("
 				,eeprom.RainResumeTime												// DELAY
 				,bitRead(eeprom.Rain, RAIN_BIT_RESUME) ? " s" : " s)"
 				);
 }
 
-/* BACKUP 
+/* BACKUP
  *   Create backup from EEPROM
  */
 void cmdBackup(void)
@@ -1381,7 +1454,7 @@ void cmdRestore(void)
 	}
 }
 
-/* FACTORY 
+/* FACTORY
  *   Factory defaults
  */
 void cmdFactory()
@@ -1397,7 +1470,7 @@ void cmdFactory()
 	}
 }
 
-/* REBOOT 
+/* REBOOT
  *   Restart controller
  */
 void cmdReboot(void)
@@ -1441,7 +1514,7 @@ void cmdPassword()
 	oldPw = SCmd.next();
 	if (oldPw == NULL ) {
 		// no parameter given, get it direct from user
-		
+
 		// Query current password
 		Serial.print(F("Current password: "));
 		if( cmdGetPassword() ) {
@@ -1463,15 +1536,15 @@ void cmdPassword()
 			cmdError(F("Wrong password, password unchanged"));
 		}
 	}
-	else { 
+	else {
 		// Parameter given
-		
+
 		// Check if old password matches stored crypted one
 		strcpy(newPassword, oldPw);
 		cryptPassword(newPassword, eeprom.EncryptKey, ENCRYPT);
 		if ( memcmp(eeprom.Password, newPassword, sizeof(newPassword)-1 )==0 ) {
 			// Password check ok, go on
-			
+
 			// New password must given twice
 			newPw = SCmd.next();
 			if (newPw == NULL ) {
