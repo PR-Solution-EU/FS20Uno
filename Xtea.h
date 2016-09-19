@@ -19,7 +19,7 @@ class Xtea
     void encrypt(char pw[16]);
     void decrypt(unsigned long data[2]);
     void decrypt(char pw[16]);
-    
+
   private:
     unsigned long _key[4];
 };

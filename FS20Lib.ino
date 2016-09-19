@@ -28,9 +28,43 @@ void strReplaceChar(char *s, char find, char replace)
     }
 }
 
-/* *******************************************************************
- * HIGH-LEVEL Functions
- * ********************************************************************/
+
+/* ===================================================================
+ * Function:	CalcCRC
+ * Return:		CRC32 checksum
+ * Arguments:	addr - start address
+ * 				size - size of the sum range
+ * Description: Calcluate a CRC32 sum from memory
+ * ===================================================================*/
+// CRC table
+const uint32_t ccrc_table[16] PROGMEM = {
+	0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
+	0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
+	0xedb88320, 0xf00f9344, 0xd6d6a3e8, 0xcb61b38c,
+	0x9b64c2b0, 0x86d3d2d4, 0xa00ae278, 0xbdbdf21c
+};
+uint32_t CalcCRC(byte *addr, size_t size)
+{
+	uint32_t crc = ~0L;
+
+	DEBUG_RUNTIME_START(msCalcCRC);
+	for (size_t index=0; index < size; ++index) {
+		unsigned int k;
+		byte data;
+
+		data = *(addr+index);
+		k = ((crc ^ data) & 0x0f);
+		crc = (unsigned long)pgm_read_dword_near( ccrc_table + k ) ^ (crc >> 4);
+		k = ((crc ^ (data >> 4)) & 0x0f);
+		crc = (unsigned long)pgm_read_dword_near( ccrc_table + k ) ^ (crc >> 4);
+		crc = ~crc;
+	}
+	DEBUG_RUNTIME_END("CalcCRC()",msCalcCRC);
+	#ifdef DEBUG_EEPROM
+	SerialTimePrintfln(F("EEPROM - CalcCRC(%p, %ld) returns 0x%08lx"), addr, (unsigned long)size, crc);
+	#endif
+	return crc;
+}
 
 /* ===================================================================
  * Function:    printProgramInfo
@@ -43,7 +77,7 @@ void printProgramInfo(bool copyright)
 	SerialPrintfln(F("%S v%S (build %S)"), PROGRAM, VERSION, REVISION);
 	SerialPrintfln(F("compiled on %s %s (GnuC%S %s)"), __DATE__, __TIME__, __GNUG__?F("++ "):F(" "), __VERSION__);
 	SerialPrintfln(F("using avr library %s (%s)"),  __AVR_LIBC_VERSION_STRING__, __AVR_LIBC_DATE_STRING__);
-	if( copyright ) {
+	if ( copyright ) {
 		SerialPrintfln(F("(c) 2016 www.p-r-solution.de - Norbert Richter <norbert.richter@p-r-solution.de>"));
 	}
 }
@@ -82,6 +116,35 @@ void watchdogReset(void)
 }
 
 /* ===================================================================
+ * Function:    getSystemUptime
+ * Return:		pointer to a string with uptime info
+ * Arguments:
+ * Description: Get system uptime
+ * ===================================================================*/
+char *getSystemUptime(void)
+{
+	uint32_t t, ot;
+	uint16_t days, milli;
+	uint8_t hours, minutes, seconds;
+	static char uptimeStr[48];
+
+	t = ot = sec(&milli);
+	days    = (uint16_t)(t      / (24UL * 60UL * 60UL));
+	t      -= (uint32_t)days    * (24UL * 60UL * 60UL);
+	hours   = (uint8_t) (t      / (60UL * 60UL));
+	t      -= (uint32_t)hours   * (60UL * 60UL);
+	minutes = (uint8_t) (t      / (60UL));
+	t      -= (uint32_t)minutes * (60UL);
+	seconds = (uint8_t) t;
+
+	if ( days ) {
+		snprintf_P(uptimeStr, sizeof(uptimeStr), PSTR("%u day%S "), days, days==1?F(""):F("s"));
+	}
+	snprintf_P(uptimeStr+strlen(uptimeStr), sizeof(uptimeStr)-strlen(uptimeStr), PSTR("%02u:%02u:%02u.%-3u (%lu%03u ms) "), hours, minutes, seconds, milli, ot, milli);
+	return uptimeStr;
+}
+
+/* ===================================================================
  * Function:    cmdGetString
  * Return:		number of character read
  * Arguments:	buf       pointer to the char buffer to store the chars
@@ -104,7 +167,7 @@ size_t SerialGetString(char *buf, size_t buflen, char term, bool echo, bool hide
 			inChar=Serial.read();   // Read single available character, there may be more waiting
 
 			if ( echo ) {
-				if( hideEcho ) {
+				if ( hideEcho ) {
 					Serial.print(F("*"));
 				}
 				else {
@@ -147,7 +210,7 @@ void vaSerialPrint(const __FlashStringHelper *fmt, va_list argp)
 /* ===================================================================
  * Function:    printCRLF
  * Return:
- * Arguments:	
+ * Arguments:
  * Description: Serial output new line
  * ===================================================================*/
 void printCRLF()
@@ -222,26 +285,7 @@ unsigned long sec(uint16_t *milli)
  * ===================================================================*/
 void SerialPrintUptime(void)
 {
-	uint32_t t, ot;
-	uint16_t days, milli;
-	uint8_t hours, minutes, seconds;
-	char timebuf[48];
-
-	t = ot = sec(&milli);
-	days    = (uint16_t)(t      / (24UL * 60UL * 60UL));
-	t      -= (uint32_t)days    * (24UL * 60UL * 60UL);
-	hours   = (uint8_t) (t      / (60UL * 60UL));
-	t      -= (uint32_t)hours   * (60UL * 60UL);
-	minutes = (uint8_t) (t      / (60UL));
-	t      -= (uint32_t)minutes * (60UL);
-	seconds = (uint8_t) t;
-
-	if ( days ) {
-		snprintf_P(timebuf, sizeof(timebuf), PSTR("%d day%S "), days, days==1?F(""):F("s"));
-		Serial.print(timebuf);
-	}
-	snprintf_P(timebuf, sizeof(timebuf), PSTR("%02d:%02d:%02d.%-3d (%ld%03d ms) "), hours, minutes, seconds, milli, ot, milli);
-	Serial.print(timebuf);
+	Serial.print(getSystemUptime());
 }
 
 /* ===================================================================
@@ -282,7 +326,7 @@ void SerialTimePrintfln(const __FlashStringHelper *fmt, ... )
  * Return:
  * Arguments:	send  if true, message will be send regardless
  *                    if eeprom.SendStatus is false
- *              type  statusType enum
+ *              type  STATUSTYPE enum
  *              fmt   variable format string like printf
  * Description: Send status using serial interface
  *              type    Status type text output
@@ -293,9 +337,9 @@ void SerialTimePrintfln(const __FlashStringHelper *fmt, ... )
  *                      4: PUSHBUTTON 01..xx
  *                      5: RAIN
  * ===================================================================*/
-void sendStatus(bool send, statusType type, const __FlashStringHelper *fmt, ... )
+void sendStatus(bool send, STATUSTYPE type, const __FlashStringHelper *fmt, ... )
 {
-	if( send || eeprom.SendStatus ) {
+	if ( send || eeprom.SendStatus ) {
 		switch (type) {
 		case SYSTEM:
 			Serial.print(F("0 SYSTEM "));
@@ -317,7 +361,7 @@ void sendStatus(bool send, statusType type, const __FlashStringHelper *fmt, ... 
 			break;
 		}
 		watchdogReset();
-		
+
 		va_list args;
 		va_start (args, fmt);
 		vaSerialPrint(fmt, args);
@@ -339,10 +383,10 @@ void sendMotorStatus(bool send, int motor)
 {
 	byte runTimePercent = (byte)((long)MotorPosition[motor]*100L / (long)(eeprom.MaxRuntime[motor] / TIMER_MS));
 
-	if( runTimePercent<1 && MotorPosition[motor]>0 ) {
+	if ( runTimePercent<1 && MotorPosition[motor]>0 ) {
 		runTimePercent=1;
 	}
-	if( runTimePercent>100 ) {
+	if ( runTimePercent>100 ) {
 		runTimePercent=100;
 	}
 	sendStatus(send,MOTOR,F("%02d %-7S %3d%% %-7S (%s)")
@@ -503,9 +547,9 @@ char getMotorDirection(byte motorNum)
  *              mType      type (WINDOW, JALOUSIE)
  * Description: Set motor type
  * ===================================================================*/
-void setMotorType(byte motorNum, mtype mType)
+void setMotorType(byte motorNum, MTYPE mType)
 {
-	if( mType == WINDOW ) {
+	if ( mType == WINDOW ) {
 		bitSet(eeprom.MTypeBitmask, motorNum);
 	}
 	else {
@@ -515,12 +559,12 @@ void setMotorType(byte motorNum, mtype mType)
 
 /* ===================================================================
  * Function:    getMotorType
- * Return:      mtype      type (WINDOW, JALOUSIE)
+ * Return:      MTYPE      type (WINDOW, JALOUSIE)
  * Arguments:   motorNum   motor # [0..x]
- *              
+ *
  * Description: Get motor type
  * ===================================================================*/
-mtype getMotorType(byte motorNum)
+MTYPE getMotorType(byte motorNum)
 {
 	if ( bitRead(eeprom.MTypeBitmask, motorNum) ) {
 		return WINDOW;

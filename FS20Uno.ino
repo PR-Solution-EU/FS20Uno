@@ -15,7 +15,7 @@
  * ==============
  * Features:
  * * Can control up to 4 electrical roof windows with shutter
- * * Control windows by using 
+ * * Control windows by using
  *   * two pushbuttons ("Open" and "Close")
  *   * two FS20-SM8 channel ("Open" and "Close" via FS20 sender)
  *   * command using serial interface
@@ -23,7 +23,7 @@
  *      RaspberryPi using ser2net it is also usable via network)
  *  * Optional rain sensor to close roof windows when it is raining
  *  * Optional restore window position after rain has gone.
- * 
+ *
  * Functions:
  * * 2 pushbutton (wall button)
  *    * Opening a motor by pushing the "Open" pushbutton for a short
@@ -34,11 +34,11 @@
  *      time.
  *      When using the "Close" pushbutton again when motor runs in
  *      "Close" direction will stop the motor.
- *    * Pushing both buttons together will stop the current running 
+ *    * Pushing both buttons together will stop the current running
  *      direction anyway.
  *    * If pushing a button longer than 10 sec, the pressed time until
  *      releasing the button will be used as new motor running time.
- * 
+ *
  * * 2 FS20-SM8 channel
  *    * Opening a motor by enable the related FS20-SM8 "Open" channel.
  *      Stop this mode by enable again the related FS20-SM8 "Open"
@@ -46,18 +46,18 @@
  *    * Closing a motor by enable the related FS20-SM8 "Close" channel.
  *      Stop this mode by enable again the related FS20-SM8 "Close"
  *      channel.
- * 
+ *
  * * Serial interface with simple commands
  *
  *
  * Two FS20-SM8 8 channel recevier are used as FS20 receiver, so we
  * have 16 channels to control 8 motors in open and close direction.
  *
- * With this setup we control 4 electric roof windows with electric 
+ * With this setup we control 4 electric roof windows with electric
  * shutter having 24V direct current motors:
  * - one motor open/close the window
  * - one motor open/close the shutter (jalousie)
- * 
+ *
  * Using the Arduino Uno we translate the user inputs from pushbuttons
  * and FS20-SM8 channels to motor signals for
  * - Off
@@ -91,12 +91,12 @@
  * Each motor will be completyl controlled by Arduino Uno. There are
  * no direct connections of FS20-SM8 channel outputs or pushbutton to
  * motor relais control signal.
- * 
- * Each motor used two additional porperties: 
+ *
+ * Each motor used two additional porperties:
  * * Motor type (window or jalousie)
  * * Motor running time (from open <-> close position)
  * Both properties are set to default values using the program defines
- * MTYPE_BITMASK, MOTOR_WINDOW_MAXRUNTIME and MOTOR_JALOUSIE_MAXRUNTIME.
+ * DEFAULT_MOTORTYPE, MOTOR_WINDOW_MAXRUNTIME and MOTOR_JALOUSIE_MAXRUNTIME.
  * They can be changed during operation with the commands  "MOTORTYPE"
  * and "MOTORTIME". Values are stored in EEPROM.
  * Motors having property WINDOW are closed when rain sensor is enable
@@ -134,7 +134,7 @@
  *                   pushng a second time switch motor off.
  * - Push both buttons together also swich motor off.
  * - Keep a pushbutton pressed longer than 10 sec, activates a auto-
- *   learn function to measure the real runtime for a motor needs to 
+ *   learn function to measure the real runtime for a motor needs to
  *   move a window or shutter.
  * Pusbuttons having a higher priority than FS20-SM8 channel outputs
  * so if a FS20-SM8 channel is active, pushbutton overwrite the state
@@ -144,7 +144,7 @@
  * ----------------------------
  * FS20-SM8 channel outputs are also used to control the motors. Because
  * we connect the FS20-SM8 channel key inputs also to Arduino, we are
- * able to activly control the FS20-SM8 channel by soft-push the 
+ * able to activly control the FS20-SM8 channel by soft-push the
  * FS20-SM8 key. So we can switch FS20-SM8 channel, which are switch
  * by key pressing or by FS20 control signal.
  * FS20 control conditions:
@@ -165,7 +165,7 @@
  * are not closed when rain begins to the previous position.
  * The resume functionaliy only works properly, if the motor runtime
  * are properly set to a real value.
- * 
+ *
  * Rain sensor input:
  * Can be connect to input "RAIN_INPUT", the active level polarity can
  * be set using "RAIN_INPUT_ACTIVE".
@@ -215,10 +215,9 @@
 #include "I2C.h"
 
 #define PROGRAM F("FS20Uno")	// program name
-#define VERSION F("4.02")		// program version
+#define VERSION F("4.03")		// program version
 #include "REVISION.h"			// Build (changed from git hook)
 #define DATAVERSION 126			// can be used to invalidate EEPROM data
-
 
 #define WATCHDOG_ENABLED		// #undef to disable watchdog function
 
@@ -268,7 +267,7 @@
 	defined(DEBUG_MOTOR) || \
 	defined(DEBUG_MOTOR_DETAILS) || \
 	defined(DEBUG_RAIN) || \
-	defined(DEBUG_ALIVE) 
+	defined(DEBUG_ALIVE)
 	#define DEBUG_OUTPUT
 	#undef WATCHDOG_ENABLED
 #endif
@@ -393,59 +392,8 @@ Bounce debInput = Bounce();
 /* Rain flag */
 bool isRaining = false;
 
-
 /* EEPROM Variablen */
-struct EEPROM {
-	/* LED-Pattern
-	 * <LEDPattern> are bitwise copied to LED, starting with bit 0
-	 * right-sifted <LEDBitCount> times with a delay of <LEDBitLenght>
-	 * between each bit.
-	 * Default pattern: 0010.0000  0000.1000  0000.0010  0000.0000
-	 * using 30 bits and 100 ms delay each bit */
-
-	// LED normal pattern
-	LEDPATTERN 	LEDPatternNormal;
-	// LED rain pattern
-	LEDPATTERN 	LEDPatternRain;
-	// LED bit count
-	byte 		LEDBitCount;
-	// LED bit delay
-	WORD 		LEDBitLenght;
-
-	// Motor type bitmask
-	MOTORBITS	MTypeBitmask;
-	// Motor runtimes
-	volatile DWORD MaxRuntime[MAX_MOTORS];
-	// Motor overtravel times
-	volatile DWORD OvertravelTime[MAX_MOTORS];
-	// Motor names
-	char 		MotorName[MAX_MOTORS][MAX_NAMELEN];
-	// Last motor position
-	volatile MOTOR_TIMER MotorPosition[MAX_MOTORS];
-
-	// <Rain> function bits
-	#define RAIN_BIT_AUTO	(1<<0)
-	#define RAIN_BIT_ENABLE	(1<<1)
-	#define RAIN_BIT_RESUME	(1<<2)
-	byte 		Rain;
-	// Rain resume delay time
-	WORD 		RainResumeTime;
-
-	// Command interface local echo flag
-	bool 		Echo;
-	// Command interface terminator
-	char 		Term;
-	// Auto status flag
-	bool 		SendStatus;
-	// Opration timer
-	DWORD		OperatingHours;
-	// Login auto timeout (0=function disabled)
-	WORD		LoginTimeout;
-	// Password
-	DWORD		EncryptKey[4];
-	char		Password[17];
-} eeprom;
-
+struct MYEEPROM eeprom;
 
 // Command interface login status
 bool prevUnlocked;				// remember value for output new status
@@ -471,7 +419,7 @@ void printRuntime(const __FlashStringHelper *funcName, unsigned long starttime)
 	SerialPrintUptime();
 	SerialPrintf(F("RUNTIME - "));
 	Serial.print(funcName);
-	SerialPrintfln(F(" duration: %ld.%03ld ms"), duration / 1000L, duration % 1000L);
+	SerialPrintfln(F(" duration: %lu.%03lu ms"), duration / 1000L, duration % 1000L);
 }
 #endif
 
@@ -502,6 +450,40 @@ void setup()
 
 	Serial.begin(SERIAL_BAUDRATE);
 	Serial.println();
+
+	// Init random generator
+	long r = millis();
+	#ifdef DEBUG_SETUP
+	SerialTimePrintfln(F("setup - r=%ld"), r);
+	#endif
+	int an = 0;
+	#ifdef RANDOM_SEED_ANALOG_READ1
+	an = analogRead(RANDOM_SEED_ANALOG_READ1);
+	r = an;
+	#ifdef DEBUG_SETUP
+	SerialTimePrintfln(F("setup - AN1: %d"), an);
+	#endif
+	#endif
+	#ifdef RANDOM_SEED_ANALOG_READ2
+	an = analogRead(RANDOM_SEED_ANALOG_READ2);
+	r <<= 10;
+	r |= an;
+	#ifdef DEBUG_SETUP
+	SerialTimePrintfln(F("setup - AN2: %d"), an);
+	#endif
+	#endif
+	#ifdef RANDOM_SEED_ANALOG_READ3
+	an = analogRead(RANDOM_SEED_ANALOG_READ3);
+	r <<= 10;
+	r |= an;
+	#ifdef DEBUG_SETUP
+	SerialTimePrintfln(F("setup - AN3: %d"), an);
+	#endif
+	#endif
+	#ifdef DEBUG_SETUP
+	SerialTimePrintfln(F("setup - randomSeed(%ld)"), r);
+	#endif
+	randomSeed(r);
 
 	// Read EEPROM program setting
 	eepromInitVars();
@@ -633,45 +615,13 @@ void setup()
 	extISREnabled   = true;
 	timerISREnabled = true;
 
-	// Init random generator
-	long r = millis();
-	#ifdef DEBUG_SETUP
-	SerialTimePrintfln(F("setup - r=%ld"), r);
-	#endif
-	int an = 0;
-	#ifdef RANDOM_SEED_ANALOG_READ1
-	an = analogRead(RANDOM_SEED_ANALOG_READ1);
-	r *= an;
-	#ifdef DEBUG_SETUP
-	SerialTimePrintfln(F("setup - AN1: %d"), an);
-	#endif
-	#endif
-	#ifdef RANDOM_SEED_ANALOG_READ2
-	an = analogRead(RANDOM_SEED_ANALOG_READ2);
-	r *= an;
-	#ifdef DEBUG_SETUP
-	SerialTimePrintfln(F("setup - AN2: %d"), an);
-	#endif
-	#endif
-	#ifdef RANDOM_SEED_ANALOG_READ3
-	an = analogRead(RANDOM_SEED_ANALOG_READ3);
-	r *= an;
-	#ifdef DEBUG_SETUP
-	SerialTimePrintfln(F("setup - AN3: %d"), an);
-	#endif
-	#endif
-	#ifdef DEBUG_SETUP
-	SerialTimePrintfln(F("setup - randomSeed(%ld)"), r);
-	#endif
-	randomSeed(r);
-
 	prevMillis = millis();
 
 	// Finished
 	digitalWrite(STATUS_LED, LOW);
 
 	#ifdef DEBUG_SETUP
-	SerialTimePrintfln(F("setup - Setup done, starting main loop()"));
+	SerialTimePrintfln(F("setup - done, starting main loop()"));
 	#endif
 	DEBUG_RUNTIME_END("setup()",msSetup);
 
@@ -680,7 +630,7 @@ void setup()
 	//~ eepromWriteVars();
 
 	sendStatus(false,SYSTEM, F("START"));
-	
+
 }
 
 /* ===================================================================
@@ -700,14 +650,14 @@ void initVars()
 	// Variablen initalisieren
 	currentLEDPattern = eeprom.LEDPatternNormal;
 	currentLEDBitCount = 0;
-	ledTimer = millis() + eeprom.LEDBitLenght;
+	ledTimer = millis() + (TIMER)eeprom.LEDBitLenght;
 
-	runTimer = millis() + ALIVE_TIMER;
-	
+	runTimer = millis() + (TIMER)ALIVE_TIMER;
+
 	secTimerCount = 0;
 
 	sendStatusMOTOR_OFF = 0;
-	
+
 	cmdUnlocked = false;
 	prevUnlocked = false;
 	cmdLoginTimeout = 0;
@@ -724,10 +674,10 @@ void initVars()
  * ===================================================================*/
 void extISR()
 {
-	if( extISREnabled )
+	if ( extISREnabled )
 	{
 		#ifdef DEBUG_PINS
-		digitalWrite(DBG_INT, !digitalRead(DBG_INT));  			
+		digitalWrite(DBG_INT, !digitalRead(DBG_INT));
 		#endif
 		isrTrigger = true;
 	}
@@ -742,16 +692,16 @@ void extISR()
  * ===================================================================*/
 void timerISR()
 {
-	if( timerISREnabled )
+	if ( timerISREnabled )
 	{
 		byte i;
 
 		#ifdef DEBUG_PINS
-		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	
+		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));
 		#endif
 
 		// Check millis() timer overflow
-		if( millis() < prevMillis ) {
+		if ( millis() < prevMillis ) {
 			millisOverflow++;
 			prevMillis = millis();
 		}
@@ -869,11 +819,11 @@ void timerISR()
 				}
 			}
 		}
-		
+
 		// Timer in sec steps
 		if ( ++secTimerCount>=(1000/TIMER_MS) ) {
 			// executed every second
-			
+
 			if ( cmdLoginTimeout>0 ) {
 				cmdLoginTimeout--;
 				if ( cmdLoginTimeout == 0 ) {
@@ -884,7 +834,7 @@ void timerISR()
 			secTimerCount = 0;
 		}
 		#ifdef DEBUG_PINS
-		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));	
+		digitalWrite(DBG_TIMER, !digitalRead(DBG_TIMER));
 		#endif
 	}
 }
@@ -904,14 +854,14 @@ void handleMPCInt()
 		byte i;
 
 		#ifdef DEBUG_PINS
-		digitalWrite(DBG_INT, !digitalRead(DBG_INT));  		
+		digitalWrite(DBG_INT, !digitalRead(DBG_INT));
 		#endif
 		isrTrigger = false;
 
 		if ( expanderReadWord(MPC_SM8STATUS, INFTF) )
 		{
 			#ifdef DEBUG_PINS
-			digitalWrite(DBG_MPC, HIGH);	
+			digitalWrite(DBG_MPC, HIGH);
 			#endif
 			irqSM8Status = expanderReadWord(MPC_SM8STATUS, GPIO);
 			for (i = 0; i < IOBITS_CNT; i++) {
@@ -920,7 +870,7 @@ void handleMPCInt()
 				}
 			}
 			#ifdef DEBUG_PINS
-			digitalWrite(DBG_MPC, LOW);		
+			digitalWrite(DBG_MPC, LOW);
 			#endif
 		}
 
@@ -928,7 +878,7 @@ void handleMPCInt()
 		{
 			static IOBITS tmpPushButton = IOBITS_ZERO;
 			#ifdef DEBUG_PINS
-			digitalWrite(DBG_MPC, HIGH);	
+			digitalWrite(DBG_MPC, HIGH);
 			#endif
 			irqPushButton = expanderReadWord(MPC_PUSHBUTTON, GPIO);
 			#ifdef DEBUG_PUSHBUTTON
@@ -944,12 +894,12 @@ void handleMPCInt()
 				}
 			}
 			#ifdef DEBUG_PINS
-			digitalWrite(DBG_MPC, LOW);		
+			digitalWrite(DBG_MPC, LOW);
 			#endif
 		}
 
 		#ifdef DEBUG_PINS
-		digitalWrite(DBG_INT, !digitalRead(DBG_INT));  		
+		digitalWrite(DBG_INT, !digitalRead(DBG_INT));
 		#endif
 	}
 	watchdogReset();
@@ -1003,7 +953,7 @@ void clrSM8Status(void)
 	curPushButton = expanderReadWord(MPC_PUSHBUTTON, GPIO);
 
 	for(byte channel=0; channel<IOBITS_CNT; channel++) {
-		if( bitRead(curSM8Status, channel) ) {
+		if ( bitRead(curSM8Status, channel) ) {
 			bitClear(valSM8Button, channel);
 		}
 	}
@@ -1011,7 +961,7 @@ void clrSM8Status(void)
 	delay(FS20_SM8_IN_RESPONSE);
 
 	for(byte channel=0; channel<IOBITS_CNT; channel++) {
-		if( bitRead(curSM8Status, channel) ) {
+		if ( bitRead(curSM8Status, channel) ) {
 			bitSet(valSM8Button, channel);
 		}
 	}
@@ -1231,7 +1181,7 @@ void ctrlPushButton(void)
 						#ifdef DEBUG_PUSHBUTTON
 						SerialTimePrintfln(F("ctrlPushButton  - motor %d: delta_t=%ld ms"), i % MAX_MOTORS, dt);
 						#endif
-						if( maxTime > 10000 ) {
+						if ( maxTime > 10000 ) {
 							#ifdef DEBUG_PUSHBUTTON
 							SerialTimePrintfln(F("ctrlPushButton  - Setting new timeout for motor %d: %ld ms"), i % MAX_MOTORS, maxTime);
 							#endif
@@ -1383,7 +1333,7 @@ void ctrlMotorRelais(void)
 			bitWrite(curTarget, 2, bitRead(tmpMotorRelais, i+MAX_MOTORS));
 			bitWrite(curTarget, 1, bitRead(valMotorRelais, i));
 			bitWrite(curTarget, 0, bitRead(valMotorRelais, i+MAX_MOTORS));
-			// everytime output last step (relais final state) 
+			// everytime output last step (relais final state)
 			targetSteps = 0;
 
 			switch (curTarget) {
@@ -1452,7 +1402,7 @@ void ctrlMotorRelais(void)
 				bitWrite(preMotorRelais[k], i+MAX_MOTORS, targetStep[k] & 1);
 			}
 
-			if( targetSteps > preMotorCount ) {
+			if ( targetSteps > preMotorCount ) {
 				preMotorCount = targetSteps;
 			}
 		}
@@ -1494,7 +1444,7 @@ void ctrlMotorRelais(void)
 			regMotorRelais = outMotorRelais;
 			expanderWriteWord(MPC_MOTORRELAIS, GPIO, regMotorRelais);
 
-			if( doSM8andTimeout ) {
+			if ( doSM8andTimeout ) {
 				for (i = 0; i < MAX_MOTORS; i++) {
 					// Set motor timeout
 						// - if motor just activated
@@ -1570,7 +1520,7 @@ void ctrlMotorRelais(void)
  * Function:    ctrlRainSensor
  * Return:
  * Arguments:
- * Description: Rain sensor handling 
+ * Description: Rain sensor handling
  * ===================================================================*/
 #ifdef DEBUG_RAIN
 const char dbgCtrlRainSensor[] PROGMEM = "ctrlRainSensor  - ";
@@ -1594,13 +1544,13 @@ void ctrlRainSensor(void)
 	sensRainEnable = (debEnable.read() == RAIN_ENABLE_ACTIVE);
 	sensRainInput  = (debInput.read()  == RAIN_INPUT_ACTIVE);
 
-	if( firstRun ) {
+	if ( firstRun ) {
 		prevRainEnableInput = sensRainEnable;
 	}
 
 	/* If enable input has changed, activate AUTO mode
 	 * regardless what user has set with RAIN DISABLE/ENABLE command */
-	if( prevRainEnableInput != sensRainEnable ) {
+	if ( prevRainEnableInput != sensRainEnable ) {
 		#ifdef DEBUG_RAIN
 		SerialTimePrintfln(F("%SsensRainEnable      = %d"), dbgCtrlRainSensor, sensRainEnable);
 		SerialTimePrintfln(F("%SprevRainEnableInput = %d"), dbgCtrlRainSensor, prevRainEnableInput);
@@ -1623,7 +1573,7 @@ void ctrlRainSensor(void)
 	// Rain is active if settings set to rain or rain sensor input is active
 	RainInput  = (sensRainInput || softRainInput);
 
-	if( firstRun ) {
+	if ( firstRun ) {
 		prevRainInput  = RainInput;
 		prevRainEnable = RainEnable;
 		firstRun = false;
@@ -1765,7 +1715,7 @@ void beAlive(void)
 void blinkLED(void)
 {
 	if ( (long)( millis() - ledTimer) >= 0 ) {
-		ledTimer += eeprom.LEDBitLenght;
+		ledTimer += (TIMER)eeprom.LEDBitLenght;
 		digitalWrite(STATUS_LED, bitRead(currentLEDPattern, 1) );
 		currentLEDPattern >>= 1;
 		currentLEDBitCount++;
@@ -1809,7 +1759,7 @@ void operationHours(bool millisSet)
 /* ===================================================================
  * Function:    loginStatus()
  * Return:
- * Arguments:	
+ * Arguments:
  * Description: call sendStatus with new login value when it was change
  *              during IRQ
  * ===================================================================*/
@@ -1836,7 +1786,7 @@ void loop()
 	ctrlSM8Status();
 
 	/* Pushbuttons are higher priorisized than FS20-SM8 channel outputs
-	 * so we handle pushbuttons after FS20-SM8 channel outputs to 
+	 * so we handle pushbuttons after FS20-SM8 channel outputs to
 	 * possibly overrule FS20-SM8 */
 
 	// Pushbutton handling
@@ -1848,15 +1798,15 @@ void loop()
 	// FS20-SM8 key button handling
 	ctrlSM8Button();
 
-	// Rain sensor handling 
+	// Rain sensor handling
 	ctrlRainSensor();
 
 	// Output motor OFF status if it has changed during IRQ
 	sendMotorOffStatus();
-	
+
 	// Output login status if it has changed during IRQ
 	loginStatus();
-	
+
 	// Alive timer (watchdog trigger)
 	beAlive();
 

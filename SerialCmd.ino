@@ -41,6 +41,8 @@ const char fstrRESUME[]			PROGMEM = "RESUME";
 const char fstrFORGET[]			PROGMEM = "FORGET";
 const char fstrWET[]			PROGMEM = "WET";
 const char fstrDRY[]			PROGMEM = "DRY";
+const char fstrWINDOW[]			PROGMEM = "WINDOW";
+const char fstrJALOUSIE[]		PROGMEM = "JALOUSIE";
 
 const char sCmdHELP[]			PROGMEM = "HELP";
 const char sCmdINFO[]			PROGMEM = "INFO";
@@ -85,7 +87,7 @@ const char sParmBACKUP[]		PROGMEM = "";
 const char sParmRESTORE[]		PROGMEM = "<addr> <data>";
 const char sParmFACTORY[]		PROGMEM = "";
 const char sParmREBOOT[]		PROGMEM = "";
-const char sParmPASSWD[]		PROGMEM = "[<current> <new> <retype>]";
+const char sParmPASSWD[]		PROGMEM = "<current> <new> <retype>";
 
 const char sDescHELP[]			PROGMEM = "Print command help";
 const char sDescINFO[]			PROGMEM = "Print version";
@@ -106,7 +108,7 @@ const char sDescRAIN[]			PROGMEM = "Rain sensor function";
 const char sDescBACKUP[]		PROGMEM = "Create backup from EEPROM";
 const char sDescRESTORE[]		PROGMEM = "Restore data into EEPROM";
 const char sDescFACTORY[]		PROGMEM = "Reset to factory defaults";
-const char sDescREBOOT[]		PROGMEM = "Restart controller";
+const char sDescREBOOT[]		PROGMEM = "Restart";
 const char sDescPASSWD[]		PROGMEM = "Set password";
 
 const char sPDescHELP[]			PROGMEM = "    <cmd>  command for getting help\r\n"
@@ -115,15 +117,15 @@ const char sPDescINFO[]			PROGMEM = "";
 const char sPDescLOGIN[]		PROGMEM = "    <password>  use password to login\r\n"
                                           "    <timeout>   logout after <timeout> sec";
 const char sPDescLOGOUT[]		PROGMEM = "";
-const char sPDescECHO[]			PROGMEM = "    ON|OFF  set local echo ON or OFF";
-const char sPDescTERM[]			PROGMEM = "    CR|LF   set terminator to CR or LF";
-const char sPDescSTATUS[]		PROGMEM = "    ON|OFF  set status messages ON or OFF";
+const char sPDescECHO[]			PROGMEM = "    ON|OFF  set to ON or OFF";
+const char sPDescTERM[]			PROGMEM = "    CR|LF   set to CR or LF";
+const char sPDescSTATUS[]		PROGMEM = "    ON|OFF  set to ON or OFF";
 const char sPDescUPTIME[]		PROGMEM = "    <uptime>  set uptime (in ms since start)\r\n"
                                           "    <h>       set operation hours";
-const char sPDescLED[]			PROGMEM = "    <len>     pattern bit time in ms\r\n"
-								          "    <count>   pattern bit count [1.." TOSTRING(MAX_LEDPATTERN_BITS) "]\r\n"
-								          "    <normal>  normal blink pattern\r\n"
-								          "    <rain>    rain blink pattern";
+const char sPDescLED[]			PROGMEM = "    <len>     bit time in ms\r\n"
+								          "    <count>   bit count [1.." TOSTRING(MAX_LEDPATTERN_BITS) "]\r\n"
+								          "    <normal>  normal pattern\r\n"
+								          "    <rain>    rain pattern";
 const char sPDescMOTOR[]		PROGMEM = "    <m>    motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
 								          "    <cmd>  can be\r\n"
 								          "      OPEN       start opening\r\n"
@@ -154,9 +156,8 @@ const char sPDescRAIN[]			PROGMEM = "    <cmd>  can be\r\n"
 								          "      WET|ON     start raining\r\n"
 								          "      DRY|OFF    stop raining\r\n"
 								          "      RESUME <s> auto-resume window position after rain was gone.\r\n"
-								          "                 <s> is the delay (in sec) before resume starts.\r\n"
-								          "      FORGET     do not resume window position\r\n"
-								          "  Note: ON|WET, OFF|DRY, ENABLE or DISABLE disables AUTO mode";
+								          "                 <s> delay (in sec) before resume starts.\r\n"
+								          "      FORGET     do not resume";
 const char sPDescBACKUP[]		PROGMEM = "";
 const char sPDescRESTORE[]		PROGMEM = "    <addr>  4-digit hex destination address\r\n"
 								          "    <data>  hex data to restore";
@@ -229,6 +230,8 @@ void setupSerialCommand(void)
 	// do it step by step without help texts to save all the space for program memory
 	SCmd.addCommand( sCmdHELP,		cmdHelp );
 	SCmd.addCommand( sCmdINFO,		cmdInfo );
+	SCmd.addCommand( sCmdLOGIN,		cmdLogin );
+	SCmd.addCommand( sCmdLOGOUT,	cmdLogout );
 	SCmd.addCommand( sCmdECHO,		cmdEcho );
 	SCmd.addCommand( sCmdTERM,		cmdTerm );
 	SCmd.addCommand( sCmdSTATUS,	cmdStatus );
@@ -392,7 +395,7 @@ void cmdHelp()
 	else {
 		bool cmdFound=false;
 		for(byte i=0; !cmdFound && i<sizeof(sCmdTable)/sizeof(sCmdTable[0]); i++) {
-			if( strcasecmp_P(arg, (char *)pgm_read_word(&(sCmdTable[i][PRINT_CMD])))==0 ) {
+			if ( strcasecmp_P(arg, (char *)pgm_read_word(&(sCmdTable[i][PRINT_CMD])))==0 ) {
 				printHelp(i, PRINT_CMD, " ");
 				printHelp(i, PRINT_PARM, "\r\n  ");
 				printHelp(i, PRINT_DESC, "\r\n");
@@ -411,7 +414,7 @@ void cmdHelp()
 	cmdOK();
 }
 #ifndef DEBUG_OUTPUT
-int printHelp(byte cmd, printCmdType type, const char *postfix)
+int printHelp(byte cmd, PRINTCMDTYPE type, const char *postfix)
 {
 	if ( cmdUnlocked || pgm_read_word(&(sCmdTable[cmd][PRINT_PROTECT])) == 0 ) {
 		char *p = NULL;
@@ -459,8 +462,10 @@ void cmdInfo()
 {
 	printProgramInfo(false);
 	if ( cmdUnlocked ) {
-		cmdUptime();
+		cmdUptimeStatus();
+		sendStatus(true,SYSTEM,F("EEPROM ADDR %d"), eepromStartAddr());
 	}
+	cmdOK();
 }
 
 /* LOGIN [<password> [<timeout>]]
@@ -537,7 +542,7 @@ void cmdLogout()
  */
 void cmdEcho(void)
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		char *arg;
 
 		arg = SCmd.next();
@@ -571,7 +576,7 @@ void cmdEcho(void)
  */
 void cmdTerm(void)
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		char *arg;
 
 		arg = SCmd.next();
@@ -605,7 +610,7 @@ void cmdTerm(void)
  */
 void cmdStatus()
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		char *arg;
 
 		arg = SCmd.next();
@@ -641,7 +646,7 @@ void cmdStatus()
  */
 void cmdUptime()
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		char *arg;
 
 		arg = SCmd.next();
@@ -658,15 +663,17 @@ void cmdUptime()
 				eepromWriteVars();
 			}
 		}
-		SerialPrintf(  F("Uptime:       "));
-		SerialPrintUptime();;
-		printCRLF();
-		SerialPrintfln(F("Operating:    %ld h"), eeprom.OperatingHours);
+		cmdUptimeStatus();
 		cmdOK();
 	}
 	else {
 		cmdErrorNotLoggedIn();
 	}
+}
+void cmdUptimeStatus(void)
+{
+	sendStatus(true,SYSTEM,F("UPTIME %s"), getSystemUptime());
+	sendStatus(true,SYSTEM,F("OPERATION %lu h"), eeprom.OperatingHours);
 }
 
 /* LED [<len> [<count> [<normal> [<rain>]]]]
@@ -678,7 +685,7 @@ void cmdUptime()
  */
 void cmdLed()
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		LEDPATTERN 	LEDPatternNormal;
 		LEDPATTERN 	LEDPatternRain;
 		byte 		LEDBitCount;
@@ -759,7 +766,7 @@ void cmdLed()
  */
 void cmdMotor()
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		int motor;
 		char *arg;
 
@@ -779,19 +786,19 @@ void cmdMotor()
 				arg = SCmd.next();
 				if (arg != NULL) {
 					if      ( strnicmp_P(arg, PSTR("OP"),2)==0 ) {
-						if( getMotorDirection(motor)<MOTOR_OPEN ) {
+						if ( getMotorDirection(motor)<MOTOR_OPEN ) {
 							setMotorDirection(motor, MOTOR_OPEN);
 						}
 						cmdOK();
 					}
 					else if ( strnicmp_P(arg, PSTR("CL"),2)==0 ) {
-						if( getMotorDirection(motor)>MOTOR_CLOSE ) {
+						if ( getMotorDirection(motor)>MOTOR_CLOSE ) {
 							setMotorDirection(motor, MOTOR_CLOSE);
 						}
 						cmdOK();
 					}
 					else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
-						if( getMotorDirection(motor)!=MOTOR_OFF ) {
+						if ( getMotorDirection(motor)!=MOTOR_OFF ) {
 							setMotorDirection(motor, MOTOR_OFF);
 						}
 						cmdOK();
@@ -809,7 +816,7 @@ void cmdMotor()
 						}
 					}
 					else if ( strnicmp_P(arg, PSTR("TOP"),3)==0 ) {
-						if( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)<=MOTOR_CLOSE ) {
+						if ( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)<=MOTOR_CLOSE ) {
 							setMotorDirection(motor, MOTOR_OPEN);
 						}
 						else {
@@ -818,7 +825,7 @@ void cmdMotor()
 						cmdOK();
 					}
 					else if ( strnicmp_P(arg, PSTR("TCL"),3)==0 ) {
-						if( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)>=MOTOR_OPEN  ) {
+						if ( getMotorDirection(motor)==MOTOR_OFF || getMotorDirection(motor)>=MOTOR_OPEN  ) {
 							setMotorDirection(motor, MOTOR_CLOSE);
 						}
 						else {
@@ -827,13 +834,13 @@ void cmdMotor()
 						cmdOK();
 					}
 					else if ( strnicmp_P(arg, PSTR("TOG"),3)==0 ) {
-						if( getMotorDirection(motor)==MOTOR_OFF ) {
+						if ( getMotorDirection(motor)==MOTOR_OFF ) {
 							setMotorDirection(motor, MOTOR_OPEN);
 						}
-						else if( getMotorDirection(motor)>MOTOR_CLOSE ) {
+						else if ( getMotorDirection(motor)>MOTOR_CLOSE ) {
 							setMotorDirection(motor, MOTOR_CLOSE);
 						}
-						else if( getMotorDirection(motor)<MOTOR_OPEN ) {
+						else if ( getMotorDirection(motor)<MOTOR_OPEN ) {
 							setMotorDirection(motor, MOTOR_OPEN);
 						}
 						cmdOK();
@@ -870,7 +877,7 @@ void cmdMotor()
  */
 void cmdMotorTime()
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		int motor;
 		DWORD runtime;
 		char *arg;
@@ -898,7 +905,7 @@ void cmdMotorTime()
 				else {
 					// Set new runtime value
 					runtime = strtoul(arg, NULL, 0);
-					if ( runtime==0 || runtime>(DWORD)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
+					if ( runtime<MOTOR_MINRUNTIME || runtime>MOTOR_MAXRUNTIME ) {
 						cmdErrorOutOfRange(F("<runtime>"));
 					}
 					else {
@@ -911,7 +918,7 @@ void cmdMotorTime()
 						}
 						else {
 							runtime = strtoul(arg, NULL, 0);
-							if ( runtime==0 || runtime>(DWORD)(MOTOR_MAXRUNTIME/TIMER_MS) ) {
+							if ( runtime<MOTOR_MINRUNTIME || runtime>MOTOR_MAXRUNTIME ) {
 								cmdErrorOutOfRange(F("<overtravel>"));
 							}
 							else {
@@ -947,7 +954,7 @@ void cmdMotorTimePrintStatus(int motor)
  */
 void cmdMotorName()
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		int motor;
 		char *arg;
 
@@ -1004,7 +1011,7 @@ void cmdMotorNamePrintStatus(int motor)
  */
 void cmdMotorType()
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		int motor;
 		char *arg;
 
@@ -1023,12 +1030,12 @@ void cmdMotorType()
 			else {
 				arg = SCmd.next();
 				if (arg != NULL) {
-					if      ( strnicmp_P(arg, F("WIN"),3)==0 ) {
+					if      ( strnicmp_P(arg, fstrWINDOW,3)==0 ) {
 						setMotorType(motor, WINDOW);
 						eepromWriteVars();
 						cmdOK();
 					}
-					else if ( strnicmp_P(arg, F("JAL"),3)==0 ) {
+					else if ( strnicmp_P(arg, fstrJALOUSIE,3)==0 ) {
 						setMotorType(motor, JALOUSIE);
 						eepromWriteVars();
 						cmdOK();
@@ -1052,7 +1059,7 @@ void cmdMotorTypePrintStatus(int motor)
 {
 	sendStatus(true,MOTOR,F("%02d TYPE %-8S (%s)")
 				,motor+1
-				,getMotorType(motor)==WINDOW ? F("WINDOW") : F("JALOUSIE")
+				,getMotorType(motor)==WINDOW ? fstrWINDOW : fstrJALOUSIE
 				,(char *)eeprom.MotorName[motor]);
 }
 
@@ -1065,7 +1072,7 @@ void cmdMotorTypePrintStatus(int motor)
  */
 void cmdFS20()
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		int channel;
 		char *arg;
 
@@ -1088,13 +1095,13 @@ void cmdFS20()
 				if (arg != NULL) {
 					// ON|OFF entered?
 					if      ( strnicmp_P(arg, fstrON, 2)==0 ) {
-						if( !bitRead(curSM8Status, channel) ) {
+						if ( !bitRead(curSM8Status, channel) ) {
 							bitClear(valSM8Button, channel);
 						}
 						cmdOK();
 					}
 					else if ( strnicmp_P(arg, fstrOFF, 2)==0 ) {
-						if( bitRead(curSM8Status, channel) ) {
+						if ( bitRead(curSM8Status, channel) ) {
 							bitClear(valSM8Button, channel);
 						}
 						cmdOK();
@@ -1138,7 +1145,7 @@ void cmdFS20()
  */
 void cmdPushButton()
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		int button;
 		char *arg;
 
@@ -1199,7 +1206,7 @@ void cmdPushButton()
  */
 void cmdRain()
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		char *arg;
 		bool cmd = false;
 
@@ -1236,7 +1243,7 @@ void cmdRain()
 			else if ( strnicmp_P(arg, fstrRESUME,2)==0 ) {
 				int delay = eeprom.RainResumeTime;
 				arg = SCmd.next();
-				if( arg!=NULL ) {
+				if ( arg!=NULL ) {
 					delay=atoi(arg);
 				}
 				if ( delay<0 || delay>6000 ) {
@@ -1276,7 +1283,7 @@ void cmdRainSensorPrintStatus()
 	debEnable.update();
 	debInput.update();
 
-	if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
+	if ( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
 		sensorEnabled = (debEnable.read() == RAIN_ENABLE_ACTIVE);
 	}
 	else {
@@ -1312,7 +1319,7 @@ void cmdRainSensorPrintStatus()
  */
 void cmdBackup(void)
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		byte m;
 
 		SerialPrintfln(F("Binary data (%d byte):"), (int)sizeof(eeprom));
@@ -1335,9 +1342,9 @@ void cmdBackup(void)
 		// STATUS
 		SerialPrintfln(F("STATUS %S"), eeprom.SendStatus?fstrON:fstrOFF);
 		// UPTIME
-		SerialPrintfln(F("UPTIME %ld %ld"), millis(), eeprom.OperatingHours);
+		SerialPrintfln(F("UPTIME %lu %lu"), (unsigned long)millis(), eeprom.OperatingHours);
 		// LED
-		SerialPrintfln(F("LED %d %d 0x%08lx 0x%08lx")
+		SerialPrintfln(F("LED %u %u 0x%08lx 0x%08lx")
 						,eeprom.LEDBitLenght
 						,eeprom.LEDBitCount
 						,eeprom.LEDPatternNormal
@@ -1346,11 +1353,11 @@ void cmdBackup(void)
 
 		// RAIN
 		SerialPrintfln(F("RAIN RESUME %d"), eeprom.RainResumeTime);
-		if( !bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
+		if ( !bitRead(eeprom.Rain, RAIN_BIT_RESUME) ) {
 			SerialPrintfln(F("RAIN FORGET"));
 		}
 		SerialPrintfln(F("RAIN %S"), bitRead(eeprom.Rain, RAIN_BIT_ENABLE) ? fstrENABLE : fstrDISABLE);
-		if( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
+		if ( bitRead(eeprom.Rain, RAIN_BIT_AUTO) ) {
 			SerialPrintfln(F("RAIN %S"), fstrAUTO);
 		}
 
@@ -1364,7 +1371,7 @@ void cmdBackup(void)
 		}
 		// MOTORTYPE
 		for(m=0; m<MAX_MOTORS; m++) {
-			SerialPrintfln(F("MOTORTYPE %d %S"), m+1, bitRead(MTYPE_BITMASK,m)!=0?F("WIN"):F("JAL"));
+			SerialPrintfln(F("MOTORTYPE %d %S"), m+1, bitRead(DEFAULT_MOTORTYPE,m)!=0?fstrWINDOW:fstrJALOUSIE);
 		}
 		// MOTORTIME
 		for(m=0; m<MAX_MOTORS; m++) {
@@ -1394,7 +1401,7 @@ void cmdBackup(void)
  */
 void cmdRestore(void)
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		char *arg;
 
 		arg = SCmd.next();
@@ -1434,7 +1441,7 @@ void cmdRestore(void)
 							#ifdef DEBUG_CMD_RESTORE
 							SerialTimePrintfln(F("RESTORE %04x: %02x"), addr, data);
 							#endif
-							EEPROM.put(addr++, data);
+							EEPROM.put(eepromStartAddr()+addr++, data);
 						}
 					}
 					if ( !fError ) {
@@ -1454,9 +1461,16 @@ void cmdRestore(void)
  */
 void cmdFactory()
 {
-	if( cmdUnlocked ) {
-		unsigned long eepromCRC = CalcCRC(EEPROMCRC, (byte *)(EEPROM_ADDR_CRC32+4), EEPROM.length()-4) - 1;
-		EEPROM.put(EEPROM_ADDR_CRC32, eepromCRC);
+	if ( cmdUnlocked ) {
+		uint32_t crc32EEPROM;
+
+		// Readout CRC checksum from EEPROM direct
+		EEPROM.get(eepromStartAddr(), crc32EEPROM);
+		// Make it invalid
+		crc32EEPROM--;
+		// Write it back
+		EEPROM.put(eepromStartAddr(), crc32EEPROM);
+		// Now eepromInitVars() will do the rest and init all vars with defaults
 		eepromInitVars();
 		cmdOK();
 	}
@@ -1470,7 +1484,7 @@ void cmdFactory()
  */
 void cmdReboot(void)
 {
-	if( cmdUnlocked ) {
+	if ( cmdUnlocked ) {
 		cmdOK();
 		#if WATCHDOG_REBOOT_DELAY >= 1000
 			sendStatus(true,SYSTEM,F("REBOOT (in %d s)"), (WATCHDOG_REBOOT_DELAY/1000));
@@ -1489,7 +1503,7 @@ void cmdReboot(void)
 	}
 }
 
-/* PASSWD [<current> <new> <retype>]
+/* PASSWD <current> <new> <retype>
  *   Set password
  *     <current>  old password
  *     <new>      new password
@@ -1508,28 +1522,30 @@ void cmdPassword()
 
 	oldPw = SCmd.next();
 	if (oldPw == NULL ) {
-		// no parameter given, get it direct from user
+		// unfortunately we have to save program memory...
+		cmdErrorParameter(F("'HELP PASSWD'"));
 
-		// Query current password
-		Serial.print(F("Current password: "));
-		if( cmdGetPassword() ) {
-			// Password check for current pw correct
+		//~ // no parameter given, get it direct from user
+		//~ // Query current password
+		//~ Serial.print(F("Current password: "));
+		//~ if ( cmdGetPassword() ) {
+			//~ // Password check for current pw correct
 
-			// Query new password
-			Serial.print(F("New password: "));
-			SerialGetString(newPassword, sizeof(newPassword), eeprom.Term, eeprom.Echo, true);
-			printCRLF();
+			//~ // Query new password
+			//~ Serial.print(F("New password: "));
+			//~ SerialGetString(newPassword, sizeof(newPassword), eeprom.Term, eeprom.Echo, true);
+			//~ printCRLF();
 
-			// Query new password again
-			Serial.print(F("Retype new password: "));
-			SerialGetString(renewPassword, sizeof(renewPassword), eeprom.Term, eeprom.Echo, true);
-			printCRLF();
+			//~ // Query new password again
+			//~ Serial.print(F("Retype new password: "));
+			//~ SerialGetString(renewPassword, sizeof(renewPassword), eeprom.Term, eeprom.Echo, true);
+			//~ printCRLF();
 
-			cmdStorePassword(newPassword, renewPassword);
-		}
-		else {
-			cmdError(F("Wrong password, password unchanged"));
-		}
+			//~ cmdStorePassword(newPassword, renewPassword);
+		//~ }
+		//~ else {
+			//~ cmdError(F("Wrong password, password unchanged"));
+		//~ }
 	}
 	else {
 		// Parameter given

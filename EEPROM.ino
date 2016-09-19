@@ -1,54 +1,164 @@
 /* ===================================================================
  * EEPROM Functions
  * ===================================================================*/
+/* EEPROM structure
+ *    8 Byte: EEPROM_MAGIC_WORD
+ *    4 Byte: Write Count
+ *  310 Byte: MYEEPROM struct
+ *
+ * This structure block can be moved within EEPROM by wear-leveling.
+ * The EEPROM_MAGIC_WORD is used to find the struct within the
+ * ATmega328/P EEPROM.
+ * 
+ * General: "Writing" to EEPROM means "Update" always, means only bytes
+ * which are different are realy written.
+ *
+ * The MYEEPROM struct contains an own CRC32 checksum at the beginning
+ * followed by a byte containing data version number. Whenever vars
+ * within MYEEPROM struct is changed, the function eepromWriteVars()
+ * is called to check if the CRC32 is valid. If it becomes invalid,
+ * new CRC32 is stored within MYEEPROM struct and the complete struct
+ * will be written to ATmega328/P EEPROM.
+ *
+ * Each write is counted in "Write Count".
+ * Function eepromWearLeveling() is called if "Write Count" exceeds
+ * EEPROM_WEARLEVELING_WRITECNT value. This function will determine
+ * a new EEPROM position for the whole structure using random(), moves
+ * the structure to new position and reset the "Write Count".
+ * 
+ */
 
+#define EEPROM_MAGIC_WORD 885418781762039 // = 0x000325489FF6E1F7
+int dataAddr = -1;
 
-/* *******************************************************************
- * LOW-LEVEL Functions
- * ********************************************************************/
 
 /* ===================================================================
- * Function:	CalcCRC
+ * Function:	eepromWearLeveling
  * Return:
- * Arguments:	type - type of memory to get data from
- *              addr - start address
- * 				size - size of the sum range
- * Description: Calcluate a CRC32 sum from RAM/EEPROM range
+ * Arguments:
+ * Description: Do EEPROM wear-leveling my moving MAGIC WORD to another
+ *              position
  * ===================================================================*/
-// CRC table
-const PROGMEM unsigned long ccrc_table[16] = {
-	0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
-	0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
-	0xedb88320, 0xf00f9344, 0xd6d6a3e8, 0xcb61b38c,
-	0x9b64c2b0, 0x86d3d2d4, 0xa00ae278, 0xbdbdf21c
-};
-unsigned long CalcCRC(crcType type, byte *addr, size_t size)
+#ifdef DEBUG_EEPROM
+const char fstrEepromWearLeveling[]	PROGMEM = "EEPROM - eepromWearLeveling() ";
+#endif
+void eepromWearLeveling(void)
 {
-	unsigned long crc  = ~0L;
-	unsigned int k;
-	byte data;
+	int oldAddr;
+	int newAddr;
+	struct MYEEPROMHEADER header;
 
-	DEBUG_RUNTIME_START(msCalcCRC);
-	for (size_t index=0; index < size; ++index) {
-		data = (type==RAMCRC?*(addr+index):EEPROM.read((unsigned int)addr+index));
-		k = ((crc ^ data) & 0x0f);
-		crc = (unsigned long)pgm_read_dword_near( ccrc_table + k ) ^ (crc >> 4);
-		k = ((crc ^ (data >> 4)) & 0x0f);
-		crc = (unsigned long)pgm_read_dword_near( ccrc_table + k ) ^ (crc >> 4);
-		crc = ~crc;
+	oldAddr = eepromStartAddr();
+	newAddr = oldAddr;
+	while ( newAddr == oldAddr ) {
+		randomSeed(millis());
+		newAddr = random(sizeof(header),EEPROM.length()-sizeof(eeprom));
+		watchdogReset();
 	}
-	DEBUG_RUNTIME_END("CalcCRC()",msCalcCRC);
+
 	#ifdef DEBUG_EEPROM
-	SerialTimePrintfln(F("EEPROM - CalcCRC(%p, %ld) returns 0x%08lx"), addr, (unsigned long)size, crc);
+	SerialTimePrintfln(F("%SoldAddr=%d, newAddr=%d"), fstrEepromWearLeveling, oldAddr, newAddr);
 	#endif
-	return crc;
+
+	// invalidate old header
+	#ifdef DEBUG_EEPROM
+	SerialTimePrintfln(F("%S invalidate header @%d"), fstrEepromWearLeveling, oldAddr-sizeof(header));
+	#endif
+	for(int i=oldAddr-sizeof(header); i<oldAddr; i++) {
+		EEPROM.update(i, 0xFF);
+	}
+
+	if ( newAddr < oldAddr ) {
+		#ifdef DEBUG_EEPROM
+		SerialTimePrintfln(F("%S copy from %d-%d to %d-%d"), fstrEepromWearLeveling, oldAddr+sizeof(eeprom), oldAddr, newAddr+sizeof(eeprom), newAddr);
+		#endif
+		// copy from end of data to new address
+		for(int i=sizeof(eeprom); i>=0; i--) {
+			EEPROM.update(newAddr+i, EEPROM.read(oldAddr+i));
+			watchdogReset();
+		}
+	}
+	else {
+		#ifdef DEBUG_EEPROM
+		SerialTimePrintfln(F("%S copy from %d-%d to %d-%d"), fstrEepromWearLeveling, oldAddr, oldAddr+sizeof(eeprom), newAddr, newAddr+sizeof(eeprom));
+		#endif
+		// copy from begin of data to new address
+		for(size_t i=0; i<sizeof(eeprom); i++) {
+			EEPROM.update(newAddr+i, EEPROM.read(oldAddr+i));
+			watchdogReset();
+		}
+	}
+
+	// validate new header
+	#ifdef DEBUG_EEPROM
+	SerialTimePrintfln(F("%S validate new header @%d"), fstrEepromWearLeveling, newAddr-sizeof(header));
+	#endif
+	header.Magic      = EEPROM_MAGIC_WORD;
+	header.WriteCount = 0;
+	EEPROM.put(newAddr-sizeof(header), header);
+	dataAddr = newAddr;
+
 }
 
+/* ===================================================================
+ * Function:	eepromStartAddr
+ * Return:		Current EEPROM data start address
+ * Arguments:
+ * Description: returns the current EEPROM start address
+ *              Address will change dynamically due to wear-leveling
+ * ===================================================================*/
+#ifdef DEBUG_EEPROM
+const char fstrEepromStartAddr[]	PROGMEM = "EEPROM - eepromStartAddr() ";
+#endif
+int eepromStartAddr(void)
+{
+	struct MYEEPROMHEADER header;
+	bool found;
 
-/* *******************************************************************
- * HIGH-LEVEL Functions
- * ********************************************************************/
+	if ( dataAddr == -1 ) {
+		#ifdef DEBUG_EEPROM
+		SerialTimePrintfln(F("%SEEPROM.length() %d"), fstrEepromStartAddr, EEPROM.length());
+		SerialTimePrintfln(F("%Ssizeof(eeprom) %d"), fstrEepromStartAddr, sizeof(eeprom));
+		SerialTimePrintfln(F("%Ssizeof(header) %d"), fstrEepromStartAddr, sizeof(header));
+		SerialTimePrintfln(F("%Ssearch start %d"), fstrEepromStartAddr, EEPROM.length()-sizeof(eeprom)-sizeof(header));
+		#endif
 
+		for (found=false, dataAddr=EEPROM.length()-sizeof(eeprom)-sizeof(header); dataAddr>=0; dataAddr-- ) {
+			EEPROM.get(dataAddr, header);
+			if ( header.Magic==EEPROM_MAGIC_WORD ) {
+				found=true;
+				break;
+			}
+		}
+		#ifdef DEBUG_EEPROM
+		SerialTimePrintfln(F("%S%S found: dataAddr=%d, Magic=0x%08lx%08lx, WriteCount=%d"), fstrEepromStartAddr, found?F(""):F("not"), dataAddr, (uint32_t)(header.Magic>>32), (uint32_t)(header.Magic & 0xFFFFFFFF), header.WriteCount);
+		#endif
+
+		if ( found==0 ) {
+			#ifdef DEBUG_EEPROM
+			SerialTimePrintfln(F("%Smagic not found"), fstrEepromStartAddr);
+			#endif
+			randomSeed(millis());
+			dataAddr = random(0,EEPROM.length()-sizeof(eeprom)-sizeof(header));
+			header.Magic      = EEPROM_MAGIC_WORD;
+			header.WriteCount = 0;
+		}
+		if ( header.WriteCount < 0 ) {
+			header.WriteCount=0;
+		}
+		#ifdef DEBUG_EEPROM
+		SerialTimePrintfln(F("%Sends with dataAddr=%d, Magic=0x%08lx%08lx, WriteCount=%d"), fstrEepromStartAddr, dataAddr, (uint32_t)(header.Magic>>32), (uint32_t)(header.Magic & 0xFFFFFFFF), header.WriteCount);
+		#endif
+
+		EEPROM.put(dataAddr, header);
+		dataAddr += sizeof(header);
+	}
+	#ifdef DEBUG_EEPROM
+	SerialTimePrintfln(F("%Sreturns %d"), fstrEepromStartAddr, dataAddr);
+	#endif
+
+	return dataAddr;
+}
 
 /* ===================================================================
  * Function:	eepromInitVars
@@ -57,41 +167,55 @@ unsigned long CalcCRC(crcType type, byte *addr, size_t size)
  * Description: Initalize program settings from EEPROM
  *              Set default values if EEPROM data are invalid
  * ===================================================================*/
+#ifdef DEBUG_EEPROM
+const char fstrEepromInitVars[]	PROGMEM = "EEPROM - eepromInitVars() ";
+#endif
 void eepromInitVars()
 {
-	int i;
-	unsigned long dataCRC;
-	unsigned long eepromCRC;
+	uint32_t crc32RAM;
 
-	// Write data version into EEPROM before checking CRC32
-	// so if DATAVERSION is not equal stored value, EEPROM
-	// settings will become invalid in next step
+	// First write DataVersion struct element direct into EEPROM
 	byte dataversion = DATAVERSION;
-	EEPROM.put(EEPROM_ADDR_DATAVERSION, dataversion);
+	#ifdef DEBUG_EEPROM
+	SerialTimePrintfln(F("%SEEPROM.put(%d,%d)"),fstrEepromInitVars,eepromStartAddr()+offsetof(MYEEPROM,DataVersion), dataversion);
+	#endif
+	EEPROM.put(eepromStartAddr()+offsetof(MYEEPROM,DataVersion), dataversion);
 
-	// Compare calculated CRC32 with stored CRC32
-	dataCRC = CalcCRC(EEPROMCRC, (byte *)(EEPROM_ADDR_CRC32+4), EEPROM.length()-4);
-	EEPROM.get(EEPROM_ADDR_CRC32, eepromCRC);
+	// if DataVersion is not equal EEPROM stored value, the next
+	// step will be invalid and
+
+	// Read out EEPROM data
+	#ifdef DEBUG_EEPROM
+	SerialTimePrintfln(F("%Sread"),fstrEepromInitVars);
+	#endif
+	DEBUG_RUNTIME_START(mseepromReadDefaults);
+	EEPROM.get(eepromStartAddr(), eeprom);
+	DEBUG_RUNTIME_END("eepromInitVars() read",mseepromReadDefaults);
+
+	// Calc CRC checksum from data in RAM
+	crc32RAM = CalcCRC( (byte *)&eeprom+offsetof(MYEEPROM,DataVersion)
+					    ,sizeof(eeprom)-sizeof(eeprom.CRC32) );
 
 	#ifdef DEBUG_EEPROM
-	SerialTimePrintfln(F("EEPROM - values CRC32: 0x%08lx"), dataCRC);
-	SerialTimePrintfln(F("EEPROM - stored CRC32: 0x%08lx"), eepromCRC);
+	SerialTimePrintfln(F("%Scalced CRC32: 0x%08lx"),fstrEepromInitVars, crc32RAM);
+	SerialTimePrintfln(F("%Seeprom.CRC32: 0x%08lx"),fstrEepromInitVars, eeprom.CRC32);
 	#endif
 
-	if ( dataCRC != eepromCRC ) {
+	if ( eeprom.CRC32 != crc32RAM) {
 		#ifdef DEBUG_EEPROM
-		SerialTimePrintfln(F("EEPROM - CRC32 not matching, set defaults..."));
+		SerialTimePrintfln(F("%Sset defaults!"),fstrEepromInitVars);
 		#endif
 		sendStatus(true,SYSTEM, F("SET DEFAULT VALUES"));
-		eeprom.LEDBitCount  	= LED_BIT_COUNT;
-		eeprom.LEDBitLenght 	= LED_BIT_LENGTH;
-		eeprom.LEDPatternNormal = LED_PATTERN_NORMAL;
-		eeprom.LEDPatternRain	= LED_PATTERN_RAIN;
-		eeprom.MTypeBitmask  	= MTYPE_BITMASK;
+		eeprom.LEDBitCount  	= DEFAULT_LED_BITCOUNT;
+		eeprom.LEDBitLenght 	= DEFAULT_LED_BITLENGTH;
+		eeprom.LEDPatternNormal = DEFAULT_LED_NORMAL;
+		eeprom.LEDPatternRain	= DEFAULT_LED_RAIN;
+		eeprom.MTypeBitmask  	= DEFAULT_MOTORTYPE;
 		byte window=1;
 		byte jalousie=1;
-		for(i=0; i<MAX_MOTORS; i++) {
-			eeprom.MaxRuntime[i] = bitRead(MTYPE_BITMASK,i)!=0?MOTOR_WINDOW_MAXRUNTIME:MOTOR_JALOUSIE_MAXRUNTIME;
+		for(int i=0; i<MAX_MOTORS; i++) {
+			eeprom.MaxRuntime[i] = bitRead(DEFAULT_MOTORTYPE,i)!=0?MOTOR_WINDOW_MAXRUNTIME:MOTOR_JALOUSIE_MAXRUNTIME;
+			eeprom.OvertravelTime[i] = bitRead(DEFAULT_MOTORTYPE,i)!=0?MOTOR_WINDOW_OVERTRAVELTIME:MOTOR_JALOUSIE_OVERTRAVELTIME;
 			if ( getMotorType(i)==WINDOW ) {
 				sprintf_P((char *)eeprom.MotorName[i], PSTR("Window %d"), window);
 				window++;
@@ -122,55 +246,49 @@ void eepromInitVars()
 	}
 	#ifdef DEBUG_EEPROM
 	else {
-		SerialTimePrintfln(F("EEPROM - CRC232 is valid"));
+		SerialTimePrintfln(F("%SCRC32 valid"),fstrEepromInitVars);
 	}
 	#endif
 
-	#ifdef DEBUG_EEPROM
-	SerialTimePrintfln(F("EEPROM - read defaults..."));
-	#endif
-	DEBUG_RUNTIME_START(mseepromReadDefaults);
-	EEPROM.get(EEPROM_ADDR_EEPROMDATA, eeprom);
-	DEBUG_RUNTIME_END("eepromInitVars() read defaults",mseepromReadDefaults);
-
-	#ifdef DEBUG_EEPROM
-	SerialTimePrintfln(F("EEPROM - values:"));
-	SerialTimePrintfln(F("EEPROM -   eeprom.LEDPatternNormal:\t0x%08lx"),	eeprom.LEDPatternNormal);
-	SerialTimePrintfln(F("EEPROM -   eeprom.LEDPatternRain:\t0x%08lx"),		eeprom.LEDPatternRain);
-	SerialTimePrintfln(F("EEPROM -   eeprom.LEDBitCount:\t%d"),         	eeprom.LEDBitCount);
-	SerialTimePrintfln(F("EEPROM -   eeprom.LEDBitLenght:\t%d"),			eeprom.LEDBitLenght);
-	SerialTimePrintfln(F("EEPROM -   eeprom.MTypeBitmask:\t0x%02x"),		eeprom.MTypeBitmask);
-	SerialTimePrintf  (F("EEPROM -   eeprom.MaxRuntime:\t"));
-	for(i=0; i<MAX_MOTORS; i++) {
+	#ifdef DEBUG_EEPROMx
+	SerialTimePrintfln(F("%Svalues:"),fstrEepromInitVars);
+	SerialTimePrintfln(F("\t\teeprom.LEDPatternNormal:0x%08lx"),	eeprom.LEDPatternNormal);
+	SerialTimePrintfln(F("\t\teeprom.LEDPatternRain:\t0x%08lx"),	eeprom.LEDPatternRain);
+	SerialTimePrintfln(F("\t\teeprom.LEDBitCount:\t%d"),         	eeprom.LEDBitCount);
+	SerialTimePrintfln(F("\t\teeprom.LEDBitLenght:\t%d"),			eeprom.LEDBitLenght);
+	SerialTimePrintfln(F("\t\teeprom.MTypeBitmask:\t0x%02x"),		eeprom.MTypeBitmask);
+	SerialTimePrintf  (F("\t\teeprom.MaxRuntime:\t"));
+	for(int i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%ld"), i?",":"", eeprom.MaxRuntime[i]);
 	}
 	printCRLF();
-	SerialTimePrintf  (F("EEPROM -   eeprom.MotorName:\t"));
-	for(i=0; i<MAX_MOTORS; i++) {
+	SerialTimePrintf  (F("\t\teeprom.MotorName:\t"));
+	for(int i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%s"), i?",":"", (char *)eeprom.MotorName[i]);
 	}
 	printCRLF();
-	SerialTimePrintf  (F("EEPROM -   eeprom.MotorPosition:\t"));
-	for(i=0; i<MAX_MOTORS; i++) {
+	SerialTimePrintf  (F("\t\teeprom.MotorPosition:\t"));
+	for(int i=0; i<MAX_MOTORS; i++) {
 		SerialPrintf(F("%s%d"), i?",":"", eeprom.MotorPosition[i]);
 	}
 	printCRLF();
-	SerialTimePrintfln(F("EEPROM -   eeprom.Rain:\t\t0x%02x"), eeprom.Rain);
-	SerialTimePrintfln(F("EEPROM -   eeprom.RainResumeTime:\t%d"), eeprom.RainResumeTime);
-	SerialTimePrintfln(F("EEPROM -   eeprom.SendStatus:\t%s"), eeprom.SendStatus?"yes":"no");
-	SerialTimePrintfln(F("EEPROM -   eeprom.Echo:\t\t%s"), eeprom.Echo?"yes":"no");
-	SerialTimePrintfln(F("EEPROM -   eeprom.Term:\t\t%s"), eeprom.Term=='\r'?"CR":"LF");
-	SerialTimePrintfln(F("EEPROM -   eeprom.OperatingHours:\t%ld"), eeprom.OperatingHours);
-	SerialTimePrintfln(F("EEPROM -   eeprom.LoginTimeout:\t%d"), eeprom.LoginTimeout);
-	SerialTimePrintf(  F("EEPROM -   eeprom.EncryptKey:\r\n  ") );
+	SerialTimePrintfln(F("\t\teeprom.Rain:\t\t0x%02x"), eeprom.Rain);
+	SerialTimePrintfln(F("\t\teeprom.RainResumeTime:\t%d"), eeprom.RainResumeTime);
+	SerialTimePrintfln(F("\t\teeprom.SendStatus:\t%s"), eeprom.SendStatus?"yes":"no");
+	SerialTimePrintfln(F("\t\teeprom.Echo:\t\t%s"), eeprom.Echo?"yes":"no");
+	SerialTimePrintfln(F("\t\teeprom.Term:\t\t%s"), eeprom.Term=='\r'?"CR":"LF");
+	SerialTimePrintfln(F("\t\teeprom.OperatingHours:\t%ld"), eeprom.OperatingHours);
+	SerialTimePrintfln(F("\t\teeprom.LoginTimeout:\t%d"), eeprom.LoginTimeout);
+	SerialTimePrintf(  F("\t\teeprom.EncryptKey:\t") );
 	for(size_t i=0; i<(sizeof(eeprom.EncryptKey)/sizeof(eeprom.EncryptKey[0])); i++) {
 		SerialPrintf(F("0x%08lx "), eeprom.EncryptKey[i]);
 	}
 	printCRLF();
-	SerialTimePrintf(  F("EEPROM -   eeprom.Password:\r\n  ") );
+	SerialTimePrintf(  F("\t\teeprom.Password:\t") );
 	for(size_t i=0; i<(sizeof(eeprom.Password)/sizeof(eeprom.Password[0])); i++) {
 		SerialPrintf(F("%02x "), (byte)eeprom.Password[i]);
 	}
+	printCRLF();
 	printCRLF();
 
 	#endif
@@ -183,38 +301,54 @@ void eepromInitVars()
  * Arguments:
  * Description: Writes program settings into EEPROM (if changed)
  * ===================================================================*/
+#ifdef DEBUG_EEPROM
+const char fstrEepromWriteVars[]	PROGMEM = "EEPROM - eepromWriteVars() ";
+#endif
 void eepromWriteVars(void)
 {
-	static unsigned long prevEEPROMDataCRC32 = 0;
-	unsigned long curEEPROMDataCRC32 = 0;
-	unsigned long eepromCRC;
+	uint32_t crc32RAM;
+	uint32_t crc32EEPROM;
 
-	DEBUG_RUNTIME_START(mseepromWriteVars);
-	curEEPROMDataCRC32 = CalcCRC(RAMCRC, (byte *)&eeprom, sizeof(eeprom));
-	DEBUG_RUNTIME_END("eepromWriteVars()", mseepromWriteVars);
-
-	EEPROM.get(EEPROM_ADDR_CRC32, eepromCRC);
+	// Calc CRC checksum from data in RAM
+	crc32RAM = CalcCRC( (byte *)&eeprom+offsetof(MYEEPROM,DataVersion)
+					    ,sizeof(eeprom)-sizeof(eeprom.CRC32) );
+	// Readout CRC checksum from EEPROM direct
+	EEPROM.get(eepromStartAddr(), crc32EEPROM);
 
 	#ifdef DEBUG_EEPROM
-	SerialTimePrintfln(F("EEPROM - prevEEPROMDataCRC32: 0x%08lx"), prevEEPROMDataCRC32);
-	SerialTimePrintfln(F("EEPROM - curEEPROMDataCRC32:  0x%08lx"), curEEPROMDataCRC32);
-	SerialTimePrintfln(F("EEPROM - eepromCRC:           0x%08lx"), eepromCRC);
+	SerialTimePrintfln(F("%Scrc32RAM:\t0x%08lx (current)"),fstrEepromWriteVars, crc32RAM);
+	SerialTimePrintfln(F("%Seeprom.CRC32:0x%08lx (struct)"),fstrEepromWriteVars, eeprom.CRC32);
+	SerialTimePrintfln(F("%Scrc32EEPROM:\t0x%08lx (EEPROM)"),fstrEepromWriteVars, crc32EEPROM);
 	#endif
 
-	if( curEEPROMDataCRC32 != prevEEPROMDataCRC32 ) {
-		#ifdef DEBUG_EEPROM
-		SerialTimePrintfln(F("EEPROM - Data changed, write EEPROM data"));
-		#endif
+	// Even if checksum stored in struct or checksum stored in EEPROM
+	// does not match the current checksum from data in RAM
+	if ( crc32RAM != eeprom.CRC32 || crc32RAM != crc32EEPROM) {
+		struct MYEEPROMHEADER header;
+
 		// Write new EEPROM data
-		EEPROM.put(EEPROM_ADDR_EEPROMDATA, eeprom);
-
-		// Wire new CRC
-		eepromCRC = CalcCRC(EEPROMCRC, (byte *)(EEPROM_ADDR_CRC32+4), EEPROM.length()-4);
-		EEPROM.put(EEPROM_ADDR_CRC32, eepromCRC);
 		#ifdef DEBUG_EEPROM
-		SerialTimePrintfln(F("EEPROM - eepromCRC:           0x%08lx"), eepromCRC);
+		SerialTimePrintfln(F("%SData changed, write data"),fstrEepromWriteVars);
 		#endif
+		// Store new checksum in struct
+		eeprom.CRC32 = crc32RAM;
+		// Write complete struct to EEPROM
+		EEPROM.put(eepromStartAddr(), eeprom);
 
-		prevEEPROMDataCRC32 = curEEPROMDataCRC32;
+		// Read out eeprom write counter
+		EEPROM.get(eepromStartAddr()-sizeof(header.WriteCount), header.WriteCount);
+		if ( header.WriteCount < 0 ) {
+			header.WriteCount=0;
+		}
+		header.WriteCount++;
+		#ifdef DEBUG_EEPROM
+		SerialTimePrintfln(F("%SNew write counter:\t%d"),fstrEepromWriteVars, header.WriteCount);
+		#endif
+		if ( header.WriteCount <= EEPROM_WEARLEVELING_WRITECNT ) {
+			EEPROM.put(eepromStartAddr()-sizeof(header.WriteCount), header.WriteCount);
+		}
+		else {
+			eepromWearLeveling();
+		}
 	}
 }
