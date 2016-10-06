@@ -215,7 +215,7 @@
 #include "I2C.h"
 
 #define PROGRAM F("FS20Uno")	// program name
-#define VERSION F("4.03")		// program version
+#define VERSION F("4.04")		// program version
 #include "REVISION.h"			// Build (changed from git hook)
 #define DATAVERSION 126			// can be used to invalidate EEPROM data
 

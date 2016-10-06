@@ -105,8 +105,8 @@ const char sDescMOTORTYPE[]		PROGMEM = "Get/Set motor type";
 const char sDescFS20[]			PROGMEM = "Get/Set FS20 status";
 const char sDescPUSHBUTTON[]	PROGMEM = "Get/Set pushbutton status";
 const char sDescRAIN[]			PROGMEM = "Rain sensor function";
-const char sDescBACKUP[]		PROGMEM = "Create backup from EEPROM";
-const char sDescRESTORE[]		PROGMEM = "Restore data into EEPROM";
+const char sDescBACKUP[]		PROGMEM = "Create backup";
+const char sDescRESTORE[]		PROGMEM = "Restore data";
 const char sDescFACTORY[]		PROGMEM = "Reset to factory defaults";
 const char sDescREBOOT[]		PROGMEM = "Restart";
 const char sDescPASSWD[]		PROGMEM = "Set password";
@@ -347,9 +347,9 @@ void cmdErrorParameter(const __FlashStringHelper *err)
 
 void cmdErrorOutOfRange(const __FlashStringHelper *str)
 {
-	Serial.print(F("ERROR: "));
+	Serial.print(F("ERROR: <"));
 	Serial.print(str);
-	Serial.println(F(" out of range"));
+	Serial.println(F("> out of range"));
 }
 
 void cmdErrorNotLoggedIn(void)
@@ -449,9 +449,14 @@ int printHelp(byte cmd, PRINTCMDTYPE type, const char *postfix)
 }
 void helpHeader()
 {
-	SerialPrintfln(F("\r\n"
-					 "%S COMMAND LIST\r\n"
-					 "\r\n"), PROGRAM);
+	printCRLF();
+	Serial.print(PROGRAM);
+	Serial.println(" COMMAND LIST");
+	printCRLF();
+	
+	//~ SerialPrintfln(F("\r\n"
+					 //~ "%S COMMAND LIST\r\n"
+					 //~ "\r\n"), PROGRAM);
 }
 #endif
 
@@ -462,8 +467,14 @@ void cmdInfo()
 {
 	printProgramInfo(false);
 	if ( cmdUnlocked ) {
+		struct MYEEPROMHEADER header;
+
 		cmdUptimeStatus();
 		sendStatus(true,SYSTEM,F("EEPROM ADDR %d"), eepromStartAddr());
+		// Read out eeprom write counter
+		EEPROM.get(eepromStartAddr()-sizeof(header.WriteCount), header.WriteCount);
+		sendStatus(true,SYSTEM,F("EEPROM WEAR-LEVELING %d%%"), (header.WriteCount*100) / EEPROM_WEARLEVELING_WRITECNT);
+		
 	}
 	cmdOK();
 }
@@ -498,7 +509,7 @@ void cmdLogin()
 			if (arg != NULL) {
 				int timeout=atoi(arg);
 				if ( timeout<0 ) {
-					cmdError(F("<timeout> of range"));
+					cmdErrorOutOfRange(F("timeout"));
 				}
 				else {
 					// store new timeout value
@@ -663,6 +674,7 @@ void cmdUptime()
 				eepromWriteVars();
 			}
 		}
+		ledTimer = millis() + (TIMER)eeprom.LEDBitLenght;
 		cmdUptimeStatus();
 		cmdOK();
 	}
@@ -719,21 +731,21 @@ void cmdLed()
 			if ( argLEDBitCount!=NULL ) {
 				LEDBitCount		= (byte)atoi(argLEDBitCount);
 				if ( LEDBitCount<1 || LEDBitCount>MAX_LEDPATTERN_BITS ) {
-					cmdErrorOutOfRange(F("<bits>"));
+					cmdErrorOutOfRange(F("bits"));
 					return;
 				}
 			}
 			if ( argLEDPatternNormal!=NULL ) {
 				LEDPatternNormal = (LEDPATTERN)strtoul(argLEDPatternNormal, NULL, 0);
 				if ( errno == ERANGE ) {
-					cmdErrorOutOfRange(F("<normal>"));
+					cmdErrorOutOfRange(F("normal"));
 					return;
 				}
 			}
 			if ( argLEDBitCount!=NULL ) {
 				LEDPatternRain = (LEDPATTERN)strtoul(argLEDPatternRain, NULL, 0);
 				if ( errno == ERANGE ) {
-					cmdErrorOutOfRange(F("<rain>"));
+					cmdErrorOutOfRange(F("rain"));
 					return;
 				}
 			}
@@ -780,7 +792,7 @@ void cmdMotor()
 		else {
 			motor=atoi(arg)-1;
 			if ( motor<0 || motor>=MAX_MOTORS ) {
-				cmdErrorOutOfRange(F("<m>"));
+				cmdErrorOutOfRange(F("m"));
 			}
 			else {
 				arg = SCmd.next();
@@ -808,7 +820,7 @@ void cmdMotor()
 						int percent=atoi(arg);
 
 						if ( percent<0 || percent>100 ) {
-							cmdError(F("<p> of range"));
+							cmdErrorOutOfRange(F("p"));
 						}
 						else {
 							setMotorPosition(motor, percent);
@@ -892,7 +904,7 @@ void cmdMotorTime()
 		else {
 			motor=atoi(arg)-1;
 			if ( motor<0 || motor>=MAX_MOTORS ) {
-				cmdErrorOutOfRange(F("<m>"));
+				cmdErrorOutOfRange(F("m"));
 			}
 			else {
 				arg = SCmd.next();
@@ -906,7 +918,7 @@ void cmdMotorTime()
 					// Set new runtime value
 					runtime = strtoul(arg, NULL, 0);
 					if ( runtime<MOTOR_MINRUNTIME || runtime>MOTOR_MAXRUNTIME ) {
-						cmdErrorOutOfRange(F("<runtime>"));
+						cmdErrorOutOfRange(F("runtime"));
 					}
 					else {
 						eeprom.MaxRuntime[motor] = runtime;
@@ -919,7 +931,7 @@ void cmdMotorTime()
 						else {
 							runtime = strtoul(arg, NULL, 0);
 							if ( runtime<MOTOR_MINRUNTIME || runtime>MOTOR_MAXRUNTIME ) {
-								cmdErrorOutOfRange(F("<overtravel>"));
+								cmdErrorOutOfRange(F("overtravel"));
 							}
 							else {
 								eeprom.OvertravelTime[motor] = runtime;
@@ -968,7 +980,7 @@ void cmdMotorName()
 		else {
 			motor=atoi(arg)-1;
 			if ( motor<0 || motor>=MAX_MOTORS ) {
-				cmdErrorOutOfRange(F("<m>"));
+				cmdErrorOutOfRange(F("m"));
 			}
 			else {
 				arg = SCmd.next();
@@ -1025,7 +1037,7 @@ void cmdMotorType()
 		else {
 			motor=atoi(arg)-1;
 			if ( motor<0 || motor>=MAX_MOTORS ) {
-				cmdErrorOutOfRange(F("<m>"));
+				cmdErrorOutOfRange(F("m"));
 			}
 			else {
 				arg = SCmd.next();
@@ -1087,7 +1099,7 @@ void cmdFS20()
 			// Channel number entered
 			channel=atoi(arg)-1;
 			if ( channel<0 || channel>=IOBITS_CNT ) {
-				cmdErrorOutOfRange(F("<ch>"));
+				cmdErrorOutOfRange(F("ch"));
 			}
 			else {
 				// Channel number ok
@@ -1160,7 +1172,7 @@ void cmdPushButton()
 			// Button number entered
 			button=atoi(arg)-1;
 			if ( button<0 || button>=IOBITS_CNT ) {
-				cmdErrorOutOfRange(F("<b>"));
+				cmdErrorOutOfRange(F("b"));
 			}
 			else {
 				// Button number ok
@@ -1247,7 +1259,7 @@ void cmdRain()
 					delay=atoi(arg);
 				}
 				if ( delay<0 || delay>6000 ) {
-					cmdError(F("<s> (max 6000) of range"));
+					cmdErrorOutOfRange(F("s"));
 				}
 				else {
 					eeprom.RainResumeTime = delay;
