@@ -128,14 +128,10 @@ const char sPDescLED[]			PROGMEM = "    <len>     bit time in ms\r\n"
 								          "    <rain>    rain pattern";
 const char sPDescMOTOR[]		PROGMEM = "    <m>    motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
 								          "    <cmd>  can be\r\n"
-								          "      OPEN       start opening\r\n"
-								          "      CLOSE      start closing\r\n"
-								          "      TOPEN      toogle opening\r\n"
-								          "      TCLOSE     toogle closing\r\n"
-								          "      TOOGLE     toogle\r\n"
+								          "      OPEN,CLOSE,TOPEN,TCLOSE,TOOGLE\r\n"
 								          "      [GOTO] <p> goto position <p> (in %, 0-100)\r\n"
 								          "      OFF        stop\r\n"
-								          "      SYNC       set a defined state\r\n"
+								          "      SYNC       set defaults\r\n"
 								          "      STATUS     get status";
 const char sPDescMOTORNAME[]	PROGMEM = "    <m>     motor number [1.." TOSTRING(MAX_MOTORS) "]\r\n"
 								          "    <name>  motor name";
@@ -151,21 +147,21 @@ const char sPDescPUSHBUTTON[]	PROGMEM = "    <b>     pushbutton number [1.." TOS
 								          "    ON|OFF  set <b> ON or OFF";
 const char sPDescRAIN[]			PROGMEM = "    <cmd>  can be\r\n"
 								          "      AUTO       rain detection enabled from input signals\r\n"
-								          "      ENABLE     enable rain detection\r\n"
-								          "      DISABLE    disable rain detection\r\n"
+								          "      ENABLE     enable detection\r\n"
+								          "      DISABLE    disable detection\r\n"
 								          "      WET|ON     start raining\r\n"
 								          "      DRY|OFF    stop raining\r\n"
-								          "      RESUME <s> auto-resume window position after rain was gone.\r\n"
-								          "                 <s> delay (in sec) before resume starts.\r\n"
-								          "      FORGET     do not resume";
+								          "      RESUME <s> resume window pos\r\n"
+								          "                 <s> delay (in sec) before resume\r\n"
+								          "      FORGET     no resume";
 const char sPDescBACKUP[]		PROGMEM = "";
-const char sPDescRESTORE[]		PROGMEM = "    <addr>  4-digit hex destination address\r\n"
+const char sPDescRESTORE[]		PROGMEM = "    <addr>  4-digit hex addr\r\n"
 								          "    <data>  hex data to restore";
 const char sPDescFACTORY[]		PROGMEM = "";
 const char sPDescREBOOT[]		PROGMEM = "";
-const char sPDescPASSWD[]		PROGMEM = "    <current>  old password\r\n"
-								          "    <new>      new password\r\n"
-								          "    <retype>   retyped new password";
+const char sPDescPASSWD[]		PROGMEM = "    <current>  old pw\r\n"
+								          "    <new>      new pw\r\n"
+								          "    <retype>   retyped new pw";
 
 
 const char* const sCmdTable[][5] PROGMEM = {
@@ -372,7 +368,7 @@ void unrecognized(char *token)
 void cmdHelp()
 {
 	#ifdef DEBUG_OUTPUT
-	Serial.print(F("No HELP availbale during debug is enabled!"));
+	Serial.print(F("No HELP available"));
 	#else
 	char *arg;
 
@@ -389,7 +385,7 @@ void cmdHelp()
 			}
 		}
 		if ( arg == NULL ) {
-			Serial.println(F("\r\nFor more info, use 'HELP cmd'"));
+			Serial.println(F("\r\nuse 'HELP cmd' for more"));
 		}
 	}
 	else {
@@ -404,7 +400,7 @@ void cmdHelp()
 			}
 		}
 		if ( !cmdFound ) {
-			SerialPrintfln(F("ERROR: Unknown command '%s', use HELP for command list"), arg);
+			SerialPrintfln(F("ERROR: Unknown cmd '%s', use HELP"), arg);
 			return;
 		}
 	}
@@ -1264,6 +1260,7 @@ void cmdRain()
 				else {
 					eeprom.RainResumeTime = delay;
 					bitSet(eeprom.Rain, RAIN_BIT_RESUME);
+					lockStoreResumePosition = 0;
 					cmd = true;
 				}
 			}
@@ -1273,6 +1270,7 @@ void cmdRain()
 					resumeMotorPosition[i] = NO_RESUME_POSITION;
 				}
 				bitClear(eeprom.Rain, RAIN_BIT_RESUME);
+				lockStoreResumePosition = 0;
 				cmd = true;
 			}
 			if ( cmd ) {

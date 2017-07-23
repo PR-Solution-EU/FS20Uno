@@ -40,7 +40,7 @@
 #define DEFAULT_PASSWORD			PSTR("31415")
 
 /* Rain window resume position delay */
-#define DEFAULT_RAINRESUMETIME		30	// sec
+#define DEFAULT_RAINRESUMETIME		300	// sec
 
 // 00100000 00001000 00000010 00000000
 // LED 100 30 0x20080200

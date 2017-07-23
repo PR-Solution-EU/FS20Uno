@@ -129,9 +129,9 @@
  * Pusbutton connects a pull-up input to GND (means 0=active).
  * Pushbutton function:
  * - Button "OPEN":  Switch motor to "Open",
- *                   pushng a second time switch motor off.
+ *                   pushing a second time switch motor off.
  * - Button "CLOSE": Switch motor to "Close",
- *                   pushng a second time switch motor off.
+ *                   pushing a second time switch motor off.
  * - Push both buttons together also swich motor off.
  * - Keep a pushbutton pressed longer than 10 sec, activates a auto-
  *   learn function to measure the real runtime for a motor needs to
@@ -215,7 +215,7 @@
 #include "I2C.h"
 
 #define PROGRAM F("FS20Uno")	// program name
-#define VERSION F("4.04")		// program version
+#define VERSION F("4.05")		// program version
 #include "REVISION.h"			// Build (changed from git hook)
 #define DATAVERSION 126			// can be used to invalidate EEPROM data
 
@@ -243,7 +243,7 @@
 #undef DEBUG_WATCHDOG		// 0.2 kB: enable watchdog related outputs
 #undef DEBUG_EEPROM			// 2.0 kB: enable EEPROM related outputs
 #undef DEBUG_SERIALCMD		// 0.3 kB: enable Serial cmd interface related outputs
-#undef DEBUG_PASSWD		// 0.5 kB: enable password related outputs
+#undef DEBUG_PASSWD			// 0.5 kB: enable password related outputs
 #undef DEBUG_CMD_RESTORE	// 0.1 kB: enable CMD RESTORE related outputs
 #undef DEBUG_SM8STATUS		// 1.1 kB: enable FS20-SM8-output related output
 #undef DEBUG_PUSHBUTTON		// 0.9 kB: enable pushbutton related output
@@ -372,6 +372,12 @@ volatile MOTOR_TIMER destMotorPosition[MAX_MOTORS] = {NO_POSITION,NO_POSITION,NO
 
 /* Stored motor positions (percent values) when rain starts */
 volatile byte resumeMotorPosition[MAX_MOTORS] = {NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION,NO_RESUME_POSITION};
+/* Bit mask which controls if motor resume position storing is locked 
+ * This prevents motor resume position will be overwritten with wrong
+ * values if rain status is flapping within rain resume delay time.
+ * It will be set when motor position is stored and released every time
+ * motor is switched from on to off or resumeDelay is NO_RESUME_DELAY */
+volatile MOTORBITS lockStoreResumePosition;
 /* Delay to count down before resumes window position after rain */
 volatile WORD resumeDelay = NO_RESUME_DELAY;
 
@@ -661,6 +667,7 @@ void initVars()
 	cmdUnlocked = false;
 	prevUnlocked = false;
 	cmdLoginTimeout = 0;
+	lockStoreResumePosition = 0;
 }
 
 
@@ -770,6 +777,8 @@ void timerISR()
 						MotorCtrl[i] = MOTOR_OFF;
 						// Clear destination position
 						destMotorPosition[i] = NO_POSITION;
+						// Unlock position storing
+						bitClear(lockStoreResumePosition, i);
 					}
 				}
 
@@ -784,6 +793,8 @@ void timerISR()
 						bitSet(sendStatusMOTOR_OFF, i);
 					}
 					MotorCtrl[i] = MOTOR_OFF;
+					// Unlock position storing
+					bitClear(lockStoreResumePosition, i);
 				}
 			}
 
@@ -1600,8 +1611,11 @@ void ctrlRainSensor(void)
 					if ( getMotorType(i)==WINDOW ) {
 						if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME)
 							&& getMotorDirection(i)==MOTOR_OFF
-							&& MotorPosition[i]!=0 ) {
+							&& MotorPosition[i]!=0 
+							&& bitRead(lockStoreResumePosition, i)==0 ) {
 							resumeMotorPosition[i] = (MOTOR_TIMER)(((unsigned long)MotorPosition[i]*100L) / (unsigned long)(eeprom.MaxRuntime[i] / TIMER_MS));
+							// Lock position storing
+							bitSet(lockStoreResumePosition, i);
 							#ifdef DEBUG_RAIN
 							SerialTimePrintfln(F("%SRemember window %d position %d%% (%d)"), dbgCtrlRainSensor, i, resumeMotorPosition[i], MotorPosition[i]);
 							#endif
@@ -1655,15 +1669,27 @@ void ctrlRainSensor(void)
 		SerialTimePrintfln(F("%SResume delay expired"), dbgCtrlRainSensor);
 		#endif
 		for (byte i = 0; i < MAX_MOTORS; i++) {
-			if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME)
-				&& getMotorType(i)==WINDOW
-				&& getMotorDirection(i)==MOTOR_OFF
-				&& resumeMotorPosition[i]!=NO_RESUME_POSITION ) {
+			if ( bitRead(eeprom.Rain, RAIN_BIT_RESUME)	// Resume windows position after rain is enabled
+				&& getMotorType(i)==WINDOW				// It's a windows motor
+				&& getMotorDirection(i)==MOTOR_OFF ) {	// Motor is currently not on
+				// If resume position was previously stored
+				if (resumeMotorPosition[i]!=NO_RESUME_POSITION ) {
+					// Resume window
 					#ifdef DEBUG_RAIN
 					SerialTimePrintfln(F("%SResume motor %d to %d%%"), dbgCtrlRainSensor, i+1, resumeMotorPosition[i] );
 					#endif
 					setMotorPosition(i, resumeMotorPosition[i]);
 					resumeMotorPosition[i] = NO_RESUME_POSITION;
+				}
+				// No motor resume position was stored
+				else {
+					// Unlock position storing
+					bitClear(lockStoreResumePosition, i);
+				}
+			}
+			else {
+				// Unlock position storing
+				bitClear(lockStoreResumePosition, i);
 			}
 		}
 		resumeDelay = NO_RESUME_DELAY;
